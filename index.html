@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบบริหารงาน รพ.สต.บ้านหนองสนม</title>
+<style>
+  :root { --bg:#f4f7f6; --card:#fff; --ink:#1f2a2e; --muted:#5f6d72; --brand:#0f766e; --brand-d:#0b5a54; --line:#dbe3e2; --err:#b42318; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Sarabun","Noto Sans Thai",system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--brand); color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:1.1rem; }
+  main { max-width:900px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+  h2 { margin:0 0 14px; font-size:1.05rem; }
+  label { display:block; font-size:.9rem; margin:10px 0 4px; color:var(--muted); }
+  input, select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:inherit; }
+  button { background:var(--brand); color:#fff; border:0; border-radius:8px; padding:10px 18px; font:inherit; cursor:pointer; margin-top:14px; }
+  button:hover { background:var(--brand-d); }
+  button.ghost { background:transparent; border:1px solid #fff; margin:0; padding:6px 14px; }
+  button.del { background:transparent; color:var(--err); border:1px solid var(--err); margin:0; padding:4px 10px; }
+  .msg { color:var(--err); min-height:1.2em; margin-top:10px; font-size:.9rem; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:600px){ .row { grid-template-columns:1fr; } }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  .hidden { display:none; }
+  .login { max-width:380px; margin:60px auto; }
+</style>
+</head>
+<body>
+
+<section id="loginView" class="login hidden">
+  <div class="card">
+    <h2>เข้าสู่ระบบ รพ.สต.บ้านหนองสนม</h2>
+    <form id="loginForm">
+      <label for="email">อีเมล</label>
+      <input id="email" type="email" required autocomplete="username">
+      <label for="password">รหัสผ่าน</label>
+      <input id="password" type="password" required autocomplete="current-password">
+      <button type="submit">เข้าสู่ระบบ</button>
+      <div id="loginMsg" class="msg"></div>
+    </form>
+  </div>
+</section>
+
+<section id="appView" class="hidden">
+  <header>
+    <h1>ระบบบริหารงาน รพ.สต.บ้านหนองสนม</h1>
+    <div><span id="who"></span> <button id="logoutBtn" class="ghost">ออกจากระบบ</button></div>
+  </header>
+  <main>
+    <div class="card">
+      <h2>เพิ่มบุคลากร</h2>
+      <form id="staffForm">
+        <div class="row">
+          <div><label for="sName">ชื่อ-สกุล</label><input id="sName" required></div>
+          <div><label for="sPos">ตำแหน่ง</label>
+            <select id="sPos">
+              <option>ผู้อำนวยการ รพ.สต.</option><option>พยาบาลวิชาชีพ</option>
+              <option>นักวิชาการสาธารณสุข</option><option>เจ้าพนักงานสาธารณสุข</option>
+              <option>แพทย์แผนไทย</option><option>เจ้าพนักงานทันตสาธารณสุข</option>
+              <option>พนักงานราชการ/ลูกจ้าง</option><option>อื่น ๆ</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label for="sPhone">เบอร์โทร</label><input id="sPhone" type="tel"></div>
+          <div><label for="sNote">หมายเหตุ</label><input id="sNote"></div>
+        </div>
+        <button type="submit">บันทึก</button>
+        <div id="staffMsg" class="msg"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>ทะเบียนบุคลากร</h2>
+      <table>
+        <thead><tr><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>เบอร์โทร</th><th>หมายเหตุ</th><th></th></tr></thead>
+        <tbody id="staffBody"></tbody>
+      </table>
+    </div>
+  </main>
+</section>
+
+<script type="module">
+import { auth, db } from "./firebase-config.js";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = id => document.getElementById(id);
+let unsub = null;
+
+// ใส่ข้อความแบบปลอดภัย ป้องกัน HTML injection
+const td = text => { const c = document.createElement("td"); c.textContent = text || ""; return c; };
+
+onAuthStateChanged(auth, user => {
+  $("loginView").classList.toggle("hidden", !!user);
+  $("appView").classList.toggle("hidden", !user);
+  if (unsub) { unsub(); unsub = null; }
+  if (user) {
+    $("who").textContent = user.email;
+    const q = query(collection(db, "staff"), orderBy("createdAt", "desc"));
+    unsub = onSnapshot(q, snap => {
+      const body = $("staffBody");
+      body.replaceChildren();
+      snap.forEach(d => {
+        const s = d.data();
+        const tr = document.createElement("tr");
+        tr.append(td(s.name), td(s.position), td(s.phone), td(s.note));
+        const act = document.createElement("td");
+        const b = document.createElement("button");
+        b.className = "del"; b.textContent = "ลบ";
+        b.onclick = async () => {
+          if (confirm("ลบ " + s.name + " ?")) await deleteDoc(doc(db, "staff", d.id));
+        };
+        act.append(b); tr.append(act); body.append(tr);
+      });
+    }, err => { $("staffMsg").textContent = "โหลดข้อมูลไม่สำเร็จ: " + err.code; });
+  }
+});
+
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("loginMsg").textContent = "";
+  try {
+    await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
+  } catch (err) {
+    $("loginMsg").textContent = "เข้าสู่ระบบไม่สำเร็จ ตรวจสอบอีเมลและรหัสผ่าน";
+  }
+});
+
+$("logoutBtn").onclick = () => signOut(auth);
+
+$("staffForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("staffMsg").textContent = "";
+  try {
+    await addDoc(collection(db, "staff"), {
+      name: $("sName").value.trim(),
+      position: $("sPos").value,
+      phone: $("sPhone").value.trim(),
+      note: $("sNote").value.trim(),
+      createdBy: auth.currentUser.email,
+      createdAt: serverTimestamp()
+    });
+    e.target.reset();
+  } catch (err) {
+    $("staffMsg").textContent = "บันทึกไม่สำเร็จ: " + err.code;
+  }
+});
+</script>
+</body>
+</html>
