@@ -27,6 +27,10 @@
   th { color:var(--muted); font-weight:600; }
   .hidden { display:none; }
   .login { max-width:380px; margin:60px auto; }
+  .ok { color:var(--brand); }
+  .avatar { width:44px; height:44px; border-radius:50%; object-fit:cover; background:var(--line); display:block; }
+  .hint { font-size:.85rem; color:var(--muted); margin-top:6px; }
+  details summary { cursor:pointer; font-weight:600; }
 </style>
 </head>
 <body>
@@ -52,6 +56,17 @@
   </header>
   <main>
     <div class="card">
+      <details>
+        <summary>ตั้งค่าอัปโหลดรูป (ImgBB)</summary>
+        <label for="imgbbKey">ImgBB API key</label>
+        <input id="imgbbKey" type="password" autocomplete="off" placeholder="วาง key ที่ได้จาก api.imgbb.com">
+        <button type="button" id="saveKeyBtn">บันทึก key</button>
+        <div id="keyMsg" class="msg"></div>
+        <div class="hint">key เก็บใน Firestore เห็นได้เฉพาะผู้ที่ล็อกอิน ห้ามใช้อัปโหลดรูปผู้ป่วยหรือเอกสารส่วนบุคคล</div>
+      </details>
+    </div>
+
+    <div class="card">
       <h2>เพิ่มบุคลากร</h2>
       <form id="staffForm">
         <div class="row">
@@ -69,7 +84,9 @@
           <div><label for="sPhone">เบอร์โทร</label><input id="sPhone" type="tel"></div>
           <div><label for="sNote">หมายเหตุ</label><input id="sNote"></div>
         </div>
-        <button type="submit">บันทึก</button>
+        <label for="sPhoto">รูปประจำตัว (ไม่บังคับ ไม่เกิน 5 MB)</label>
+        <input id="sPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+        <button type="submit" id="staffSubmit">บันทึก</button>
         <div id="staffMsg" class="msg"></div>
       </form>
     </div>
@@ -77,7 +94,7 @@
     <div class="card">
       <h2>ทะเบียนบุคลากร</h2>
       <table>
-        <thead><tr><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>เบอร์โทร</th><th>หมายเหตุ</th><th></th></tr></thead>
+        <thead><tr><th>รูป</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>เบอร์โทร</th><th>หมายเหตุ</th><th></th></tr></thead>
         <tbody id="staffBody"></tbody>
       </table>
     </div>
@@ -88,8 +105,27 @@
 import { auth, db } from "./firebase-config.js";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp }
+import { collection, addDoc, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// อ่าน ImgBB key จาก Firestore (settings/imgbb) ไม่เก็บ key ไว้ในโค้ด
+async function getImgbbKey() {
+  const s = await getDoc(doc(db, "settings", "imgbb"));
+  return s.exists() ? s.data().key : "";
+}
+
+// อัปโหลดรูปไป ImgBB แล้วคืนลิงก์รูป
+async function uploadToImgbb(file) {
+  const key = await getImgbbKey();
+  if (!key) throw new Error("ยังไม่ได้ตั้งค่า ImgBB key");
+  if (file.size > 5 * 1024 * 1024) throw new Error("ไฟล์ใหญ่เกิน 5 MB");
+  const fd = new FormData();
+  fd.append("image", file);
+  const res = await fetch("https://api.imgbb.com/1/upload?key=" + encodeURIComponent(key), { method: "POST", body: fd });
+  const json = await res.json();
+  if (!res.ok || !json.success) throw new Error("อัปโหลดรูปไม่สำเร็จ");
+  return json.data.display_url;
+}
 
 const $ = id => document.getElementById(id);
 let unsub = null;
@@ -110,7 +146,13 @@ onAuthStateChanged(auth, user => {
       snap.forEach(d => {
         const s = d.data();
         const tr = document.createElement("tr");
-        tr.append(td(s.name), td(s.position), td(s.phone), td(s.note));
+        const pic = document.createElement("td");
+        if (s.photoUrl && /^https:\/\/i\.ibb\.co\//.test(s.photoUrl)) {
+          const img = document.createElement("img");
+          img.className = "avatar"; img.src = s.photoUrl; img.alt = ""; img.loading = "lazy";
+          pic.append(img);
+        }
+        tr.append(pic, td(s.name), td(s.position), td(s.phone), td(s.note));
         const act = document.createElement("td");
         const b = document.createElement("button");
         b.className = "del"; b.textContent = "ลบ";
@@ -138,20 +180,41 @@ $("logoutBtn").onclick = () => signOut(auth);
 $("staffForm").addEventListener("submit", async e => {
   e.preventDefault();
   $("staffMsg").textContent = "";
+  $("staffSubmit").disabled = true;
   try {
+    let photoUrl = "";
+    const file = $("sPhoto").files[0];
+    if (file) photoUrl = await uploadToImgbb(file);
     await addDoc(collection(db, "staff"), {
       name: $("sName").value.trim(),
       position: $("sPos").value,
       phone: $("sPhone").value.trim(),
       note: $("sNote").value.trim(),
+      photoUrl,
       createdBy: auth.currentUser.email,
       createdAt: serverTimestamp()
     });
     e.target.reset();
   } catch (err) {
-    $("staffMsg").textContent = "บันทึกไม่สำเร็จ: " + err.code;
+    $("staffMsg").textContent = "บันทึกไม่สำเร็จ: " + (err.message || err.code);
+  } finally {
+    $("staffSubmit").disabled = false;
   }
 });
+
+$("saveKeyBtn").onclick = async () => {
+  const key = $("imgbbKey").value.trim();
+  const m = $("keyMsg");
+  m.classList.remove("ok");
+  if (!/^[0-9a-f]{32}$/i.test(key)) { m.textContent = "key ต้องเป็นตัวอักษร a-f และตัวเลข 32 ตัว"; return; }
+  try {
+    await setDoc(doc(db, "settings", "imgbb"), { key, updatedBy: auth.currentUser.email, updatedAt: serverTimestamp() });
+    $("imgbbKey").value = "";
+    m.classList.add("ok"); m.textContent = "บันทึก key แล้ว";
+  } catch (err) {
+    m.textContent = "บันทึกไม่สำเร็จ: " + err.code;
+  }
+};
 </script>
 </body>
 </html>
