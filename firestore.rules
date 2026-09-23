@@ -1,0 +1,61 @@
+rules_version = '2';
+// กฎความปลอดภัย Firestore ของระบบ รพ.สต.บ้านหนองสนม
+// สิทธิ์อ้างอิงจากเอกสาร users/{อีเมลตัวพิมพ์เล็ก} ต้องตรงกับ src/lib/roles.js
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.token.email);
+    }
+    function isActive() {
+      return signedIn() && exists(userPath()) && get(userPath()).data.active == true;
+    }
+    function hasRole(list) {
+      return isActive() && get(userPath()).data.role in list;
+    }
+
+    // ผู้ใช้งานและสิทธิ์
+    match /users/{email} {
+      allow read: if signedIn() && (request.auth.token.email == email || hasRole(['super_admin', 'director']));
+      // เจ้าของระบบสร้างสิทธิ์ตัวเองครั้งแรกได้ครั้งเดียว
+      allow create: if (signedIn()
+                        && request.auth.token.email == email
+                        && email == 'top22bph8@gmail.com'
+                        && request.resource.data.role == 'super_admin')
+                    || hasRole(['super_admin']);
+      allow update, delete: if hasRole(['super_admin']);
+    }
+
+    // ตั้งค่าระบบ
+    match /settings/{id} {
+      allow read: if isActive();
+      allow write: if hasRole(['super_admin']);
+    }
+
+    // ตัวนับเลขทะเบียน
+    match /counters/{id} {
+      allow read: if isActive();
+      allow create, update: if hasRole(['super_admin', 'admin_clerk']);
+    }
+
+    // ทะเบียนหนังสือรับ / หนังสือส่ง
+    match /incoming/{id} {
+      allow read: if hasRole(['super_admin', 'director', 'admin_clerk', 'viewer']);
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk']);
+    }
+    match /outgoing/{id} {
+      allow read: if hasRole(['super_admin', 'director', 'admin_clerk', 'viewer']);
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk']);
+    }
+
+    // Audit Log: เพิ่มได้อย่างเดียว แก้ไข/ลบไม่ได้
+    match /auditLogs/{id} {
+      allow read: if hasRole(['super_admin', 'director']);
+      allow create: if isActive() && request.resource.data.userEmail == request.auth.token.email;
+      allow update, delete: if false;
+    }
+  }
+}

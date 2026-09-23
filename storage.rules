@@ -1,0 +1,29 @@
+rules_version = '2';
+// กฎความปลอดภัย Firebase Storage (ไฟล์แนบเอกสาร) อ้างสิทธิ์จาก Firestore users/{อีเมล}
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function userPath() {
+      return /databases/(default)/documents/users/$(request.auth.token.email);
+    }
+    function isActive() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && firestore.exists(userPath())
+        && firestore.get(userPath()).data.active == true;
+    }
+    function role() {
+      return firestore.get(userPath()).data.role;
+    }
+
+    match /docs/{module}/{id}/{file} {
+      allow read: if isActive() && module in ['incoming', 'outgoing']
+                  && role() in ['super_admin', 'director', 'admin_clerk', 'viewer'];
+      allow create, update: if isActive() && module in ['incoming', 'outgoing']
+                  && role() in ['super_admin', 'admin_clerk']
+                  && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if isActive() && module in ['incoming', 'outgoing']
+                  && role() in ['super_admin', 'admin_clerk'];
+    }
+  }
+}
