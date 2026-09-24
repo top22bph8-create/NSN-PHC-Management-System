@@ -7,7 +7,7 @@ import { Badge, EmptyState, ErrorState, Spinner } from '../components/ui';
 const ACTION = {
   login: ['เข้าสู่ระบบ', 'bg-slate-100 text-slate-700'],
   create: ['เพิ่ม', 'bg-emerald-100 text-emerald-800'],
-  update: ['แก้ไข', 'bg-blue-100 text-blue-800'],
+  update: ['แก้ไข', 'bg-brand-100 text-brand-800'],
   delete: ['ลบ', 'bg-red-100 text-red-800'],
   export: ['ส่งออก', 'bg-amber-100 text-amber-800'],
   settings: ['ตั้งค่า', 'bg-purple-100 text-purple-800'],
@@ -47,7 +47,7 @@ export default function AuditLog() {
             <tbody>
               {list.map((r) => (
                 <Fragment key={r.id}>
-                  <tr className="cursor-pointer border-t border-slate-100 hover:bg-blue-50/60" onClick={() => setOpen(open === r.id ? null : r.id)}>
+                  <tr className="cursor-pointer border-t border-slate-100 hover:bg-brand-50/60" onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="whitespace-nowrap px-3 py-2">{fmtDateTime(r.at)}</td>
                     <td className="px-3 py-2">{r.userEmail}</td>
                     <td className="px-3 py-2"><Badge className={ACTION[r.action]?.[1]}>{ACTION[r.action]?.[0] || r.action}</Badge></td>

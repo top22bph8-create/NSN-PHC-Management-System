@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import {
   AlertTriangle, Armchair, Building2, Activity, Car, CheckCircle2, Clock, HeartPulse, Inbox,
-  Package, Megaphone, ScrollText, Send, ShoppingCart, Wallet, FileSignature,
+  Package, Megaphone, CalendarDays, Users, ScrollText, Send, ShoppingCart, Wallet, FileSignature,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -12,8 +12,12 @@ import { ROLES, canRead } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { addDays, fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
 import { ErrorState, Spinner } from '../components/ui';
+import Logo from '../components/Logo';
+import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
 
 const CARDS = [
+  { label: 'ระบบควบคุมวันลา', icon: CalendarDays, path: '/leave', ready: true, module: 'leave' },
+  { label: 'ทำเนียบบุคลากร', icon: Users, path: '/personnel', ready: true, module: 'personnel' },
   { key: 'incoming', label: 'หนังสือรับ', icon: Inbox, path: '/incoming', live: true },
   { key: 'outgoing', label: 'หนังสือส่ง', icon: Send, path: '/outgoing', live: true },
   { label: 'คำสั่ง', icon: ScrollText, path: '/soon/orders' },
@@ -115,13 +119,17 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
-      <div className="mb-5 rounded-2xl bg-gradient-to-r from-blue-800 to-emerald-600 p-5 text-white">
-        <div className="text-sm text-blue-100">{today}</div>
-        <h1 className="mt-1 text-xl font-bold sm:text-2xl">โรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม</h1>
-        <div className="mt-1 text-blue-50">
+      <div className="relative mb-5 flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-600 to-brand-400 p-5 text-white shadow-md">
+        <div className="hidden shrink-0 rounded-2xl bg-white/90 p-2 shadow sm:block"><Logo size={88} /></div>
+        <div className="min-w-0">
+        <div className="text-sm text-brand-50">{today}</div>
+        <h1 className="mt-1 text-lg font-bold leading-snug sm:text-xl">{SYSTEM_NAME_TH}</h1>
+        <div className="text-sm text-brand-50">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
+        <div className="mt-1 text-brand-50">
           {profile.email === 'top22bph8@gmail.com' || profile.role === 'director' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[profile.role]}`}
         </div>
-        <div className="mt-1 text-sm text-blue-100">ปีงบประมาณ {fy}</div>
+        <div className="mt-1 text-sm text-brand-100">ปีงบประมาณ {fy}</div>
+        </div>
       </div>
 
       {error ? <ErrorState message={error} />
@@ -132,11 +140,11 @@ export default function Dashboard() {
               <>
                 <h2 className="mb-2 text-lg font-semibold">ภาพรวมงานธุรการ</h2>
                 <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-                  <Stat icon={Inbox} label="หนังสือรับทั้งหมด" value={m.inTotal} tone="bg-blue-100 text-blue-700" />
+                  <Stat icon={Inbox} label="หนังสือรับทั้งหมด" value={m.inTotal} tone="bg-brand-100 text-brand-700" />
                   <Stat icon={Clock} label="รอดำเนินการ" value={m.pending.length} tone="bg-amber-100 text-amber-700" />
                   <Stat icon={AlertTriangle} label="เกินกำหนด" value={m.overdue.length} tone="bg-red-100 text-red-700" />
                   <Stat icon={Clock} label="ใกล้ครบกำหนด (3 วัน)" value={m.near.length} tone="bg-orange-100 text-orange-700" />
-                  <Stat icon={Send} label="หนังสือส่งทั้งหมด" value={m.outTotal} tone="bg-emerald-100 text-emerald-700" />
+                  <Stat icon={Send} label="หนังสือส่งทั้งหมด" value={m.outTotal} tone="bg-sky-100 text-sky-700" />
                 </div>
               </>
             )}
@@ -144,17 +152,17 @@ export default function Dashboard() {
             <h2 className="mb-2 text-lg font-semibold">ระบบงานทั้งหมด</h2>
             <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {CARDS.map((c) => {
-                const allowed = !c.live || canRead(profile.role, c.key);
+                const allowed = c.ready ? canRead(profile.role, c.module) : !c.live || canRead(profile.role, c.key);
                 const stats = c.live && m && allowed
                   ? (c.key === 'incoming' ? { total: m.inTotal, month: m.inMonth } : { total: m.outTotal, month: m.outMonth })
                   : null;
                 return (
-                  <Link key={c.label} to={allowed ? c.path : '#'} className={`card flex flex-col gap-2 p-4 transition ${allowed ? 'hover:border-blue-400 hover:shadow-md' : 'opacity-50'}`}>
-                    <div className="flex items-center gap-2"><c.icon className={`h-6 w-6 ${c.live ? 'text-blue-700' : 'text-slate-400'}`} /><span className="font-semibold">{c.label}</span></div>
+                  <Link key={c.label} to={allowed ? c.path : '#'} className={`card flex flex-col gap-2 p-4 transition ${allowed ? 'hover:border-brand-400 hover:shadow-md' : 'opacity-50'}`}>
+                    <div className="flex items-center gap-2"><c.icon className={`h-6 w-6 ${c.live || c.ready ? 'text-brand-700' : 'text-slate-400'}`} /><span className="font-semibold">{c.label}</span></div>
                     {stats ? (
                       <div className="text-sm text-slate-600"><span className="text-2xl font-bold text-slate-800">{stats.total}</span> รายการ · เดือนนี้ {stats.month}</div>
                     ) : (
-                      <span className="text-sm text-slate-400">{c.live ? 'ไม่มีสิทธิ์เข้าถึง' : 'เร็วๆ นี้'}</span>
+                      <span className={`text-sm ${c.ready ? 'text-brand-700' : 'text-slate-400'}`}>{c.ready ? 'เปิดใช้งานแล้ว' : c.live ? 'ไม่มีสิทธิ์เข้าถึง' : 'เร็วๆ นี้'}</span>
                     )}
                   </Link>
                 );
@@ -169,14 +177,14 @@ export default function Dashboard() {
                     {m.monthly.map((x) => (
                       <div key={x.label} className="flex flex-1 flex-col items-center gap-1">
                         <div className="flex h-32 w-full items-end justify-center gap-0.5">
-                          <div className="w-1/2 rounded-t bg-blue-600" style={{ height: `${(x.inc / maxBar) * 100}%` }} title={`รับ ${x.inc}`} />
-                          <div className="w-1/2 rounded-t bg-emerald-500" style={{ height: `${(x.out / maxBar) * 100}%` }} title={`ส่ง ${x.out}`} />
+                          <div className="w-1/2 rounded-t bg-brand-600" style={{ height: `${(x.inc / maxBar) * 100}%` }} title={`รับ ${x.inc}`} />
+                          <div className="w-1/2 rounded-t bg-brand-300" style={{ height: `${(x.out / maxBar) * 100}%` }} title={`ส่ง ${x.out}`} />
                         </div>
                         <span className="text-[11px] text-slate-500">{x.label}</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 flex gap-4 text-sm text-slate-600"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-blue-600" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-emerald-500" />หนังสือส่ง</span></div>
+                  <div className="mt-2 flex gap-4 text-sm text-slate-600"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-brand-600" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-brand-300" />หนังสือส่ง</span></div>
                 </div>
 
                 <div className="card p-4">
@@ -186,7 +194,7 @@ export default function Dashboard() {
                       {m.byUnit.map(([u, n]) => (
                         <li key={u} className="text-sm">
                           <div className="mb-0.5 flex justify-between"><span>{u}</span><span className="font-semibold">{n}</span></div>
-                          <div className="h-2 rounded bg-slate-100"><div className="h-2 rounded bg-blue-600" style={{ width: `${(n / maxUnit) * 100}%` }} /></div>
+                          <div className="h-2 rounded bg-slate-100"><div className="h-2 rounded bg-brand-600" style={{ width: `${(n / maxUnit) * 100}%` }} /></div>
                         </li>
                       ))}
                     </ul>
@@ -216,7 +224,7 @@ export default function Dashboard() {
                     <ul className="divide-y divide-slate-100">
                       {m.recent.map((x) => (
                         <li key={x.mod + x.id} className="flex cursor-pointer items-start gap-2 py-2 hover:bg-slate-50" onClick={() => nav(`${REGISTRIES[x.mod].path}?open=${x.id}`)}>
-                          {x.mod === 'incoming' ? <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" /> : <Send className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />}
+                          {x.mod === 'incoming' ? <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" /> : <Send className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />}
                           <div className="min-w-0 flex-1"><div className="truncate font-medium">{x.no} · {x.subject}</div><div className="text-sm text-slate-500">{fmtDate(x.date)}</div></div>
                         </li>
                       ))}
@@ -226,7 +234,7 @@ export default function Dashboard() {
 
                 {logs.length > 0 && (
                   <div className="card p-4 lg:col-span-2">
-                    <h3 className="mb-3 flex items-center justify-between font-semibold">กิจกรรมล่าสุด <Link to="/audit" className="text-sm font-normal text-blue-700 hover:underline">ดูทั้งหมด</Link></h3>
+                    <h3 className="mb-3 flex items-center justify-between font-semibold">กิจกรรมล่าสุด <Link to="/audit" className="text-sm font-normal text-brand-700 hover:underline">ดูทั้งหมด</Link></h3>
                     <ul className="divide-y divide-slate-100 text-sm">
                       {logs.map((l) => (
                         <li key={l.id} className="flex flex-wrap gap-x-3 py-1.5"><span className="text-slate-500">{fmtDateTime(l.at)}</span><span className="font-medium">{l.userEmail}</span><span>{ACTION[l.action] || l.action} {l.label}</span></li>

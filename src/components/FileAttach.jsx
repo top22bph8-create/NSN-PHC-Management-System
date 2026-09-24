@@ -124,7 +124,7 @@ export default function FileAttach({ cfg, id, label, attachments = [], canEdit, 
       <ul className="space-y-2">
         {attachments.map((a) => (
           <li key={a.path} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2">
-            <FileText className="h-5 w-5 shrink-0 text-blue-700" />
+            <FileText className="h-5 w-5 shrink-0 text-brand-700" />
             <div className="min-w-0 flex-1">
               <div className="truncate font-medium">{a.name}</div>
               <div className="text-sm text-slate-500">{a.docType} · {fmtSize(a.size)}</div>

@@ -17,16 +17,38 @@ service cloud.firestore {
       return isActive() && get(userPath()).data.role in list;
     }
 
-    // ผู้ใช้งานและสิทธิ์
+    // ผู้ใช้งานและสิทธิ์ (ทำเนียบบุคลากร)
     match /users/{email} {
-      allow read: if signedIn() && (request.auth.token.email == email || hasRole(['super_admin', 'director']));
+      // ผู้ใช้ทุกคนที่ใช้งานอยู่อ่านทำเนียบได้ / อ่านของตัวเองได้เสมอ (เพื่อแสดงหน้าบัญชีถูกระงับ)
+      allow read: if signedIn() && (request.auth.token.email == email || isActive());
       // เจ้าของระบบสร้างสิทธิ์ตัวเองครั้งแรกได้ครั้งเดียว
       allow create: if (signedIn()
                         && request.auth.token.email == email
                         && email == 'top22bph8@gmail.com'
                         && request.resource.data.role == 'super_admin')
                     || hasRole(['super_admin']);
-      allow update, delete: if hasRole(['super_admin']);
+      // เจ้าตัวแก้ได้เฉพาะ mustChangePassword เป็น false (หลังเปลี่ยนรหัสผ่านแล้ว)
+      allow update: if hasRole(['super_admin'])
+                    || (signedIn() && request.auth.token.email == email
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword'])
+                        && request.resource.data.mustChangePassword == false);
+      allow delete: if hasRole(['super_admin']);
+    }
+
+    // ใบลา
+    match /leaves/{id} {
+      allow read: if isActive() && (resource.data.userEmail == request.auth.token.email
+                                    || hasRole(['super_admin', 'director', 'admin_clerk']));
+      // ยื่นใบลาของตัวเอง สถานะต้องเป็น "รอพิจารณา" (ธุรการ/แอดมินยื่นแทนได้)
+      allow create: if isActive() && request.resource.data.status == 'รอพิจารณา'
+                    && (request.resource.data.userEmail == request.auth.token.email
+                        || hasRole(['super_admin', 'admin_clerk']));
+      // ผู้อำนวยการ/แอดมินพิจารณาได้ ส่วนเจ้าของใบลายกเลิกได้เฉพาะใบที่ยังรอพิจารณา
+      allow update: if hasRole(['super_admin', 'director'])
+                    || (isActive() && resource.data.userEmail == request.auth.token.email
+                        && resource.data.status == 'รอพิจารณา'
+                        && request.resource.data.status == 'ยกเลิก');
+      allow delete: if hasRole(['super_admin']);
     }
 
     // ตั้งค่าระบบ

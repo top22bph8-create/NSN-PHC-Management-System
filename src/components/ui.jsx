@@ -77,7 +77,7 @@ export function Badge({ children, className = 'bg-slate-100 text-slate-700' }) {
 
 export function Toast({ toast, onClose }) {
   if (!toast) return null;
-  const color = toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600';
+  const color = toast.type === 'error' ? 'bg-red-600' : 'bg-brand-700';
   return (
     <div className={`fixed bottom-20 left-1/2 z-[60] -translate-x-1/2 rounded-lg px-4 py-2 text-white shadow-lg lg:bottom-6 ${color}`} onClick={onClose} role="status">
       {toast.text}

@@ -6,24 +6,29 @@ import { REGISTRIES } from './config/registries';
 import Layout from './components/Layout';
 import RegistryPage from './components/RegistryPage';
 import { Spinner } from './components/ui';
+import Logo from './components/Logo';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
-import Users from './pages/Users';
+import Personnel from './pages/Personnel';
+import Leave from './pages/Leave';
+import Backup from './pages/Backup';
+import Account, { ForcedChange } from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
 import AuditLog from './pages/AuditLog';
 
 function Blocked({ problem, error }) {
   const { logout, user } = useAuth();
   const text = {
-    'no-profile': 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาแจ้งผู้ดูแลระบบให้เพิ่มอีเมลของท่านในเมนู "ผู้ใช้งานและสิทธิ์"',
+    'no-profile': 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาแจ้งผู้ดูแลระบบให้เพิ่มอีเมลของท่านในเมนู "ทำเนียบบุคลากร"',
     inactive: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
     error: `โหลดข้อมูลสิทธิ์ไม่สำเร็จ (${error}) ตรวจสอบว่าได้เผยแพร่ Firestore Rules ล่าสุดแล้ว`,
   }[problem];
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-100 to-white p-4">
       <div className="card max-w-md p-6 text-center">
+        <Logo size={80} className="mx-auto mb-2" />
         <h1 className="mb-2 text-xl font-bold">เข้าใช้งานไม่ได้</h1>
         <p className="mb-1 text-sm text-slate-500">{user?.email}</p>
         <p className="mb-4">{text}</p>
@@ -47,6 +52,7 @@ function Shell() {
   if (loading) return <Spinner />;
   if (!user) return <Login />;
   if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (profile.mustChangePassword) return <ForcedChange />;
   return (
     <FiscalYearProvider>
       <Routes>
@@ -56,7 +62,11 @@ function Shell() {
           {Object.values(REGISTRIES).map((cfg) => (
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><RegistryPage cfg={cfg} /></Guard>} />
           ))}
-          <Route path="users" element={<Guard module="users"><Users /></Guard>} />
+          <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
+          <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />
+          <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
+          <Route path="account" element={<Account />} />
+          <Route path="users" element={<Navigate to="/personnel" replace />} />
           <Route path="settings" element={<Guard module="settings"><SettingsPage /></Guard>} />
           <Route path="audit" element={<Guard module="audit"><AuditLog /></Guard>} />
           <Route path="soon/:key" element={<ComingSoon />} />

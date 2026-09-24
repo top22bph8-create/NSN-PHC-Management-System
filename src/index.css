@@ -2,21 +2,42 @@
 
 @theme {
   --font-sans: "Sarabun", system-ui, sans-serif;
+  /* โทนสีฟ้าอ่อน อ้างอิงสีของโลโก้ (ฟ้าเข้ม #1a6db5 / ฟ้าสว่าง #40c4f5) */
+  --color-brand-50: #f0f9ff;
+  --color-brand-100: #e0f2fe;
+  --color-brand-200: #bae6fd;
+  --color-brand-300: #7dd3fc;
+  --color-brand-400: #40c4f5;
+  --color-brand-500: #1fa3e0;
+  --color-brand-600: #1a85cc;
+  --color-brand-700: #1a6db5;
+  --color-brand-800: #175a96;
+  --color-brand-900: #144a7a;
 }
 
 html, body, #root { min-height: 100%; }
-body { @apply bg-slate-50 text-slate-800 antialiased; }
+body {
+  @apply text-slate-800 antialiased;
+  background: linear-gradient(180deg, #f0f9ff 0%, #f8fcff 40%, #ffffff 100%) fixed;
+}
 
 .input {
-  @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base outline-none transition
-    focus:border-blue-600 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100;
+  @apply w-full rounded-lg border border-brand-200 bg-white px-3 py-2 text-base outline-none transition
+    focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:bg-slate-100;
 }
 .btn {
   @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-base font-medium transition
     disabled:cursor-not-allowed disabled:opacity-50;
 }
-.btn-primary { @apply bg-blue-700 text-white hover:bg-blue-800; }
-.btn-green { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
-.btn-outline { @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50; }
+.btn-primary { @apply bg-brand-700 text-white shadow-sm hover:bg-brand-800; }
+.btn-green { @apply bg-brand-600 text-white shadow-sm hover:bg-brand-700; }
+.btn-outline { @apply border border-brand-200 bg-white text-brand-800 hover:bg-brand-50; }
 .btn-danger { @apply bg-red-600 text-white hover:bg-red-700; }
-.card { @apply rounded-xl border border-slate-200 bg-white shadow-sm; }
+.card { @apply rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-100/60; }
+
+/* ลายน้ำโลโก้จาง ๆ มุมขวาล่างของทุกหน้า */
+.watermark {
+  position: fixed; right: -60px; bottom: -60px; width: 420px; height: 420px; z-index: 0;
+  background: url("./assets/logo.png") center / contain no-repeat; opacity: .05; pointer-events: none;
+}
+main, header { position: relative; z-index: 1; }

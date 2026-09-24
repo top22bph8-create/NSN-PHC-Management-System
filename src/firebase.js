@@ -5,7 +5,7 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: 'AIzaSyAGnLzjmmmTIo3Ks_InRopMihfSYKOg0yg',
   authDomain: 'nsn-phc-web.firebaseapp.com',
   projectId: 'nsn-phc-web',

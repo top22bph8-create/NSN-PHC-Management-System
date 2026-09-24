@@ -1,6 +1,6 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Building2,
-  Activity, HeartPulse, Users, Settings, History,
+  Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
 } from 'lucide-react';
 
 // ready = พร้อมใช้งานแล้ว, module = ชื่อสิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
@@ -10,6 +10,13 @@ export const MENU = [
     items: [
       { key: 'dash', label: 'Dashboard', path: '/', icon: Home, ready: true },
       { key: 'search', label: 'ค้นหาแบบรวม', path: '/search', icon: Search, ready: true },
+    ],
+  },
+  {
+    title: 'งานบุคคล',
+    items: [
+      { key: 'leave', label: 'ระบบควบคุมวันลา', path: '/leave', icon: CalendarDays, ready: true, module: 'leave' },
+      { key: 'personnel', label: 'ทำเนียบบุคลากร', path: '/personnel', icon: Users, ready: true, module: 'personnel' },
     ],
   },
   {
@@ -35,8 +42,8 @@ export const MENU = [
   {
     title: 'ผู้ดูแลระบบ',
     items: [
-      { key: 'users', label: 'ผู้ใช้งานและสิทธิ์', path: '/users', icon: Users, ready: true, module: 'users' },
-      { key: 'settings', label: 'ตั้งค่าเลขทะเบียน', path: '/settings', icon: Settings, ready: true, module: 'settings' },
+      { key: 'settings', label: 'ตั้งค่าระบบ', path: '/settings', icon: Settings, ready: true, module: 'settings' },
+      { key: 'backup', label: 'สำรอง/กู้คืนข้อมูล', path: '/backup', icon: DatabaseBackup, ready: true, module: 'backup' },
       { key: 'audit', label: 'Audit Log', path: '/audit', icon: History, ready: true, module: 'audit' },
     ],
   },

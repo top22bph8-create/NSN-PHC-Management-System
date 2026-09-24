@@ -223,11 +223,11 @@ export default function RegistryPage({ cfg }) {
                 </thead>
                 <tbody>
                   {filtered.map((it) => (
-                    <tr key={it.id} className="cursor-pointer border-t border-slate-100 hover:bg-blue-50/60" onClick={() => setViewId(it.id)}>
+                    <tr key={it.id} className="cursor-pointer border-t border-slate-100 hover:bg-brand-50/60" onClick={() => setViewId(it.id)}>
                       {listFields.map((f) => (
                         <td key={f.key} className={`px-3 py-2 align-top ${f.key === 'subject' ? 'max-w-xs' : ''}`}>
                           {f.key === cfg.statusField ? <Badge className={cfg.statusColors[it[f.key]]}>{it[f.key]}</Badge>
-                            : f.key === cfg.numberField ? <span className="font-semibold text-blue-800">{it[f.key]}</span>
+                            : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
                             : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key])}</span>}
                         </td>
                       ))}
@@ -256,7 +256,7 @@ export default function RegistryPage({ cfg }) {
           }
         >
           <form id="reg-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2" noValidate>
-            {!form.id && <p className="rounded-lg bg-blue-50 p-2 text-sm text-blue-800 sm:col-span-2">{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>}
+            {!form.id && <p className="rounded-lg bg-brand-50 p-2 text-sm text-brand-800 sm:col-span-2">{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>}
             {cfg.fields.filter((f) => !f.auto).map((f) => (
               <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
                 <label htmlFor={`f-${f.key}`} className="mb-1 block text-sm font-medium text-slate-600">{f.label}{f.required && <span className="text-red-600"> *</span>}</label>

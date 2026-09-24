@@ -64,5 +64,14 @@ export function AuthProvider({ children }) {
     await signOut(auth);
   };
 
-  return <Ctx.Provider value={{ ...state, logout }}>{children}</Ctx.Provider>;
+  // โหลดโปรไฟล์ใหม่ (ใช้หลังเปลี่ยนรหัสผ่านครั้งแรก)
+  const refresh = async () => {
+    const u = auth.currentUser;
+    if (!u) return;
+    const email = u.email.toLowerCase();
+    const snap = await getDoc(doc(db, 'users', email));
+    if (snap.exists()) setState((s) => ({ ...s, profile: { ...snap.data(), email } }));
+  };
+
+  return <Ctx.Provider value={{ ...state, logout, refresh }}>{children}</Ctx.Provider>;
 }

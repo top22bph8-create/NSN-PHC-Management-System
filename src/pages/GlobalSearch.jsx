@@ -61,11 +61,11 @@ export default function GlobalSearch() {
           if (!list.length) return null;
           return (
             <section key={key} className="mb-5">
-              <h2 className="mb-2 flex items-center gap-2 font-semibold"><Icon className="h-5 w-5 text-blue-700" /> {cfg.title} <span className="text-sm font-normal text-slate-500">({list.length})</span> <Link to={cfg.path} className="text-sm font-normal text-blue-700 hover:underline">เปิดทะเบียน</Link></h2>
+              <h2 className="mb-2 flex items-center gap-2 font-semibold"><Icon className="h-5 w-5 text-brand-700" /> {cfg.title} <span className="text-sm font-normal text-slate-500">({list.length})</span> <Link to={cfg.path} className="text-sm font-normal text-brand-700 hover:underline">เปิดทะเบียน</Link></h2>
               <ul className="card divide-y divide-slate-100">
                 {list.slice(0, 50).map((it) => (
-                  <li key={it.id} className="cursor-pointer p-3 hover:bg-blue-50/60" onClick={() => go(cfg, it)}>
-                    <div className="font-medium"><span className="text-blue-800">{it[cfg.numberField]}</span> · {it.subject}</div>
+                  <li key={it.id} className="cursor-pointer p-3 hover:bg-brand-50/60" onClick={() => go(cfg, it)}>
+                    <div className="font-medium"><span className="text-brand-800">{it[cfg.numberField]}</span> · {it.subject}</div>
                     <div className="text-sm text-slate-500">เลขที่ {it.docNo || '-'} · {fmtDate(it[cfg.dateField])} · ปีงบประมาณ {it.fy}</div>
                   </li>
                 ))}
