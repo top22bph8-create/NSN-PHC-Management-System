@@ -16,6 +16,11 @@ export const ROLES = {
 
 const ALL = Object.keys(ROLES);
 
+// บทบาทที่ผู้ดูแลระบบกำหนดให้ผู้ใช้งานได้ (ไม่รวม "pending" ซึ่งเป็นสถานะรออนุมัติเท่านั้น)
+export const ASSIGNABLE_ROLES = ROLES;
+// ป้ายกำกับสำหรับบัญชีที่สมัครเข้ามาเองและรออนุมัติ (ไม่ใช่บทบาทที่ใช้งานจริง)
+export const PENDING_LABEL = 'รอผู้ดูแลระบบอนุมัติ';
+
 export const ACCESS = {
   incoming: { read: ['super_admin', 'director', 'admin_clerk', 'viewer'], write: ['super_admin', 'admin_clerk'] },
   outgoing: { read: ['super_admin', 'director', 'admin_clerk', 'viewer'], write: ['super_admin', 'admin_clerk'] },

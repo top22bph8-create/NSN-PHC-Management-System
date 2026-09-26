@@ -39,16 +39,22 @@ export default function Layout() {
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {visible.map((s, idx) => (
           <div key={s.title} className={`mb-4 ${idx > 0 ? 'border-t border-brand-200/70 pt-3' : ''}`}>
-            <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-500">
-              {s.icon && <s.icon className="h-3.5 w-3.5" />} {s.title}
-            </div>
+            {s.main ? (
+              <div className="menu-band-title mb-2">
+                {s.icon && <s.icon className="h-4 w-4" />} {s.title}
+              </div>
+            ) : (
+              <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-500">
+                {s.icon && <s.icon className="h-3.5 w-3.5" />} {s.title}
+              </div>
+            )}
             {s.items.map((i) => (
               <NavLink
                 key={i.key} to={i.path} end={i.path === '/'} onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 transition ${isActive ? 'bg-brand-600 font-semibold text-white shadow-sm' : 'text-slate-700 hover:bg-brand-100'}`}
+                className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 transition ${isActive ? 'bg-brand-600 font-semibold text-white shadow-sm' : `text-slate-700 hover:bg-brand-100 ${s.main ? 'font-semibold' : ''}`}`}
               >
                 <i.icon className="h-5 w-5 shrink-0" />
-                <span className="flex-1">{i.label}</span>
+                <span className="flex-1">{i.emoji && <span className="mr-1">{i.emoji}</span>}{i.label}</span>
                 {!i.ready && <span className="rounded bg-brand-100 px-1.5 text-xs text-brand-700">เร็วๆ นี้</span>}
               </NavLink>
             ))}

@@ -26,6 +26,11 @@ service cloud.firestore {
                         && request.auth.token.email == email
                         && email == 'top22bph8@gmail.com'
                         && request.resource.data.role == 'super_admin')
+                    // ผู้ใช้งานสมัครเข้ามาเอง: สร้างได้เฉพาะโปรไฟล์ตัวเอง สถานะ pending/ยังไม่ active เท่านั้น
+                    || (signedIn()
+                        && request.auth.token.email == email
+                        && request.resource.data.role == 'pending'
+                        && request.resource.data.active == false)
                     || hasRole(['super_admin']);
       // เจ้าตัวแก้ได้เฉพาะ mustChangePassword เป็น false (หลังเปลี่ยนรหัสผ่านแล้ว)
       allow update: if hasRole(['super_admin'])

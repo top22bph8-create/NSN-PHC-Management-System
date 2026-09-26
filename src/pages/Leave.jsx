@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { CalendarDays, Check, Download, Loader2, Plus, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, User, Users, X } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -11,6 +11,27 @@ import { exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
+
+// การ์ดโควตา/สถิติการลาของบุคคลใดบุคคลหนึ่ง (ใช้ทั้งของตัวเองด้านบน และในแดชบอร์ดรายบุคคล)
+function QuotaGrid({ quota, used, pending }) {
+  if (!quota) return null;
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {Object.entries(quota).map(([type, q]) => {
+        const u = used[type] || 0; const p = pending[type] || 0;
+        const pct = q ? Math.min(100, ((u + p) / q) * 100) : 0;
+        return (
+          <div key={type} className="card p-3">
+            <div className="text-sm text-slate-500">{type}</div>
+            <div className="text-2xl font-bold text-brand-800">{Math.max(0, q - u)} <span className="text-sm font-normal text-slate-500">/ {q} วัน คงเหลือ</span></div>
+            <div className="mt-1 h-2 overflow-hidden rounded bg-brand-100"><div className="h-2 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
+            <div className="mt-1 text-xs text-slate-500">ใช้แล้ว {u}{p ? ` · รออนุมัติ ${p}` : ''}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function LeaveForm({ profile, quota, mine, pageFy, onClose, say }) {
   const [f, setF] = useState({ type: LEAVE_TYPES[0], start: todayStr(), end: todayStr(), days: 1, reason: '', contact: '' });
@@ -97,11 +118,53 @@ function DecideModal({ leave, decision, onClose, say, by }) {
   );
 }
 
+function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, onBack, say }) {
+  const [form, setForm] = useState(false);
+  const mine = useMemo(() => rows.filter((l) => l.userEmail === person.email), [rows, person.email]);
+  const { used, pending } = useMemo(() => usage(mine), [mine]);
+  const canFile = isSelf || canFileForOthers;
+  return (
+    <div>
+      <button className="mb-3 flex items-center gap-1 text-sm text-brand-700 hover:underline" onClick={onBack}><ChevronLeft className="h-4 w-4" /> กลับไปรายชื่อบุคลากร</button>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-700"><User className="h-6 w-6" /></div>
+          <div>
+            <div className="text-lg font-bold text-slate-800">{person.name || person.email}</div>
+            <div className="text-sm text-slate-500">{person.position || ''}</div>
+          </div>
+        </div>
+        {canFile && <button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>}
+      </div>
+      <QuotaGrid quota={quota} used={used} pending={pending} />
+      <div className="card overflow-x-auto">
+        {mine.length === 0 ? <EmptyState title="ยังไม่มีประวัติการลาในปีงบประมาณนี้" /> : (
+          <table className="w-full min-w-[640px] text-left">
+            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">ช่วงวันที่</th><th className="px-3 py-2">วัน</th><th className="px-3 py-2">สถานะ</th></tr></thead>
+            <tbody>
+              {mine.map((l) => (
+                <tr key={l.id} className="border-t border-slate-100">
+                  <td className="px-3 py-2">{l.type}</td>
+                  <td className="px-3 py-2 text-sm">{fmtDate(l.start)} - {fmtDate(l.end)}</td>
+                  <td className="px-3 py-2">{l.days}</td>
+                  <td className="px-3 py-2"><Badge className={LEAVE_STATUS_COLORS[l.status]}>{l.status}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {form && quota && <LeaveForm profile={person} quota={quota} mine={mine} pageFy={fy} onClose={() => setForm(false)} say={say} />}
+    </div>
+  );
+}
+
 export default function Leave() {
   const { profile } = useAuth();
   const { fy } = useFiscalYear();
   const viewAll = can(profile.role, 'leave', 'viewAll');
   const canApprove = can(profile.role, 'leave', 'approve');
+  const canFileForOthers = ['super_admin', 'admin_clerk'].includes(profile.role);
   const [tab, setTab] = useState('mine');
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
@@ -109,6 +172,8 @@ export default function Leave() {
   const [form, setForm] = useState(false);
   const [decide, setDecide] = useState(null);
   const [toast, setToast] = useState(null);
+  const [people, setPeople] = useState(null);
+  const [person, setPerson] = useState(null);
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 4000); };
 
   useEffect(() => { getQuota().then(setQuota).catch(() => setQuota({})); }, []);
@@ -120,6 +185,14 @@ export default function Leave() {
       (s) => setRows(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.start || '').localeCompare(a.start || ''))),
       (e) => setError(e.message));
   }, [fy, viewAll, profile.email]);
+
+  // รายชื่อบุคลากรทั้งหมด สำหรับแท็บ "รายบุคคล" (เห็นเฉพาะผู้ที่มีสิทธิ์ดูรายการลาทุกคน)
+  useEffect(() => {
+    if (!viewAll) return;
+    return onSnapshot(collection(db, 'users'),
+      (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending').sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email), 'th'))),
+      () => setPeople([]));
+  }, [viewAll]);
 
   const mine = useMemo(() => (rows || []).filter((l) => l.userEmail === profile.email), [rows, profile.email]);
   const { used, pending } = useMemo(() => usage(mine), [mine]);
@@ -139,29 +212,45 @@ export default function Leave() {
     'วันลา', `วันลา-ปีงบ${fy}`,
   );
 
-  const tabs = [['mine', 'ใบลาของฉัน'], ...(viewAll ? [['all', 'ทั้งหมด'], ['wait', `รอพิจารณา${waitCount ? ` (${waitCount})` : ''}`]] : [])];
+  const tabs = [['mine', 'ใบลาของฉัน'], ...(viewAll ? [['all', 'ทั้งหมด'], ['wait', `รอพิจารณา${waitCount ? ` (${waitCount})` : ''}`], ['people', 'รายบุคคล']] : [])];
+
+  if (tab === 'people' && viewAll) {
+    return (
+      <div className="mx-auto max-w-6xl p-4 lg:p-6">
+        <PageHeader icon={Users} title="วันลารายบุคคล" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`} />
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {tabs.map(([k, l]) => <button key={k} onClick={() => { setTab(k); setPerson(null); }} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
+        </div>
+        {person ? (
+          <PersonDashboard person={person} rows={rows || []} quota={quota} fy={fy} canFileForOthers={canFileForOthers} isSelf={person.email === profile.email} onBack={() => setPerson(null)} say={say} />
+        ) : people === null ? <Spinner /> : people.length === 0 ? <EmptyState title="ยังไม่มีบุคลากร" /> : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {people.map((p) => {
+              const cnt = (rows || []).filter((l) => l.userEmail === p.email && l.status === 'อนุมัติ').length;
+              return (
+                <button key={p.email} onClick={() => setPerson(p)} className="card flex items-center gap-3 p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-brand-100 text-brand-700"><User className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-slate-800">{p.name || p.email}</div>
+                    <div className="truncate text-sm text-slate-500">{p.position || '-'}</div>
+                  </div>
+                  <Badge className="bg-brand-50 text-brand-700">{cnt} ครั้ง</Badge>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <Toast toast={toast} onClose={() => setToast(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <PageHeader icon={CalendarDays} title="ระบบควบคุมวันลา" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`}
         actions={<button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>} />
 
-      {quota && (
-        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {Object.entries(quota).map(([type, q]) => {
-            const u = used[type] || 0; const p = pending[type] || 0;
-            const pct = q ? Math.min(100, ((u + p) / q) * 100) : 0;
-            return (
-              <div key={type} className="card p-3">
-                <div className="text-sm text-slate-500">{type}</div>
-                <div className="text-2xl font-bold text-brand-800">{Math.max(0, q - u)} <span className="text-sm font-normal text-slate-500">/ {q} วัน คงเหลือ</span></div>
-                <div className="mt-1 h-2 overflow-hidden rounded bg-brand-100"><div className="h-2 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
-                <div className="mt-1 text-xs text-slate-500">ใช้แล้ว {u}{p ? ` · รออนุมัติ ${p}` : ''}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <QuotaGrid quota={quota} used={used} pending={pending} />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}

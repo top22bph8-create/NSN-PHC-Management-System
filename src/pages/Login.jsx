@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
-import { Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, User, UserPlus } from 'lucide-react';
 import { auth } from '../firebase';
 import { firebasePassword, toEmail } from '../lib/accounts';
 import { ORG_UNDER, SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
@@ -41,15 +42,15 @@ export default function Login() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-brand-200 via-brand-50 to-white p-4">
-      <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-brand-300/40 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-brand-400/30 blur-3xl" />
-      <div className="card relative w-full max-w-md p-6 sm:p-8">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-brand-700 via-brand-300 to-brand-50 p-4">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-white/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-brand-900/20 blur-3xl" />
+      <div className="card relative w-full max-w-md p-6 shadow-2xl shadow-brand-900/20 sm:p-8">
         <div className="mb-6 text-center">
-          <Logo size={120} className="mx-auto drop-shadow" />
-          <h1 className="mt-3 text-lg font-bold leading-snug text-brand-900 sm:text-xl">{SYSTEM_NAME_TH}</h1>
-          <p className="text-sm text-slate-600">{SYSTEM_AREA_TH}</p>
-          <p className="mt-1 inline-block rounded-full bg-brand-100 px-3 py-0.5 text-sm font-semibold text-brand-700">{SYSTEM_NAME_EN}</p>
+          <Logo size={120} className="mx-auto drop-shadow-lg" />
+          <h1 className="mt-4 bg-gradient-to-r from-brand-800 to-brand-500 bg-clip-text text-xl font-extrabold leading-snug text-transparent sm:text-2xl">{SYSTEM_NAME_TH}</h1>
+          <p className="mt-1 text-sm font-medium text-slate-600">{SYSTEM_AREA_TH}</p>
+          <p className="mt-2 inline-block rounded-full bg-gradient-to-r from-brand-600 to-brand-800 px-4 py-1 text-sm font-bold tracking-wide text-white shadow-sm">{SYSTEM_NAME_EN}</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div>
@@ -74,6 +75,9 @@ export default function Login() {
           <button className="btn btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} เข้าสู่ระบบ</button>
           <button type="button" onClick={reset} className="w-full text-sm text-brand-700 hover:underline">ลืมรหัสผ่าน</button>
         </form>
+        <Link to="/signup" className="mt-4 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-brand-300 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50">
+          <UserPlus className="h-4 w-4" /> ยังไม่มีบัญชี? สมัครใช้งาน
+        </Link>
         <p className="mt-6 text-center text-xs text-slate-500">สำหรับเจ้าหน้าที่ที่ได้รับอนุญาตเท่านั้น<br />{ORG_UNDER}</p>
       </div>
     </div>

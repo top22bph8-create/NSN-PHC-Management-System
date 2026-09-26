@@ -39,11 +39,16 @@ label { @apply text-slate-600; }
   @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-base font-medium transition
     disabled:cursor-not-allowed disabled:opacity-50;
 }
-.btn-primary { @apply bg-brand-700 text-white shadow-sm hover:bg-brand-800; }
+.btn-primary { @apply bg-gradient-to-r from-brand-600 to-brand-800 text-white shadow-sm hover:from-brand-700 hover:to-brand-900; }
 .btn-green { @apply bg-brand-600 text-white shadow-sm hover:bg-brand-700; }
 .btn-outline { @apply border border-brand-200 bg-white text-brand-800 hover:bg-brand-50; }
 .btn-danger { @apply bg-red-600 text-white hover:bg-red-700; }
 .card { @apply rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-100/60; }
+
+/* แถบหัวข้องานหลัก: ใหญ่ ตัวหนา สังเกตง่ายกว่างานรอง */
+.menu-band-title {
+  @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-700 to-brand-500 px-3 py-1.5 text-sm font-extrabold uppercase tracking-wide text-white shadow-sm;
+}
 
 /* ลายน้ำโลโก้จาง ๆ มุมขวาล่างของทุกหน้า */
 .watermark {

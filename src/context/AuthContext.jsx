@@ -40,7 +40,8 @@ export function AuthProvider({ children }) {
           }
           const profile = { ...snap.data(), email };
           if (!profile.active) {
-            setState({ loading: false, user, profile: null, problem: 'inactive' });
+            // เก็บ profile ไว้ (ไม่ตั้งเป็น null) เพื่อให้หน้าบล็อกแสดงข้อความ "รออนุมัติ" ต่างจาก "ถูกระงับ" ได้ถูกต้อง
+            setState({ loading: false, user, profile, problem: 'inactive' });
             return;
           }
           setState({ loading: false, user, profile, problem: null });

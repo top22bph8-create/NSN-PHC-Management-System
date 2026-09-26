@@ -1,6 +1,21 @@
 // นิยามทะเบียน: เพิ่มทะเบียนใหม่ได้โดยเพิ่มค่าในไฟล์นี้ ไม่ต้องเขียนหน้าใหม่
 const UNITS = ['ธุรการ', 'การเงินและบัญชี', 'พัสดุ', 'ส่งเสริมป้องกันควบคุมโรค', 'เวชปฏิบัติครอบครัว', 'ผู้อำนวยการ'];
 
+// รายชื่อ "ถึง" มาตรฐานของหนังสือส่ง (เลือกจากรายการ หรือเลือก "อื่น ๆ" แล้วพิมพ์เอง)
+export const OUTGOING_TO_OPTIONS = [
+  'นายกองค์การบริหารส่วนจังหวัดสกลนคร',
+  'นายกองค์การบริหารส่วนจังหวัดสกลนคร (ผ่านผู้อำนวยการกองสาธารณสุข)',
+  'นายกองค์การบริหารส่วนจังหวัดสกลนคร (ผ่านผู้อำนวยการกองคลัง)',
+  'นายกองค์การบริหารส่วนจังหวัดสกลนคร (ผ่านผู้อำนวยการกองพัสดุและทรัพย์สิน)',
+  'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม',
+  'ผู้จัดการธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (สาขาธาตุนาเวง)',
+  'ผู้จัดการธนาคารกรุงไทย',
+  'ผู้อำนวยการโรงพยาบาลสกลนคร',
+  'ผู้ใหญ่บ้าน',
+  'ผู้จัดการร้านหนึ่งก๊อปปี้',
+  'ผู้จัดการสหกรณ์การเกษตรเมืองสกลนคร จำกัด',
+];
+
 export const REGISTRIES = {
   incoming: {
     key: 'incoming',
@@ -36,6 +51,8 @@ export const REGISTRIES = {
       { key: 'actionDate', label: 'วันที่ดำเนินการ', type: 'date' },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
+    reportColor: 'F5A623',
+    reportColumns: ['receiveNo', 'receiveDate', 'from', 'to', 'subject', 'docDate'],
   },
   outgoing: {
     key: 'outgoing',
@@ -59,14 +76,15 @@ export const REGISTRIES = {
       { key: 'sendDate', label: 'วันที่ส่ง', type: 'date', required: true, list: true },
       { key: 'docNo', label: 'เลขที่หนังสือ', type: 'text', required: true, list: true, search: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
-      { key: 'receiver', label: 'ผู้รับ', type: 'text', list: true, search: true },
-      { key: 'destOrg', label: 'หน่วยงานปลายทาง', type: 'text', required: true, list: true, search: true },
+      { key: 'to', label: 'ถึง', type: 'select-other', options: OUTGOING_TO_OPTIONS, required: true, list: true, search: true },
       { key: 'owner', label: 'ผู้รับผิดชอบ', type: 'text', search: true },
       { key: 'unit', label: 'กลุ่มงาน', type: 'select', options: UNITS },
       { key: 'method', label: 'วิธีส่ง', type: 'select', options: ['ไปรษณีย์', 'ส่งด้วยตนเอง', 'อีเมล', 'ระบบสารบรรณอิเล็กทรอนิกส์', 'อื่น ๆ'], default: 'ไปรษณีย์' },
       { key: 'status', label: 'สถานะ', type: 'select', options: ['ร่าง', 'ส่งแล้ว', 'ยืนยันรับแล้ว'], default: 'ร่าง', list: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
+    reportColor: 'F6C90E',
+    reportColumns: ['sendNo', 'sendDate', 'to', 'subject', 'note'],
   },
   vehicle: {
     key: 'vehicle',
@@ -100,6 +118,8 @@ export const REGISTRIES = {
       { key: 'status', label: 'สถานะ', type: 'select', options: ['ขออนุมัติ', 'กำลังใช้งาน', 'เสร็จสิ้น'], default: 'ขออนุมัติ', list: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
+    reportColor: '4FA8E0',
+    reportColumns: ['tripNo', 'useDate', 'plate', 'driver', 'purpose', 'requester', 'status'],
   },
   duty: {
     key: 'duty',
@@ -129,6 +149,8 @@ export const REGISTRIES = {
       { key: 'status', label: 'สถานะ', type: 'select', options: ['วางแผน', 'ปฏิบัติงานแล้ว', 'ยกเลิก'], default: 'วางแผน', list: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
+    reportColor: '7FCC9E',
+    reportColumns: ['dutyNo', 'dutyDate', 'dutyType', 'timeRange', 'staffName', 'location', 'status'],
   },
   homevisit: {
     key: 'homevisit',
@@ -158,5 +180,7 @@ export const REGISTRIES = {
       { key: 'problem', label: 'ปัญหา/อุปสรรค', type: 'textarea' },
       { key: 'status', label: 'สถานะ', type: 'select', options: ['วางแผน', 'ดำเนินการแล้ว', 'เลื่อน/ยกเลิก'], default: 'วางแผน', list: true },
     ],
+    reportColor: 'B48EAD',
+    reportColumns: ['visitNo', 'visitDate', 'village', 'targetGroup', 'team', 'visitedCount', 'status'],
   },
 };

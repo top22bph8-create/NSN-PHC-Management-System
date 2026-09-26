@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
-import { Download, FileSpreadsheet, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -10,6 +10,7 @@ import { canWrite } from '../lib/roles';
 import { diffFields, writeAudit } from '../lib/audit';
 import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, ORG_DOC_CODE } from '../lib/numbering';
 import { exportCsv, exportXlsx } from '../lib/exportFile';
+import { exportRegistryExcel } from '../lib/report';
 import { fiscalYearBE, fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from './ui';
 import FileAttach from './FileAttach';
@@ -198,6 +199,20 @@ export default function RegistryPage({ cfg }) {
     }
   };
 
+  // รายงานรูปแบบทะเบียนราชการ (แถบชื่อเรื่องสี + หัวตารางสี): Excel จริงจากไฟล์, PDF ผ่านหน้าพิมพ์ของเบราว์เซอร์
+  const [reporting, setReporting] = useState(false);
+  const doReportExcel = async () => {
+    if (!filtered.length) return say({ type: 'error', text: 'ไม่มีข้อมูลให้ออกรายงาน' });
+    setReporting(true);
+    try {
+      await exportRegistryExcel(cfg, filtered, fy);
+      writeAudit({ action: 'export', module: cfg.key, label: `รายงาน ${cfg.title} ปีงบ${fy} (Excel แบบฟอร์ม)` }).catch(() => {});
+    } catch (e) {
+      say({ type: 'error', text: 'ออกรายงานไม่สำเร็จ: ' + e.message });
+    } finally { setReporting(false); }
+  };
+  const openReportPdf = () => window.open(`${window.location.origin}${window.location.pathname}#/print/${cfg.key}?fy=${fy}`, '_blank');
+
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -208,6 +223,8 @@ export default function RegistryPage({ cfg }) {
         <div className="flex flex-wrap gap-2">
           <button className="btn btn-outline" onClick={() => doExport('xlsx')}><FileSpreadsheet className="h-4 w-4" /> Excel</button>
           <button className="btn btn-outline" onClick={() => doExport('csv')}><Download className="h-4 w-4" /> CSV</button>
+          <button className="btn btn-outline" onClick={doReportExcel} disabled={reporting} title="รายงาน Excel รูปแบบทะเบียนราชการ">{reporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} รายงาน Excel</button>
+          <button className="btn btn-outline" onClick={openReportPdf} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> รายงาน PDF</button>
           {writable && <button className="btn btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
         </div>
       </div>
@@ -278,10 +295,13 @@ export default function RegistryPage({ cfg }) {
             {!form.id && !isOutgoing && <p className="rounded-lg bg-brand-50 p-2 text-sm text-brand-800 sm:col-span-2">{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>}
             {!form.id && isOutgoing && (
               <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800 sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-brand-900" htmlFor="outgoing-number-preview">เลขที่หนังสือส่ง</label>
+                <input id="outgoing-number-preview" readOnly className="input bg-white font-semibold text-brand-800"
+                  value={!insertMode ? `${ORG_DOC_CODE}/${nextOutgoingPreview}` : (insertBase ? `${ORG_DOC_CODE}/${insertBase}.x (เลขแทรกลำดับถัดไป)` : `${ORG_DOC_CODE}/(เลือกเลขที่เดิมก่อน)`)} />
                 {!insertMode ? (
-                  <p>เลขที่หนังสือส่งจะออกเป็น <b>{ORG_DOC_CODE}/{nextOutgoingPreview}</b> โดยอัตโนมัติเมื่อกดบันทึก</p>
+                  <p className="mt-1">เลขที่นี้จะถูกออกโดยอัตโนมัติเมื่อกดบันทึก</p>
                 ) : (
-                  <p>เลขที่จะเป็นเลขแทรกของหมายเลขที่เลือกไว้ เช่น {ORG_DOC_CODE}/20.1</p>
+                  <p className="mt-1">เลขที่จะเป็นเลขแทรกของหมายเลขที่เลือกไว้ เช่น {ORG_DOC_CODE}/20.1 (ลำดับแทรกจริงจะคำนวณตอนบันทึก)</p>
                 )}
                 <label className="mt-2 flex items-center gap-2 font-normal text-brand-900">
                   <input type="checkbox" className="h-4 w-4" checked={insertMode} disabled={!outgoingBases.length && !insertMode}
@@ -310,6 +330,33 @@ export default function RegistryPage({ cfg }) {
                     <option value="">-- เลือก --</option>
                     {f.options.map((o) => <option key={o}>{o}</option>)}
                   </select>
+                ) : f.type === 'select-other' ? (
+                  (() => {
+                    const raw = form.values[f.key] || '';
+                    const isFixed = f.options.includes(raw);
+                    const selectVal = isFixed ? raw : raw ? 'อื่นๆ' : '';
+                    return (
+                      <div className="space-y-2">
+                        <select
+                          id={`f-${f.key}`} className="input" value={selectVal}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setForm({ ...form, values: { ...form.values, [f.key]: v === 'อื่นๆ' ? '' : v } });
+                          }}
+                        >
+                          <option value="">-- เลือก --</option>
+                          {f.options.map((o) => <option key={o}>{o}</option>)}
+                          <option value="อื่นๆ">อื่นๆ (ระบุ)</option>
+                        </select>
+                        {selectVal === 'อื่นๆ' && (
+                          <input
+                            className="input" placeholder="ระบุถึง..." autoFocus value={raw}
+                            onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}
+                          />
+                        )}
+                      </div>
+                    );
+                  })()
                 ) : (
                   <input id={`f-${f.key}`} type={f.type === 'date' ? 'date' : 'text'} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
                 )}

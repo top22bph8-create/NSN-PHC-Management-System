@@ -16,10 +16,10 @@ import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand'
 
 // เมนูหลัก 4 งานทะเบียนที่ใช้งานบ่อยที่สุด แสดงเด่นบนแดชบอร์ด งานย่อยอื่น ๆ ไปอยู่ในแถบเมนูด้านซ้ายแทน
 const CARDS = [
-  { key: 'incoming', label: 'ทะเบียนหนังสือรับ', desc: 'ลงรับหนังสือ ติดตามกำหนดดำเนินการ', icon: Inbox, path: '/incoming', module: 'incoming' },
-  { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ', icon: Send, path: '/outgoing', module: 'outgoing' },
-  { key: 'leave', label: 'ทะเบียนควบคุมวันลา', desc: 'ยื่นใบลา อนุมัติ ตรวจสอบวันลาคงเหลือ', icon: CalendarDays, path: '/leave', module: 'leave' },
-  { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', desc: 'บันทึกการใช้รถ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle' },
+  { key: 'incoming', label: 'ทะเบียนหนังสือรับ', emoji: '📥', desc: 'ลงรับหนังสือ ติดตามกำหนดดำเนินการ', icon: Inbox, path: '/incoming', module: 'incoming', tone: 'from-sky-500 to-brand-700' },
+  { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', emoji: '📤', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ', icon: Send, path: '/outgoing', module: 'outgoing', tone: 'from-brand-500 to-brand-800' },
+  { key: 'leave', label: 'ทะเบียนควบคุมวันลา', emoji: '🗓️', desc: 'ยื่นใบลา อนุมัติ ตรวจสอบวันลาคงเหลือ', icon: CalendarDays, path: '/leave', module: 'leave', tone: 'from-cyan-500 to-brand-700' },
+  { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', desc: 'บันทึกการใช้รถ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle', tone: 'from-indigo-500 to-brand-800' },
 ];
 
 const ACTION = { create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', login: 'เข้าสู่ระบบ', export: 'ส่งออก', settings: 'ตั้งค่า' };
@@ -147,8 +147,8 @@ export default function Dashboard() {
                   : null;
                 return (
                   <Link key={c.key} to={allowed ? c.path : '#'} className={`card group relative flex flex-col gap-2 overflow-hidden p-5 transition ${allowed ? 'hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-lg' : 'opacity-50'}`}>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700 transition group-hover:bg-brand-600 group-hover:text-white"><c.icon className="h-6 w-6" /></div>
-                    <div className="font-bold text-slate-800">{c.label}</div>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${c.tone} text-white shadow-sm`}><c.icon className="h-6 w-6" /></div>
+                    <div className="font-bold text-slate-800">{c.emoji} {c.label}</div>
                     <div className="text-sm text-slate-500">{c.desc}</div>
                     {stats ? (
                       <div className="mt-1 text-sm text-slate-600"><span className="text-2xl font-bold text-brand-800">{stats.total}</span> รายการ · เดือนนี้ {stats.month}</div>

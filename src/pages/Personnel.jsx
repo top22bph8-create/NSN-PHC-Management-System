@@ -3,7 +3,7 @@ import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 
 import { FileSpreadsheet, KeyRound, Loader2, Search, UserPlus, Users } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { ROLES, canWrite } from '../lib/roles';
+import { ASSIGNABLE_ROLES, PENDING_LABEL, ROLES, canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { createAuthAccount, toEmail, usernameOf } from '../lib/accounts';
 import { Badge, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
@@ -199,7 +199,12 @@ export default function Personnel() {
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 5000); };
 
   useEffect(
-    () => onSnapshot(collection(db, 'users'), (s) => setRows(s.docs.map((d) => d.data()).sort((a, b) => String(a.username || a.email).localeCompare(String(b.username || b.email), 'th', { numeric: true }))), (e) => setError(e.message)),
+    () => onSnapshot(collection(db, 'users'), (s) => setRows(s.docs.map((d) => d.data()).sort((a, b) => {
+      const pa = a.role === 'pending' ? 0 : 1;
+      const pb = b.role === 'pending' ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return String(a.username || a.email).localeCompare(String(b.username || b.email), 'th', { numeric: true });
+    })), (e) => setError(e.message)),
     [],
   );
   const existing = useMemo(() => new Set((rows || []).map((r) => r.email)), [rows]);
@@ -235,23 +240,29 @@ export default function Personnel() {
             <tbody>
               {shown.map((u) => {
                 const me = u.email === profile.email;
+                const pending = u.role === 'pending';
                 return (
-                  <tr key={u.email} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-mono text-sm">{usernameOf(u.email)}{me && <Badge className="ml-2 bg-brand-100 text-brand-800">คุณ</Badge>}</td>
+                  <tr key={u.email} className={`border-t border-slate-100 ${pending ? 'bg-amber-50/60' : ''}`}>
+                    <td className="px-3 py-2 font-mono text-sm">
+                      {usernameOf(u.email)}{me && <Badge className="ml-2 bg-brand-100 text-brand-800">คุณ</Badge>}
+                      {pending && <div className="mt-0.5"><Badge className="bg-amber-100 text-amber-800">รอสมัครใหม่</Badge></div>}
+                    </td>
                     <td className="px-3 py-2">{u.name || '-'}</td>
                     <td className="px-3 py-2 text-sm text-slate-600">{u.position || '-'}</td>
                     <td className="px-3 py-2">
                       {writable ? (
                         <select className="input !w-auto !py-1" value={u.role} disabled={me} onChange={(e) => change(u, { role: e.target.value }, 'role')} aria-label={`บทบาทของ ${u.name}`}>
-                          {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          {pending && <option value="pending">{PENDING_LABEL}</option>}
+                          {Object.entries(ASSIGNABLE_ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                         </select>
-                      ) : ROLES[u.role]}
+                      ) : (pending ? PENDING_LABEL : ROLES[u.role])}
                     </td>
                     <td className="px-3 py-2">
                       {writable ? (
                         <label className="flex items-center gap-2"><input type="checkbox" className="h-5 w-5" checked={!!u.active} disabled={me} onChange={(e) => change(u, { active: e.target.checked }, 'active')} /> {u.active ? 'ใช้งาน' : 'ระงับ'}</label>
                       ) : <Badge className={u.active ? 'bg-brand-100 text-brand-800' : 'bg-slate-200 text-slate-600'}>{u.active ? 'ใช้งาน' : 'ระงับ'}</Badge>}
                       {u.mustChangePassword && <div className="text-xs text-amber-700">ยังไม่เปลี่ยนรหัสผ่าน</div>}
+                      {pending && writable && <div className="text-xs text-amber-700">เลือกบทบาทแล้วติ๊ก "ใช้งาน" เพื่ออนุมัติ</div>}
                     </td>
                     {writable && <td className="px-3 py-2"><button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => setModal({ t: 'reset', u })} title="ตั้งรหัสเริ่มต้นใหม่"><KeyRound className="h-4 w-4" /></button></td>}
                   </tr>
