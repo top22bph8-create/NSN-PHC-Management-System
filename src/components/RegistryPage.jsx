@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { canWrite } from '../lib/roles';
 import { diffFields, writeAudit } from '../lib/audit';
-import { createNumbered } from '../lib/numbering';
+import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, ORG_DOC_CODE } from '../lib/numbering';
 import { exportCsv, exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from './ui';
@@ -43,6 +43,9 @@ export default function RegistryPage({ cfg }) {
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
+  const [insertMode, setInsertMode] = useState(false);
+  const [insertBase, setInsertBase] = useState('');
+  const isOutgoing = cfg.key === 'outgoing';
 
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 3500); };
 
@@ -91,7 +94,14 @@ export default function RegistryPage({ cfg }) {
 
   const display = (f, v) => (f.type === 'date' ? fmtDate(v) : v || '-');
 
-  const openCreate = () => { setErrors({}); setForm({ values: emptyForm(cfg) }); };
+  // เลขที่หนังสือส่งหลัก (insertSeq = 0) ในปีงบประมาณนี้ ใหม่สุดก่อน สำหรับตัวเลือก "แทรกเลขที่ย้อนหลัง"
+  const outgoingBases = useMemo(
+    () => (isOutgoing ? (items || []).filter((x) => x.baseSeq && !x.insertSeq).sort((a, b) => b.baseSeq - a.baseSeq) : []),
+    [items, isOutgoing],
+  );
+  const nextOutgoingPreview = outgoingBases.length ? outgoingBases[0].baseSeq + 1 : 1;
+
+  const openCreate = () => { setErrors({}); setInsertMode(false); setInsertBase(''); setForm({ values: emptyForm(cfg) }); };
   const openEdit = (it) => {
     const values = {};
     cfg.fields.forEach((f) => { if (!f.auto) values[f.key] = it[f.key] ?? ''; });
@@ -123,10 +133,19 @@ export default function RegistryPage({ cfg }) {
         await writeAudit({ action: 'update', module: cfg.key, docId: form.id, label: form.number, before, after });
         say({ type: 'ok', text: 'บันทึกการแก้ไขแล้ว' });
       } else {
-        const { id, number } = await createNumbered({
-          collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField],
-          data: { ...values, fy: fyVal, attachments: [] },
-        });
+        let id, number;
+        if (isOutgoing && insertMode) {
+          if (!insertBase) { setErrors({ ...e, sendNo: 'กรุณาเลือกเลขที่หนังสือส่งที่จะแทรก' }); setSaving(false); return; }
+          if (fyVal !== fy) { say({ type: 'error', text: `วันที่ที่เลือกอยู่ในปีงบประมาณ ${fyVal} กรุณาเปลี่ยนปีงบประมาณด้านบนเป็น ${fyVal} ก่อนแทรกเลขที่` }); setSaving(false); return; }
+          ({ id, number } = await insertOutgoingNumbered({ fy: fyVal, baseSeq: Number(insertBase), data: { ...values, attachments: [] } }));
+        } else if (isOutgoing) {
+          ({ id, number } = await createOutgoingNumbered({ fy: fyVal, data: { ...values, attachments: [] } }));
+        } else {
+          ({ id, number } = await createNumbered({
+            collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField],
+            data: { ...values, fy: fyVal, attachments: [] },
+          }));
+        }
         await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
         say({ type: 'ok', text: `บันทึกแล้ว ${cfg.numberLabel} ${number}` });
         // ปีงบประมาณของรายการใหม่อาจไม่ตรงกับปีที่เลือก
@@ -256,7 +275,31 @@ export default function RegistryPage({ cfg }) {
           }
         >
           <form id="reg-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2" noValidate>
-            {!form.id && <p className="rounded-lg bg-brand-50 p-2 text-sm text-brand-800 sm:col-span-2">{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>}
+            {!form.id && !isOutgoing && <p className="rounded-lg bg-brand-50 p-2 text-sm text-brand-800 sm:col-span-2">{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>}
+            {!form.id && isOutgoing && (
+              <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800 sm:col-span-2">
+                {!insertMode ? (
+                  <p>เลขที่หนังสือส่งจะออกเป็น <b>{ORG_DOC_CODE}/{nextOutgoingPreview}</b> โดยอัตโนมัติเมื่อกดบันทึก</p>
+                ) : (
+                  <p>เลขที่จะเป็นเลขแทรกของหมายเลขที่เลือกไว้ เช่น {ORG_DOC_CODE}/20.1</p>
+                )}
+                <label className="mt-2 flex items-center gap-2 font-normal text-brand-900">
+                  <input type="checkbox" className="h-4 w-4" checked={insertMode} disabled={!outgoingBases.length && !insertMode}
+                    onChange={(e) => { setInsertMode(e.target.checked); setInsertBase(''); }} />
+                  แทรกเลขที่ย้อนหลัง (สำหรับหนังสือที่ลงวันที่ย้อนหลังและเลขที่นั้นถูกใช้ไปแล้ว)
+                </label>
+                {!outgoingBases.length && !insertMode && <p className="mt-1 text-xs text-brand-600">ยังไม่มีเลขที่ในปีงบประมาณ {fy} ให้แทรก</p>}
+                {insertMode && (
+                  <select className="input mt-2" value={insertBase} onChange={(e) => setInsertBase(e.target.value)} aria-label="เลือกเลขที่ที่จะแทรก">
+                    <option value="">-- เลือกเลขที่เดิมที่จะแทรก --</option>
+                    {outgoingBases.map((b) => (
+                      <option key={b.baseSeq} value={b.baseSeq}>{ORG_DOC_CODE}/{b.baseSeq} · {fmtDate(b[cfg.dateField])} · {String(b.subject || '').slice(0, 30)}</option>
+                    ))}
+                  </select>
+                )}
+                {errors.sendNo && <p className="mt-1 text-sm text-red-600">{errors.sendNo}</p>}
+              </div>
+            )}
             {cfg.fields.filter((f) => !f.auto).map((f) => (
               <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
                 <label htmlFor={`f-${f.key}`} className="mb-1 block text-sm font-medium text-slate-600">{f.label}{f.required && <span className="text-red-600"> *</span>}</label>

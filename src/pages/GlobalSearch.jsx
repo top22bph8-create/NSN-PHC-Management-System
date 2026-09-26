@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
-import { Inbox, Send } from 'lucide-react';
+import { Car, ClipboardList, Inbox, MapPinned, Send } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -10,7 +10,10 @@ import { REGISTRIES } from '../config/registries';
 import { fmtDate } from '../lib/thai';
 import { EmptyState, ErrorState, Spinner } from '../components/ui';
 
-const ICON = { incoming: Inbox, outgoing: Send };
+const ICON = { incoming: Inbox, outgoing: Send, vehicle: Car, duty: ClipboardList, homevisit: MapPinned };
+
+// ฟิลด์หลักที่ใช้แสดงเป็นหัวเรื่องของแต่ละรายการ (ตัวแรกที่ค้นหาได้ นอกเหนือจากเลขที่)
+const titleFieldOf = (cfg) => (cfg.fields.find((f) => f.search && f.key !== cfg.numberField) || cfg.fields.find((f) => f.list && f.key !== cfg.numberField));
 
 // ค้นหาแบบรวม: ดึงรายการล่าสุด 500 รายการของแต่ละทะเบียน (ทุกปีงบประมาณ) แล้วกรองในเครื่อง
 export default function GlobalSearch() {
@@ -57,7 +60,8 @@ export default function GlobalSearch() {
         : q && total === 0 ? <EmptyState title="ไม่พบข้อมูลที่ตรงกับคำค้น" hint="ลองใช้คำอื่น เช่น เลขที่หนังสือ ชื่อหน่วยงาน หรือคำในเรื่อง" />
         : Object.entries(results).map(([key, list]) => {
           const cfg = REGISTRIES[key];
-          const Icon = ICON[key];
+          const Icon = ICON[key] || Inbox;
+          const titleField = titleFieldOf(cfg);
           if (!list.length) return null;
           return (
             <section key={key} className="mb-5">
@@ -65,8 +69,8 @@ export default function GlobalSearch() {
               <ul className="card divide-y divide-slate-100">
                 {list.slice(0, 50).map((it) => (
                   <li key={it.id} className="cursor-pointer p-3 hover:bg-brand-50/60" onClick={() => go(cfg, it)}>
-                    <div className="font-medium"><span className="text-brand-800">{it[cfg.numberField]}</span> · {it.subject}</div>
-                    <div className="text-sm text-slate-500">เลขที่ {it.docNo || '-'} · {fmtDate(it[cfg.dateField])} · ปีงบประมาณ {it.fy}</div>
+                    <div className="font-medium"><span className="text-brand-800">{it[cfg.numberField]}</span>{titleField && ` · ${it[titleField.key] || '-'}`}</div>
+                    <div className="text-sm text-slate-500">{fmtDate(it[cfg.dateField])} · ปีงบประมาณ {it.fy}</div>
                   </li>
                 ))}
               </ul>

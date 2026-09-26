@@ -3,7 +3,7 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
-import { DEFAULT_NUMBERING, formatNumber, getNumbering } from '../lib/numbering';
+import { DEFAULT_NUMBERING, ORG_DOC_CODE, formatNumber, getNumbering } from '../lib/numbering';
 import { writeAudit } from '../lib/audit';
 import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
@@ -58,7 +58,11 @@ export default function SettingsPage() {
               </select>
             </div>
           </div>
-          {Object.values(REGISTRIES).map((r) => (
+          <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800">
+            เลขที่หนังสือส่งใช้รูปแบบตายตัวของหน่วยงาน <b>{ORG_DOC_CODE}/ลำดับ</b> รันต่อเนื่องไปเรื่อย ๆ ตามปีงบประมาณ (ไม่ปรับตามการตั้งค่าด้านล่าง)
+            หากลงวันที่ย้อนหลังและเลขที่เดิมถูกใช้ไปแล้ว ให้ใช้ปุ่ม "แทรกเลขที่ย้อนหลัง" ตอนเพิ่มหนังสือส่ง ระบบจะออกเป็นเลขทศนิยม เช่น /20.1, /20.2
+          </div>
+          {Object.values(REGISTRIES).filter((r) => r.key !== 'outgoing').map((r) => (
             <div key={r.key} className="grid items-end gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor={`p-${r.key}`}>คำนำหน้า{r.numberLabel} (ไม่บังคับ)</label>

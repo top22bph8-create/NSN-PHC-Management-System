@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle, Armchair, Building2, Activity, Car, CheckCircle2, Clock, HeartPulse, Inbox,
-  Package, Megaphone, CalendarDays, Users, ScrollText, Send, ShoppingCart, Wallet, FileSignature,
+  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -15,22 +14,12 @@ import { ErrorState, Spinner } from '../components/ui';
 import Logo from '../components/Logo';
 import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
 
+// เมนูหลัก 4 งานทะเบียนที่ใช้งานบ่อยที่สุด แสดงเด่นบนแดชบอร์ด งานย่อยอื่น ๆ ไปอยู่ในแถบเมนูด้านซ้ายแทน
 const CARDS = [
-  { label: 'ระบบควบคุมวันลา', icon: CalendarDays, path: '/leave', ready: true, module: 'leave' },
-  { label: 'ทำเนียบบุคลากร', icon: Users, path: '/personnel', ready: true, module: 'personnel' },
-  { key: 'incoming', label: 'หนังสือรับ', icon: Inbox, path: '/incoming', live: true },
-  { key: 'outgoing', label: 'หนังสือส่ง', icon: Send, path: '/outgoing', live: true },
-  { label: 'คำสั่ง', icon: ScrollText, path: '/soon/orders' },
-  { label: 'ประกาศ', icon: Megaphone, path: '/soon/orders' },
-  { label: 'ทะเบียนยืมเงิน', icon: Wallet, path: '/soon/finance' },
-  { label: 'สั่งซื้อ/สั่งจ้าง', icon: ShoppingCart, path: '/soon/finance' },
-  { label: 'สัญญา', icon: FileSignature, path: '/soon/finance' },
-  { label: 'ครุภัณฑ์', icon: Armchair, path: '/soon/equipment' },
-  { label: 'พัสดุ', icon: Package, path: '/soon/supplies' },
-  { label: 'ยานพาหนะ', icon: Car, path: '/soon/vehicle' },
-  { label: 'อาคาร/สิ่งก่อสร้าง', icon: Building2, path: '/soon/land' },
-  { label: 'งานควบคุมโรค', icon: Activity, path: '/soon/disease' },
-  { label: 'งานเวชปฏิบัติครอบครัว', icon: HeartPulse, path: '/soon/family' },
+  { key: 'incoming', label: 'ทะเบียนหนังสือรับ', desc: 'ลงรับหนังสือ ติดตามกำหนดดำเนินการ', icon: Inbox, path: '/incoming', module: 'incoming' },
+  { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ', icon: Send, path: '/outgoing', module: 'outgoing' },
+  { key: 'leave', label: 'ทะเบียนควบคุมวันลา', desc: 'ยื่นใบลา อนุมัติ ตรวจสอบวันลาคงเหลือ', icon: CalendarDays, path: '/leave', module: 'leave' },
+  { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', desc: 'บันทึกการใช้รถ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle' },
 ];
 
 const ACTION = { create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', login: 'เข้าสู่ระบบ', export: 'ส่งออก', settings: 'ตั้งค่า' };
@@ -149,21 +138,22 @@ export default function Dashboard() {
               </>
             )}
 
-            <h2 className="mb-2 text-lg font-semibold">ระบบงานทั้งหมด</h2>
-            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <h2 className="mb-2 text-lg font-semibold">เมนูหลัก</h2>
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {CARDS.map((c) => {
-                const allowed = c.ready ? canRead(profile.role, c.module) : !c.live || canRead(profile.role, c.key);
-                const stats = c.live && m && allowed
-                  ? (c.key === 'incoming' ? { total: m.inTotal, month: m.inMonth } : { total: m.outTotal, month: m.outMonth })
+                const allowed = canRead(profile.role, c.module);
+                const stats = m && allowed
+                  ? (c.key === 'incoming' ? { total: m.inTotal, month: m.inMonth } : c.key === 'outgoing' ? { total: m.outTotal, month: m.outMonth } : null)
                   : null;
                 return (
-                  <Link key={c.label} to={allowed ? c.path : '#'} className={`card flex flex-col gap-2 p-4 transition ${allowed ? 'hover:border-brand-400 hover:shadow-md' : 'opacity-50'}`}>
-                    <div className="flex items-center gap-2"><c.icon className={`h-6 w-6 ${c.live || c.ready ? 'text-brand-700' : 'text-slate-400'}`} /><span className="font-semibold">{c.label}</span></div>
+                  <Link key={c.key} to={allowed ? c.path : '#'} className={`card group relative flex flex-col gap-2 overflow-hidden p-5 transition ${allowed ? 'hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-lg' : 'opacity-50'}`}>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700 transition group-hover:bg-brand-600 group-hover:text-white"><c.icon className="h-6 w-6" /></div>
+                    <div className="font-bold text-slate-800">{c.label}</div>
+                    <div className="text-sm text-slate-500">{c.desc}</div>
                     {stats ? (
-                      <div className="text-sm text-slate-600"><span className="text-2xl font-bold text-slate-800">{stats.total}</span> รายการ · เดือนนี้ {stats.month}</div>
-                    ) : (
-                      <span className={`text-sm ${c.ready ? 'text-brand-700' : 'text-slate-400'}`}>{c.ready ? 'เปิดใช้งานแล้ว' : c.live ? 'ไม่มีสิทธิ์เข้าถึง' : 'เร็วๆ นี้'}</span>
-                    )}
+                      <div className="mt-1 text-sm text-slate-600"><span className="text-2xl font-bold text-brand-800">{stats.total}</span> รายการ · เดือนนี้ {stats.month}</div>
+                    ) : !allowed && <span className="text-sm text-slate-400">ไม่มีสิทธิ์เข้าถึง</span>}
+                    <ArrowRight className="absolute bottom-4 right-4 h-5 w-5 text-brand-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
                   </Link>
                 );
               })}

@@ -17,13 +17,12 @@ service firebase.storage {
     }
 
     match /docs/{module}/{id}/{file} {
-      allow read: if isActive() && module in ['incoming', 'outgoing']
-                  && role() in ['super_admin', 'director', 'admin_clerk', 'viewer'];
-      allow create, update: if isActive() && module in ['incoming', 'outgoing']
-                  && role() in ['super_admin', 'admin_clerk']
+      allow read: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit'];
+      allow create, update: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit']
+                  && role() in ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med']
                   && request.resource.size < 20 * 1024 * 1024;
-      allow delete: if isActive() && module in ['incoming', 'outgoing']
-                  && role() in ['super_admin', 'admin_clerk'];
+      allow delete: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit']
+                  && role() in ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'];
     }
   }
 }

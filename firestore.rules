@@ -57,10 +57,10 @@ service cloud.firestore {
       allow write: if hasRole(['super_admin']);
     }
 
-    // ตัวนับเลขทะเบียน
+    // ตัวนับเลขทะเบียน (สิทธิ์จริงบังคับที่ทะเบียนปลายทางแต่ละอันด้านล่างอยู่แล้ว)
     match /counters/{id} {
       allow read: if isActive();
-      allow create, update: if hasRole(['super_admin', 'admin_clerk']);
+      allow create, update: if isActive();
     }
 
     // ทะเบียนหนังสือรับ / หนังสือส่ง
@@ -71,6 +71,24 @@ service cloud.firestore {
     match /outgoing/{id} {
       allow read: if hasRole(['super_admin', 'director', 'admin_clerk', 'viewer']);
       allow create, update, delete: if hasRole(['super_admin', 'admin_clerk']);
+    }
+
+    // ทะเบียนควบคุมยานพาหนะ
+    match /vehicle/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+    }
+
+    // แผนปฏิบัติงานเวรนอกเวลาประจำเดือน
+    match /duty/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+    }
+
+    // แผน/รายงานการเยี่ยมบ้านเชิงรุกในชุมชนประจำเดือน
+    match /homevisit/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med']);
     }
 
     // Audit Log: เพิ่มได้อย่างเดียว แก้ไข/ลบไม่ได้

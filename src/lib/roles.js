@@ -19,6 +19,9 @@ const ALL = Object.keys(ROLES);
 export const ACCESS = {
   incoming: { read: ['super_admin', 'director', 'admin_clerk', 'viewer'], write: ['super_admin', 'admin_clerk'] },
   outgoing: { read: ['super_admin', 'director', 'admin_clerk', 'viewer'], write: ['super_admin', 'admin_clerk'] },
+  vehicle: { read: ALL, write: ['super_admin', 'admin_clerk', 'director'] },
+  duty: { read: ALL, write: ['super_admin', 'admin_clerk', 'director'] },
+  homevisit: { read: ALL, write: ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'] },
   personnel: { read: ALL, write: ['super_admin'] },
   leave: { read: ALL, write: ALL, viewAll: ['super_admin', 'director', 'admin_clerk'], approve: ['super_admin', 'director'] },
   users: { read: ['super_admin'], write: ['super_admin'] },

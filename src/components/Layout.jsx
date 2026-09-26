@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, Home, Inbox, KeyRound, LogOut, Menu, Search, X } from 'lucide-react';
+import { CalendarDays, Car, Home, Inbox, KeyRound, LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { MENU } from '../config/menu';
@@ -37,9 +37,11 @@ export default function Layout() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
-        {visible.map((s) => (
-          <div key={s.title} className="mb-3">
-            <div className="px-3 pb-1 text-xs font-semibold tracking-wide text-brand-600">{s.title}</div>
+        {visible.map((s, idx) => (
+          <div key={s.title} className={`mb-4 ${idx > 0 ? 'border-t border-brand-200/70 pt-3' : ''}`}>
+            <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-500">
+              {s.icon && <s.icon className="h-3.5 w-3.5" />} {s.title}
+            </div>
             {s.items.map((i) => (
               <NavLink
                 key={i.key} to={i.path} end={i.path === '/'} onClick={() => setOpen(false)}
@@ -66,8 +68,9 @@ export default function Layout() {
 
   const tabs = [
     { to: '/', icon: Home, label: 'หน้าหลัก' },
-    { to: '/leave', icon: CalendarDays, label: 'ลางาน' },
     ...(canRead(profile.role, 'incoming') ? [{ to: '/incoming', icon: Inbox, label: 'หนังสือรับ' }] : []),
+    { to: '/leave', icon: CalendarDays, label: 'ลางาน' },
+    ...(canRead(profile.role, 'vehicle') ? [{ to: '/vehicle', icon: Car, label: 'รถยนต์' }] : []),
   ];
 
   return (

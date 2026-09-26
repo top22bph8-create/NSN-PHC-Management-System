@@ -34,3 +34,57 @@ export async function createNumbered({ collectionName, numberField, dateStr, dat
   });
   return { id: newRef.id, number };
 }
+
+// ===== เลขทะเบียนหนังสือส่ง: รูปแบบตายตัวของหน่วยงาน (ไม่ผูกกับการตั้งค่าเลขทะเบียนทั่วไป) =====
+export const ORG_DOC_CODE = 'สน 51006.24';
+
+export const formatOutgoing = (seq, insertSeq = 0) =>
+  `${ORG_DOC_CODE}/${seq}${insertSeq ? `.${insertSeq}` : ''}`;
+
+// ออกเลขที่หนังสือส่งถัดไป รันต่อเนื่องตามปีงบประมาณ (ไม่ขึ้นปีใหม่กลางทาง ไม่มีเลขปีต่อท้าย)
+export async function createOutgoingNumbered({ fy, data }) {
+  const counterRef = doc(db, 'counters', `outgoing_seq_${fy}`);
+  const newRef = doc(collection(db, 'outgoing'));
+  let number = '';
+  let seq = 0;
+  await runTransaction(db, async (tx) => {
+    const c = await tx.get(counterRef);
+    seq = (c.exists() ? c.data().last : 0) + 1;
+    number = formatOutgoing(seq);
+    tx.set(counterRef, { last: seq, updatedAt: serverTimestamp() });
+    tx.set(newRef, {
+      ...data,
+      fy,
+      sendNo: number,
+      baseSeq: seq,
+      insertSeq: 0,
+      createdAt: serverTimestamp(),
+      createdBy: auth.currentUser.email.toLowerCase(),
+    });
+  });
+  return { id: newRef.id, number };
+}
+
+// แทรกเลขที่ย้อนหลังในเลขที่ที่ออกไปแล้ว (เช่น /20 ที่ใช้ไปแล้ว -> แทรกใหม่เป็น /20.1, /20.2, ...)
+export async function insertOutgoingNumbered({ fy, baseSeq, data }) {
+  const counterRef = doc(db, 'counters', `outgoing_insert_${fy}_${baseSeq}`);
+  const newRef = doc(collection(db, 'outgoing'));
+  let number = '';
+  let idx = 0;
+  await runTransaction(db, async (tx) => {
+    const c = await tx.get(counterRef);
+    idx = (c.exists() ? c.data().last : 0) + 1;
+    number = formatOutgoing(baseSeq, idx);
+    tx.set(counterRef, { last: idx, updatedAt: serverTimestamp() });
+    tx.set(newRef, {
+      ...data,
+      fy,
+      sendNo: number,
+      baseSeq: Number(baseSeq),
+      insertSeq: idx,
+      createdAt: serverTimestamp(),
+      createdBy: auth.currentUser.email.toLowerCase(),
+    });
+  });
+  return { id: newRef.id, number };
+}

@@ -19,7 +19,17 @@ html, body, #root { min-height: 100%; }
 body {
   @apply text-slate-800 antialiased;
   background: linear-gradient(180deg, #f0f9ff 0%, #f8fcff 40%, #ffffff 100%) fixed;
+  line-height: 1.6;
+  font-feature-settings: "kern" 1, "liga" 1;
+  text-rendering: optimizeLegibility;
 }
+
+/* ระบบตัวอักษร: หัวข้อหนาชัดเจน ระยะห่างตัวอักษรกระชับอ่านง่าย */
+h1, h2, h3, h4 { @apply font-bold text-brand-900; letter-spacing: -0.01em; }
+h1 { line-height: 1.3; }
+h2 { line-height: 1.35; }
+label { @apply text-slate-600; }
+::selection { background: var(--color-brand-200); }
 
 .input {
   @apply w-full rounded-lg border border-brand-200 bg-white px-3 py-2 text-base outline-none transition

@@ -37,12 +37,15 @@ export function fiscalYearBE(dateStr) {
   return (m >= 10 ? y + 1 : y) + 543;
 }
 
-export const currentFiscalYear = () => fiscalYearBE(todayStr());
+// ระบบเริ่มใช้งานจริงตั้งแต่วันที่ 1 ต.ค. 2569 = ปีงบประมาณ 2570 เป็นต้นไป (ไม่มีปีงบประมาณก่อนหน้านี้ให้เลือก)
+export const START_FISCAL_YEAR = 2570;
+
+export const currentFiscalYear = () => Math.max(fiscalYearBE(todayStr()), START_FISCAL_YEAR);
 
 export function fiscalYearOptions() {
   const cur = currentFiscalYear();
   const list = [];
-  for (let y = cur - 2; y <= cur + 2; y++) list.push(y);
+  for (let y = START_FISCAL_YEAR; y <= cur + 1; y++) list.push(y);
   return list;
 }
 
