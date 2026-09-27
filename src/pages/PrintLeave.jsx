@@ -6,6 +6,24 @@ import { ORG_UNDER } from '../config/brand';
 import { fmtDateLong } from '../lib/thai';
 import { OWNER_EMAIL } from '../lib/roles';
 import { getQuota } from '../lib/leave';
+import thSarabunRegular from '../assets/fonts/THSarabunIT9-Regular.ttf';
+import thSarabunItalic from '../assets/fonts/THSarabunIT9-Italic.ttf';
+import thSarabunBoldItalic from '../assets/fonts/THSarabunIT9-BoldItalic.ttf';
+
+const FONT_STACK = '"TH SarabunIT๙", "TH SarabunPSK", "THSarabunNew", "Sarabun", sans-serif';
+
+// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษตามหนังสือราชการ (บน 2.5 ซม. ซ้าย 3 ซม. เผื่อเข้าเล่ม ขวา/ล่าง 2 ซม.)
+// หมายเหตุ: มีเฉพาะไฟล์ปกติ/เอียง/หนา-เอียง ไม่มีไฟล์ตัวหนาตรงแยกต่างหาก จึงให้เบราว์เซอร์สังเคราะห์ตัวหนาปกติ (faux bold) จากไฟล์ปกติแทน
+function PrintFonts() {
+  return (
+    <style>{`
+      @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunRegular}') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+      @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
+      @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
+      @page { size: A4; margin: 2.5cm 2cm 2cm 3cm; }
+    `}</style>
+  );
+}
 
 const ORG_ADDRESS_LINE1 = 'โรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
 const ORG_ADDRESS_LINE2 = 'อำเภอเมือง จังหวัดสกลนคร ๔๗๐๐๐';
@@ -44,7 +62,7 @@ function CheckBox({ checked }) {
 function SignatureBox({ role, presetName, presetPosition }) {
   return (
     <div className="mt-3 text-sm leading-6">
-      <div className="font-semibold underline">ความเห็นของ{role}</div>
+      <div className="font-bold underline">ความเห็นของ{role}</div>
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
       <div className="border-b border-dotted border-slate-400">&nbsp;</div>
       {presetName ? (
@@ -55,7 +73,7 @@ function SignatureBox({ role, presetName, presetPosition }) {
         </div>
       ) : (
         <div className="mt-2">
-          <div>( ลงชื่อ ) <Blank w="w-52" /></div>
+          <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
           <div>( <Blank w="w-52" /> )</div>
           <div>( ตำแหน่ง ) <Blank w="w-52" /></div>
           <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
@@ -69,7 +87,7 @@ function SignatureBox({ role, presetName, presetPosition }) {
 function CheckerLine({ presetName, presetPosition }) {
   return (
     <div className="mt-3 text-sm leading-6">
-      <div>( ลงชื่อ ) <Blank w="w-52" /> ผู้ตรวจสอบ</div>
+      <div><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
       <div>( {presetName || <Blank w="w-52" />} )</div>
       <div>ตำแหน่ง {presetPosition || <Blank w="w-52" />}</div>
       <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
@@ -81,11 +99,11 @@ function CheckerLine({ presetName, presetPosition }) {
 function DelegateBox({ l }) {
   return (
     <div className="mt-3 text-sm leading-6">
-      <div className="font-semibold underline">คำสั่ง</div>
+      <div className="font-bold underline">คำสั่ง</div>
       <p className="mt-1">ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
       <p>ให้ {l.delegateTo ? <b>{l.delegateTo}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
-      <div className="mt-1">( ลงชื่อ ) <Blank w="w-44" /> ผู้มอบงาน</div>
-      <div>( ลงชื่อ ) <Blank w="w-44" /> ผู้รับมอบงาน</div>
+      <div className="mt-1"><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
+      <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้รับมอบงาน</div>
     </div>
   );
 }
@@ -96,7 +114,7 @@ function DelegateBox({ l }) {
 function OrderBox({ status, isOwnerLeave, decidedDate }) {
   return (
     <div className="mt-3 text-sm leading-6">
-      <div className="font-semibold underline">คำสั่ง</div>
+      <div className="font-bold underline">คำสั่ง</div>
       <div className="mt-1 flex gap-6">
         <label className="flex items-center gap-1"><CheckBox checked={status === 'อนุมัติ'} /> อนุญาต</label>
         <label className="flex items-center gap-1"><CheckBox checked={status === 'ไม่อนุมัติ'} /> ไม่อนุญาต</label>
@@ -105,7 +123,7 @@ function OrderBox({ status, isOwnerLeave, decidedDate }) {
       <div className="border-b border-dotted border-slate-400">&nbsp;</div>
       {isOwnerLeave ? (
         <div className="mt-2">
-          <div>( ลงชื่อ ) <Blank w="w-52" /></div>
+          <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
           <div>( <Blank w="w-52" /> )</div>
           <div>( ตำแหน่ง ) <Blank w="w-52" /></div>
           <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
@@ -217,13 +235,13 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
       <p className="leading-7">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
       <p className="leading-7">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
       <div className="mt-4 text-right text-sm">
-        <div>( ลงชื่อ ) <Blank w="w-52" /></div>
+        <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
         <div>
-          <p className="text-sm font-semibold underline">สถิติการลาในปีงบประมาณนี้</p>
+          <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <StatsTable rows={stats} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </div>
@@ -258,7 +276,7 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
         <div>
-          <p className="text-sm font-semibold underline">สถิติการลาในปีงบประมาณนี้</p>
+          <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <VacationStatsTable before={before} thisTime={thisTime} total={total} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </div>
@@ -292,7 +310,7 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
       </p>
       <p className="leading-7">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
       <div className="mt-4 text-right text-sm">
-        <div>( ลงชื่อ ) <Blank w="w-52" /></div>
+        <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
         <div>( {l.name} )</div>
       </div>
       <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
@@ -317,11 +335,11 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
       </p>
       <p className="leading-7">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
       <div className="mt-4 text-right text-sm">
-        <div>( ลงชื่อ ) <Blank w="w-52" /></div>
+        <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-3 text-sm font-semibold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-3 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <StatsTable rows={stats} />
       <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
       <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
@@ -394,14 +412,15 @@ export default function PrintLeave() {
 
   return (
     <div
-      className="mx-auto max-w-[800px] bg-white p-8 text-[16px] leading-6 text-slate-800 print:p-6"
-      style={{ fontFamily: '"TH SarabunIT๙", "TH SarabunIT9", "TH SarabunPSK", "THSarabunNew", "Sarabun", sans-serif' }}
+      className="mx-auto max-w-[800px] bg-white p-8 text-[16px] leading-6 text-slate-800 print:max-w-none print:p-0"
+      style={{ fontFamily: FONT_STACK }}
     >
+      <PrintFonts />
       <div className="mb-3 flex justify-end gap-2 print:hidden">
         <button className="btn btn-outline" onClick={() => window.close()}>ปิดหน้านี้</button>
         <button className="btn btn-primary" onClick={() => window.print()}>พิมพ์ / บันทึกเป็น PDF</button>
       </div>
-      <p className="mb-2 text-xs text-amber-700 print:hidden">เคล็ดลับ: ตอนสั่งพิมพ์ ให้เปิด "การตั้งค่าเพิ่มเติม" แล้วปิดตัวเลือก "ส่วนหัวและส่วนท้าย" (Headers and footers) เพื่อไม่ให้เบราว์เซอร์แทรกวันที่/URL ลงในกระดาษ · แบบฟอร์มนี้ใช้ฟอนต์ TH SarabunIT๙ หากเครื่องที่พิมพ์ไม่ได้ติดตั้งฟอนต์นี้ไว้ จะแสดงผลด้วยฟอนต์ใกล้เคียงแทนโดยอัตโนมัติ</p>
+      <p className="mb-2 text-xs text-amber-700 print:hidden">เคล็ดลับ: ตอนสั่งพิมพ์ ให้เปิด "การตั้งค่าเพิ่มเติม" แล้วปิดตัวเลือก "ส่วนหัวและส่วนท้าย" (Headers and footers) เพื่อไม่ให้เบราว์เซอร์แทรกวันที่/URL ลงในกระดาษ · แบบฟอร์มนี้ใช้ฟอนต์ TH SarabunIT๙ ที่แนบมาฝังไว้ในไฟล์ให้แล้ว จึงแสดงผลเหมือนกันทุกเครื่อง</p>
       {l.type === 'ลาพักผ่อน' ? (
         <Vacation l={l} to={to} quotaAccrued={quotaAccrued} quotaRemain={quotaRemain} quotaTotal={quotaTotal} before={vBefore || ''} thisTime={vThisTime || ''} total={vTotal || ''} isOwnerLeave={isOwnerLeave} dateText={dateText} decidedDate={decidedDate} />
       ) : ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาคลอดบุตร'].includes(l.type) ? (
