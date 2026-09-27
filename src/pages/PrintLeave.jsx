@@ -12,7 +12,7 @@ import thSarabunBoldItalic from '../assets/fonts/THSarabunIT9-BoldItalic.ttf';
 
 const FONT_STACK = '"TH SarabunIT๙", "TH SarabunPSK", "THSarabunNew", "Sarabun", sans-serif';
 
-// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษตามหนังสือราชการ (บน 2.5 ซม. ซ้าย 3 ซม. เผื่อเข้าเล่ม ขวา/ล่าง 2 ซม.)
+// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษตามหนังสือราชการ (หัวท้าย 2.5 ซม. ซ้าย/ขวา 2 ซม.)
 // หมายเหตุ: มีเฉพาะไฟล์ปกติ/เอียง/หนา-เอียง ไม่มีไฟล์ตัวหนาตรงแยกต่างหาก จึงให้เบราว์เซอร์สังเคราะห์ตัวหนาปกติ (faux bold) จากไฟล์ปกติแทน
 function PrintFonts() {
   return (
@@ -20,7 +20,7 @@ function PrintFonts() {
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunRegular}') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
-      @page { size: A4; margin: 2.5cm 2cm 2cm 3cm; }
+      @page { size: A4; margin: 2.5cm 2cm 2.5cm 2cm; }
     `}</style>
   );
 }
@@ -58,18 +58,19 @@ function CheckBox({ checked }) {
   );
 }
 
-// กล่อง "ความเห็นของผู้บังคับบัญชา" — เว้นว่างให้เซ็นด้วยลายมือ เว้นแต่ระบุ presetName/Position ไว้ล่วงหน้า (แบบใบลาพักผ่อน)
-function SignatureBox({ role, presetName, presetPosition }) {
+// กล่อง "ความเห็นของผู้บังคับบัญชา" — เว้นว่างให้เซ็นด้วยลายมือ เว้นแต่ระบุ presetName/Position ไว้ล่วงหน้า (presetExtra = บรรทัดตำแหน่งเพิ่มเติมใต้ตำแหน่งหลัก)
+function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
   return (
     <div className="mt-3 text-sm leading-6">
       <div className="font-bold underline">ความเห็นของ{role}</div>
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
       <div className="border-b border-dotted border-slate-400">&nbsp;</div>
       {presetName ? (
-        <div className="mt-2 text-center">
+        <div className="mt-4 text-center">
           <div>( {presetName} )</div>
-          <div>{presetPosition}</div>
-          <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
+          <div className="mt-2">{presetPosition}</div>
+          {presetExtra ? <div className="mt-2">{presetExtra}</div> : null}
+          <div className="mt-2">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
         </div>
       ) : (
         <div className="mt-2">
@@ -83,27 +84,29 @@ function SignatureBox({ role, presetName, presetPosition }) {
   );
 }
 
-// บรรทัดลงชื่อ "ผู้ตรวจสอบ" — เว้นว่างให้เซ็นด้วยลายมือ เว้นแต่ระบุ presetName ไว้ล่วงหน้า (แบบใบลาพักผ่อน)
+// บรรทัดลงชื่อ "ผู้ตรวจสอบ" — จัดชื่อ/ตำแหน่ง/เส้นปะให้อยู่กึ่งกลางเพื่อความสวยงาม เว้นแต่ระบุ presetName ไว้ล่วงหน้า
 function CheckerLine({ presetName, presetPosition }) {
   return (
-    <div className="mt-3 text-sm leading-6">
+    <div className="mt-3 text-center text-sm leading-6">
       <div><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
-      <div>( {presetName || <Blank w="w-52" />} )</div>
+      <div className="mt-1">( {presetName || <Blank w="w-52" />} )</div>
       <div>ตำแหน่ง {presetPosition || <Blank w="w-52" />}</div>
-      <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
+      <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
     </div>
   );
 }
 
-// คำสั่งมอบหมายงานในหน้าที่ระหว่างลา (เฉพาะแบบใบลาพักผ่อน ตามตัวอย่าง)
+// คำสั่งมอบหมายงานในหน้าที่ระหว่างลา — แสดงชื่อผู้มอบงาน (ผู้ยื่นใบลา) และผู้รับมอบงาน (ผู้ที่ถูกเลือกไว้) ให้ครบตามตัวอย่าง
 function DelegateBox({ l }) {
   return (
     <div className="mt-3 text-sm leading-6">
       <div className="font-bold underline">คำสั่ง</div>
       <p className="mt-1">ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
       <p>ให้ {l.delegateTo ? <b>{l.delegateTo}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
-      <div className="mt-1"><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
-      <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้รับมอบงาน</div>
+      <div className="mt-2"><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
+      <div>( {l.name} )</div>
+      <div className="mt-2"><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้รับมอบงาน</div>
+      <div>( {l.delegateTo || <Blank w="w-44" />} )</div>
     </div>
   );
 }
@@ -129,10 +132,11 @@ function OrderBox({ status, isOwnerLeave, decidedDate }) {
           <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
         </div>
       ) : (
-        <div className="mt-2 text-center">
-          <div>( {DIRECTOR_NAME} )</div>
+        <div className="mt-4 text-center">
+          <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
+          <div className="mt-1">( {DIRECTOR_NAME} )</div>
           <div>{DIRECTOR_POSITION}</div>
-          {decidedDate ? <div>วันที่ {decidedDate}</div> : <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
+          {decidedDate ? <div className="mt-1">วันที่ {decidedDate}</div> : <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
         </div>
       )}
     </div>
@@ -201,7 +205,7 @@ function Head({ title, dateText }) {
         <div>{ORG_ADDRESS_LINE1}</div>
         <div>{ORG_ADDRESS_LINE2}</div>
       </div>
-      <div className="text-right text-sm">วันที่ {dateText || <Blank w="w-40" />}</div>
+      <div className="text-center text-sm">วันที่ {dateText || <Blank w="w-40" />}</div>
     </div>
   );
 }
@@ -234,22 +238,23 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
       </p>
       <p className="leading-7">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
       <p className="leading-7">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
-      <div className="mt-4 text-right text-sm">
-        <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
-        <div>( {l.name} )</div>
+      <div className="mt-4 text-center text-sm">
+        <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
+        <div className="mt-1">( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
         <div>
           <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <StatsTable rows={stats} />
+          <DelegateBox l={l} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </div>
         <div>
-          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
         </div>
       </div>
-      <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
     </>
   );
 }
@@ -270,23 +275,22 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
       <p className="leading-7">
         ระหว่างวันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} รวม {l.days} วันทำการ ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่โทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-56" />}
       </p>
-      <div className="mt-4 text-right text-sm">
-        <div>( {l.name} )</div>
+      <div className="mt-4 text-center text-sm">
+        <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
+        <div className="mt-1">( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
         <div>
           <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <VacationStatsTable before={before} thisTime={thisTime} total={total} />
+          <DelegateBox l={l} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </div>
         <div>
-          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
         </div>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-6">
-        <DelegateBox l={l} />
-        <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
       </div>
     </>
   );
@@ -309,12 +313,18 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
         จึงขออนุญาตลาตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
       <p className="leading-7">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
-      <div className="mt-4 text-right text-sm">
-        <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
-        <div>( {l.name} )</div>
+      <div className="mt-4 text-center text-sm">
+        <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
+        <div className="mt-1">( {l.name} )</div>
+        <div>ตำแหน่ง {l.position}</div>
       </div>
-      <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
-      <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+      <div className="mt-3 grid grid-cols-2 gap-6">
+        <DelegateBox l={l} />
+        <div>
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+        </div>
+      </div>
     </>
   );
 }
@@ -334,15 +344,22 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
       <p className="leading-7">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <div className="mt-4 text-right text-sm">
-        <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
-        <div>( {l.name} )</div>
+      <div className="mt-4 text-center text-sm">
+        <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
+        <div className="mt-1">( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-3 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
-      <StatsTable rows={stats} />
-      <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
-      <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+      <div className="mt-3 grid grid-cols-2 gap-6">
+        <div>
+          <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+          <StatsTable rows={stats} />
+          <DelegateBox l={l} />
+        </div>
+        <div>
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+        </div>
+      </div>
     </>
   );
 }
