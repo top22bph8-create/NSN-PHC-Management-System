@@ -48,8 +48,10 @@ service cloud.firestore {
       allow create: if isActive() && request.resource.data.status == 'รอพิจารณา'
                     && (request.resource.data.userEmail == request.auth.token.email
                         || hasRole(['super_admin', 'admin_clerk']));
-      // ผู้อำนวยการ/แอดมินพิจารณาได้ ส่วนเจ้าของใบลายกเลิกได้เฉพาะใบที่ยังรอพิจารณา
-      allow update: if hasRole(['super_admin', 'director'])
+      // Super Admin แก้/ยกเลิกแทนใครก็ได้ทุกกรณี · ผู้อำนวยการพิจารณาได้เฉพาะอนุมัติ/ไม่อนุมัติ (ยกเลิกแทนคนอื่นไม่ได้)
+      // ส่วนเจ้าของใบลาเองยกเลิกได้เฉพาะใบของตัวเองที่ยังรอพิจารณา
+      allow update: if hasRole(['super_admin'])
+                    || (hasRole(['director']) && request.resource.data.status in ['อนุมัติ', 'ไม่อนุมัติ'])
                     || (isActive() && resource.data.userEmail == request.auth.token.email
                         && resource.data.status == 'รอพิจารณา'
                         && request.resource.data.status == 'ยกเลิก');

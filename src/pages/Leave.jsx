@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, Printer, User, Users, X } from 'lucide-react';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, Printer, Trash2, User, Users, X, XCircle } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -71,8 +71,8 @@ function MiniQuota({ quota, used }) {
   );
 }
 
-function LeaveForm({ profile, quota, mine, pageFy, onClose, say }) {
-  const [f, setF] = useState({ type: LEAVE_TYPES[0], start: todayStr(), end: todayStr(), days: 1, reason: '', contact: '' });
+function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
+  const [f, setF] = useState({ type: LEAVE_TYPES[0], start: todayStr(), end: todayStr(), days: 1, reason: '', contact: '', delegateTo: '' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => {
     const v = e.target.value;
@@ -83,6 +83,7 @@ function LeaveForm({ profile, quota, mine, pageFy, onClose, say }) {
       return n;
     });
   };
+  const delegates = (people || []).filter((p) => p.email !== profile.email);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -99,9 +100,11 @@ function LeaveForm({ profile, quota, mine, pageFy, onClose, say }) {
     }
     setBusy(true);
     try {
+      const delegate = delegates.find((p) => p.name === f.delegateTo);
       const data = {
         userEmail: profile.email, name: profile.name || profile.email, position: profile.position || '',
         type: f.type, start: f.start, end: f.end, days, reason: f.reason.trim(), contact: f.contact.trim(),
+        delegateTo: f.delegateTo || '', delegatePosition: delegate?.position || '',
         fy, status: 'รอพิจารณา', createdAt: serverTimestamp(),
       };
       const ref = await addDoc(collection(db, 'leaves'), data);
@@ -126,8 +129,71 @@ function LeaveForm({ profile, quota, mine, pageFy, onClose, say }) {
         <p className="text-xs text-slate-500">นับเฉพาะวันจันทร์-ศุกร์ อัตโนมัติ (ปรับเป็น 0.5 ได้กรณีลาครึ่งวัน) วันหยุดนักขัตฤกษ์ให้ปรับจำนวนวันเอง</p>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lr">เหตุผลการลา</label><textarea id="lr" required rows={2} className="input" value={f.reason} onChange={set('reason')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lc">ติดต่อได้ที่ (เบอร์โทร/ที่อยู่ ระหว่างลา)</label><input id="lc" className="input" value={f.contact} onChange={set('contact')} /></div>
+        <div>
+          <label className="mb-1 block text-sm text-slate-600" htmlFor="ldg">มอบหมายงานในหน้าที่ให้ (ผู้ดำเนินการแทนระหว่างลา)</label>
+          <select id="ldg" className="input" value={f.delegateTo} onChange={set('delegateTo')}>
+            <option value="">-- เลือกผู้รับมอบงาน --</option>
+            {delegates.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}
+          </select>
+        </div>
         <button className="btn btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยื่นใบลา</button>
       </form>
+    </Modal>
+  );
+}
+
+// เลือกใบลาที่จะยกเลิก/ลบ จากปุ่มบนหัวหน้าเพจ: คนทั่วไปยกเลิกได้เฉพาะใบของตัวเองที่ยังรอพิจารณา, Super Admin เลือกยกเลิก/ลบใบของใครก็ได้
+function CancelPickerModal({ rows, profile, isSuperAdmin, onClose, say }) {
+  const eligible = useMemo(
+    () => (isSuperAdmin ? rows.filter((l) => l.status !== 'ยกเลิก') : rows.filter((l) => l.userEmail === profile.email && l.status === 'รอพิจารณา')),
+    [rows, profile.email, isSuperAdmin],
+  );
+  const [selId, setSelId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const sel = eligible.find((l) => l.id === selId) || null;
+
+  const doCancel = async () => {
+    if (!sel) return;
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, 'leaves', sel.id), { status: 'ยกเลิก' });
+      await writeAudit({ action: 'update', module: 'leave', docId: sel.id, label: `${sel.name} ${sel.type}`, before: { status: sel.status }, after: { status: 'ยกเลิก' } });
+      say({ type: 'ok', text: 'ยกเลิกใบลาแล้ว' });
+      onClose();
+    } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
+  };
+  const doDelete = async () => {
+    if (!sel) return;
+    setBusy(true);
+    try {
+      await deleteDoc(doc(db, 'leaves', sel.id));
+      await writeAudit({ action: 'delete', module: 'leave', docId: sel.id, label: `${sel.name} ${sel.type}`, before: { status: sel.status } });
+      say({ type: 'ok', text: 'ลบใบลาแล้ว' });
+      onClose();
+    } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal title="ยกเลิกวันลา" onClose={onClose}>
+      {eligible.length === 0 ? (
+        <p className="text-slate-500">{isSuperAdmin ? 'ไม่มีใบลาให้ยกเลิก' : 'คุณไม่มีใบลาที่ยังรอพิจารณาให้ยกเลิก (ยกเลิกได้เฉพาะใบลาของตัวเองที่ยังไม่ได้รับการพิจารณา)'}</p>
+      ) : (
+        <>
+          <label className="mb-1 block text-sm text-slate-600" htmlFor="cancelSel">เลือกใบลาที่ต้องการยกเลิก</label>
+          <select id="cancelSel" className="input" value={selId} onChange={(e) => setSelId(e.target.value)}>
+            <option value="">-- เลือกใบลา --</option>
+            {eligible.map((l) => (
+              <option key={l.id} value={l.id}>{l.name} · {l.type} · {fmtDate(l.start)}-{fmtDate(l.end)} · {l.status}</option>
+            ))}
+          </select>
+          {!isSuperAdmin && <p className="mt-2 text-xs text-slate-500">บุคคลอื่นที่ไม่ใช่ผู้ทำใบลาจะยกเลิกแทนไม่ได้ ยกเว้น Super Admin</p>}
+          <div className="mt-4 flex justify-end gap-2">
+            <button className="btn btn-outline" onClick={onClose} disabled={busy}>ปิด</button>
+            {isSuperAdmin && <button className="btn btn-danger" disabled={!sel || busy} onClick={doDelete}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} <Trash2 className="h-4 w-4" /> ลบถาวร</button>}
+            <button className="btn btn-primary" disabled={!sel || busy} onClick={doCancel}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} <XCircle className="h-4 w-4" /> ยกเลิกใบลานี้</button>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }
@@ -156,7 +222,7 @@ function DecideModal({ leave, decision, onClose, say, by }) {
   );
 }
 
-function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, onBack, say }) {
+function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, people, onBack, say }) {
   const [form, setForm] = useState(false);
   const mine = useMemo(() => rows.filter((l) => l.userEmail === person.email), [rows, person.email]);
   const { used, pending } = useMemo(() => usage(mine), [mine]);
@@ -193,7 +259,7 @@ function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, on
           </table>
         )}
       </div>
-      {form && quota && <LeaveForm profile={person} quota={quota} mine={mine} pageFy={fy} onClose={() => setForm(false)} say={say} />}
+      {form && quota && <LeaveForm profile={person} quota={quota} mine={mine} pageFy={fy} people={people} onClose={() => setForm(false)} say={say} />}
     </div>
   );
 }
@@ -225,17 +291,18 @@ export default function Leave() {
       (e) => setError(e.message));
   }, [fy, viewAll, profile.email]);
 
-  // รายชื่อบุคลากรทั้งหมด สำหรับแท็บ "รายบุคคล" (เห็นเฉพาะผู้ที่มีสิทธิ์ดูรายการลาทุกคน) เรียงตามลำดับตำแหน่งที่กำหนด
+  // รายชื่อบุคลากรทั้งหมด: ใช้ทั้งแท็บ "รายบุคคล" (เฉพาะผู้มีสิทธิ์ดูรายการลาทุกคน) และตัวเลือก "มอบหมายงานให้" ในฟอร์มยื่นใบลา (ทุกคน) เรียงตามลำดับตำแหน่งที่กำหนด
   useEffect(() => {
-    if (!viewAll) return;
     return onSnapshot(collection(db, 'users'),
       (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending').sort((a, b) => {
         const r = posRank(a.position) - posRank(b.position);
         return r !== 0 ? r : String(a.name || a.email).localeCompare(String(b.name || b.email), 'th');
       })),
       () => setPeople([]));
-  }, [viewAll]);
+  }, []);
   const [quickForm, setQuickForm] = useState(null); // ยื่นใบลาแบบเร็วจากท้ายแถวในลิสต์รายบุคคล
+  const [showCancel, setShowCancel] = useState(false);
+  const isSuperAdmin = profile.role === 'super_admin';
 
   const mine = useMemo(() => (rows || []).filter((l) => l.userEmail === profile.email), [rows, profile.email]);
   const { used, pending } = useMemo(() => usage(mine), [mine]);
@@ -265,7 +332,7 @@ export default function Leave() {
           {tabs.map(([k, l]) => <button key={k} onClick={() => { setTab(k); setPerson(null); }} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
         </div>
         {person ? (
-          <PersonDashboard person={person} rows={rows || []} quota={quota} fy={fy} canFileForOthers={canFileForOthers} isSelf={person.email === profile.email} onBack={() => setPerson(null)} say={say} />
+          <PersonDashboard person={person} rows={rows || []} quota={quota} fy={fy} canFileForOthers={canFileForOthers} isSelf={person.email === profile.email} people={people} onBack={() => setPerson(null)} say={say} />
         ) : people === null ? <Spinner /> : people.length === 0 ? <EmptyState title="ยังไม่มีบุคลากร" /> : (
           <div className="space-y-3">
             {people.map((p) => {
@@ -291,7 +358,7 @@ export default function Leave() {
           </div>
         )}
         {quickForm && quota && (
-          <LeaveForm profile={quickForm} quota={quota} mine={(rows || []).filter((l) => l.userEmail === quickForm.email)} pageFy={fy} onClose={() => setQuickForm(null)} say={say} />
+          <LeaveForm profile={quickForm} quota={quota} mine={(rows || []).filter((l) => l.userEmail === quickForm.email)} pageFy={fy} people={people} onClose={() => setQuickForm(null)} say={say} />
         )}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
@@ -301,7 +368,10 @@ export default function Leave() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <PageHeader icon={CalendarDays} emoji="🗓️" title="ระบบควบคุมวันลา" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`}
-        actions={<button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>} />
+        actions={<>
+          <button className="btn btn-outline" onClick={() => setShowCancel(true)}><XCircle className="h-5 w-5" /> ยกเลิกวันลา</button>
+          <button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>
+        </>} />
 
       <QuotaGrid quota={quota} used={used} pending={pending} />
 
@@ -341,8 +411,9 @@ export default function Leave() {
           </table>
         )}
       </div>
-      {form && quota && <LeaveForm profile={profile} quota={quota} mine={mine} pageFy={fy} onClose={() => setForm(false)} say={say} />}
+      {form && quota && <LeaveForm profile={profile} quota={quota} mine={mine} pageFy={fy} people={people} onClose={() => setForm(false)} say={say} />}
       {decide && <DecideModal leave={decide.l} decision={decide.d} by={profile.name || profile.email} onClose={() => setDecide(null)} say={say} />}
+      {showCancel && <CancelPickerModal rows={rows || []} profile={profile} isSuperAdmin={isSuperAdmin} onClose={() => setShowCancel(false)} say={say} />}
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
