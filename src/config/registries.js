@@ -20,6 +20,7 @@ export const REGISTRIES = {
   incoming: {
     key: 'incoming',
     path: '/incoming',
+    emoji: '📥',
     title: 'ทะเบียนหนังสือรับ',
     noun: 'หนังสือรับ',
     numberField: 'receiveNo',
@@ -47,8 +48,6 @@ export const REGISTRIES = {
       { key: 'urgency', label: 'ความเร่งด่วน', type: 'select', options: ['ปกติ', 'ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'], default: 'ปกติ' },
       { key: 'secrecy', label: 'ชั้นความลับ', type: 'select', options: ['ปกติ', 'ลับ', 'ลับมาก', 'ลับที่สุด'], default: 'ปกติ' },
       { key: 'status', label: 'สถานะ', type: 'select', options: ['รอดำเนินการ', 'กำลังดำเนินการ', 'ดำเนินการแล้ว'], default: 'รอดำเนินการ', list: true },
-      { key: 'dueDate', label: 'กำหนดดำเนินการ', type: 'date' },
-      { key: 'actionDate', label: 'วันที่ดำเนินการ', type: 'date' },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'F5A623',
@@ -57,6 +56,7 @@ export const REGISTRIES = {
   outgoing: {
     key: 'outgoing',
     path: '/outgoing',
+    emoji: '📤',
     title: 'ทะเบียนหนังสือส่ง',
     noun: 'หนังสือส่ง',
     numberField: 'sendNo',
@@ -77,7 +77,7 @@ export const REGISTRIES = {
       { key: 'docNo', label: 'เลขที่หนังสือ', type: 'text', required: true, list: true, search: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
       { key: 'to', label: 'ถึง', type: 'select-other', options: OUTGOING_TO_OPTIONS, required: true, list: true, search: true },
-      { key: 'owner', label: 'ผู้รับผิดชอบ', type: 'text', search: true },
+      { key: 'owner', label: 'ผู้รับผิดชอบ', type: 'select-users', list: true, search: true },
       { key: 'unit', label: 'กลุ่มงาน', type: 'select', options: UNITS },
       { key: 'method', label: 'วิธีส่ง', type: 'select', options: ['ไปรษณีย์', 'ส่งด้วยตนเอง', 'อีเมล', 'ระบบสารบรรณอิเล็กทรอนิกส์', 'อื่น ๆ'], default: 'ไปรษณีย์' },
       { key: 'status', label: 'สถานะ', type: 'select', options: ['ร่าง', 'ส่งแล้ว', 'ยืนยันรับแล้ว'], default: 'ร่าง', list: true },
@@ -89,6 +89,7 @@ export const REGISTRIES = {
   vehicle: {
     key: 'vehicle',
     path: '/vehicle',
+    emoji: '🚗',
     title: 'ทะเบียนควบคุมยานพาหนะ',
     noun: 'การใช้รถ',
     numberField: 'tripNo',
@@ -124,6 +125,7 @@ export const REGISTRIES = {
   duty: {
     key: 'duty',
     path: '/duty',
+    emoji: '🌙',
     title: 'แผนปฏิบัติงานเวรนอกเวลาประจำเดือน',
     noun: 'เวรนอกเวลา',
     numberField: 'dutyNo',
@@ -155,6 +157,7 @@ export const REGISTRIES = {
   homevisit: {
     key: 'homevisit',
     path: '/homevisit',
+    emoji: '🏠',
     title: 'แผนปฏิบัติงานและรายงานผลการเยี่ยมบ้านเชิงรุกในชุมชนประจำเดือน',
     noun: 'การเยี่ยมบ้าน',
     numberField: 'visitNo',

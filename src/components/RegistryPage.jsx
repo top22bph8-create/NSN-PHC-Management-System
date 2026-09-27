@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, deleteDoc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
-import { Download, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { canWrite } from '../lib/roles';
 import { diffFields, writeAudit } from '../lib/audit';
 import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, ORG_DOC_CODE } from '../lib/numbering';
-import { exportCsv, exportXlsx } from '../lib/exportFile';
+import { exportCsv } from '../lib/exportFile';
 import { exportRegistryExcel } from '../lib/report';
 import { fiscalYearBE, fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from './ui';
 import FileAttach from './FileAttach';
+import { PageHeader } from './Logo';
 
 const emptyForm = (cfg) => {
   const f = {};
@@ -46,9 +47,32 @@ export default function RegistryPage({ cfg }) {
   const [toast, setToast] = useState(null);
   const [insertMode, setInsertMode] = useState(false);
   const [insertBase, setInsertBase] = useState('');
+  const [insertPreview, setInsertPreview] = useState(null);
+  const [people, setPeople] = useState([]);
+  const [justCreated, setJustCreated] = useState(null); // { number, at } แสดงผลหลังบันทึกทะเบียนหนังสือรับ
   const isOutgoing = cfg.key === 'outgoing';
+  const isIncoming = cfg.key === 'incoming';
+  const hasUserSelect = cfg.fields.some((f) => f.type === 'select-users');
 
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 3500); };
+
+  // รายชื่อบุคลากร ใช้เติมช้อยฟิลด์ประเภท select-users (เช่น ผู้รับผิดชอบหนังสือส่ง)
+  useEffect(() => {
+    if (!hasUserSelect) return;
+    return onSnapshot(collection(db, 'users'),
+      (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending' && u.name).sort((a, b) => String(a.name).localeCompare(String(b.name), 'th'))),
+      () => setPeople([]));
+  }, [hasUserSelect]);
+
+  // คำนวณเลขแทรกลำดับถัดไปจริง (อ่านตัวนับปัจจุบัน) เพื่อโชว์พรีวิวก่อนบันทึก
+  useEffect(() => {
+    if (!isOutgoing || !insertMode || !insertBase) { setInsertPreview(null); return; }
+    let live = true;
+    getDoc(doc(db, 'counters', `outgoing_insert_${fy}_${insertBase}`)).then((s) => {
+      if (live) setInsertPreview((s.exists() ? s.data().last : 0) + 1);
+    }).catch(() => { if (live) setInsertPreview(null); });
+    return () => { live = false; };
+  }, [isOutgoing, insertMode, insertBase, fy]);
 
   // โหลดข้อมูลตามปีงบประมาณที่เลือก (เรียงฝั่งเครื่องเพื่อไม่ต้องสร้าง Index)
   useEffect(() => {
@@ -102,7 +126,7 @@ export default function RegistryPage({ cfg }) {
   );
   const nextOutgoingPreview = outgoingBases.length ? outgoingBases[0].baseSeq + 1 : 1;
 
-  const openCreate = () => { setErrors({}); setInsertMode(false); setInsertBase(''); setForm({ values: emptyForm(cfg) }); };
+  const openCreate = () => { setErrors({}); setInsertMode(false); setInsertBase(''); setJustCreated(null); setForm({ values: emptyForm(cfg) }); };
   const openEdit = (it) => {
     const values = {};
     cfg.fields.forEach((f) => { if (!f.auto) values[f.key] = it[f.key] ?? ''; });
@@ -151,6 +175,12 @@ export default function RegistryPage({ cfg }) {
         say({ type: 'ok', text: `บันทึกแล้ว ${cfg.numberLabel} ${number}` });
         // ปีงบประมาณของรายการใหม่อาจไม่ตรงกับปีที่เลือก
         if (fyVal !== fy) say({ type: 'ok', text: `บันทึกแล้ว ${number} (อยู่ในปีงบประมาณ ${fyVal})` });
+        if (isIncoming) {
+          // ทะเบียนหนังสือรับ: ค้างหน้าต่างไว้ให้เห็นเลขรับ+เวลารับที่ออกจริง ก่อนปิดเอง
+          setJustCreated({ number, at: new Date() });
+          setSaving(false);
+          return;
+        }
       }
       setForm(null);
     } catch (err) {
@@ -191,8 +221,7 @@ export default function RegistryPage({ cfg }) {
     if (!filtered.length) return say({ type: 'error', text: 'ไม่มีข้อมูลให้ส่งออก' });
     const name = `${cfg.title}_ปีงบ${fy}`;
     try {
-      if (kind === 'xlsx') await exportXlsx(exportRows(), cfg.noun, name);
-      else exportCsv(exportRows(), name);
+      exportCsv(exportRows(), name);
       writeAudit({ action: 'export', module: cfg.key, label: `${name} (${filtered.length} รายการ, ${kind})` }).catch(() => {});
     } catch (e) {
       say({ type: 'error', text: 'ส่งออกไม่สำเร็จ: ' + e.message });
@@ -215,19 +244,18 @@ export default function RegistryPage({ cfg }) {
 
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{cfg.title}</h1>
-          <p className="text-slate-500">ปีงบประมาณ {fy} · {items ? `${filtered.length} จาก ${items.length} รายการ` : 'กำลังโหลด'}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn btn-outline" onClick={() => doExport('xlsx')}><FileSpreadsheet className="h-4 w-4" /> Excel</button>
-          <button className="btn btn-outline" onClick={() => doExport('csv')}><Download className="h-4 w-4" /> CSV</button>
-          <button className="btn btn-outline" onClick={doReportExcel} disabled={reporting} title="รายงาน Excel รูปแบบทะเบียนราชการ">{reporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} รายงาน Excel</button>
-          <button className="btn btn-outline" onClick={openReportPdf} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> รายงาน PDF</button>
-          {writable && <button className="btn btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
-        </div>
-      </div>
+      <PageHeader
+        emoji={cfg.emoji} title={cfg.title}
+        subtitle={`ปีงบประมาณ ${fy} · ${items ? `${filtered.length} จาก ${items.length} รายการ` : 'กำลังโหลด'}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={() => doExport('csv')}><Download className="h-4 w-4" /> CSV</button>
+            <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doReportExcel} disabled={reporting} title="ออกรายงาน Excel รูปแบบทะเบียนราชการ">{reporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Excel</button>
+            <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={openReportPdf} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> PDF</button>
+            {writable && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
+          </div>
+        }
+      />
 
       <div className="card mb-4 grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative sm:col-span-2">
@@ -277,7 +305,28 @@ export default function RegistryPage({ cfg }) {
       </div>
 
       {/* ฟอร์มเพิ่ม/แก้ไข */}
-      {form && (
+      {form && justCreated ? (
+        <Modal wide title={`บันทึก${cfg.noun}สำเร็จ`} onClose={() => { setForm(null); setJustCreated(null); }}
+          footer={<>
+            <button className="btn btn-outline" onClick={() => { setJustCreated(null); openCreate(); }}>เพิ่มรายการใหม่</button>
+            <button className="btn btn-primary" onClick={() => { setForm(null); setJustCreated(null); }}>เสร็จสิ้น</button>
+          </>}>
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+            <p className="text-slate-600">บันทึกลงทะเบียนหนังสือรับแล้ว</p>
+            <div className="w-full max-w-sm space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">เลขรับ</label>
+                <input readOnly className="input bg-brand-50 text-center text-xl font-extrabold text-brand-800" value={justCreated.number} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">เวลาที่รับหนังสือ</label>
+                <input readOnly className="input bg-brand-50 text-center font-semibold text-brand-800" value={justCreated.at.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} />
+              </div>
+            </div>
+          </div>
+        </Modal>
+      ) : form && (
         <Modal
           wide
           title={form.id ? `แก้ไข${cfg.noun} ${form.number}` : `เพิ่ม${cfg.noun}`}
@@ -297,7 +346,7 @@ export default function RegistryPage({ cfg }) {
               <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800 sm:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-brand-900" htmlFor="outgoing-number-preview">เลขที่หนังสือส่ง</label>
                 <input id="outgoing-number-preview" readOnly className="input bg-white font-semibold text-brand-800"
-                  value={!insertMode ? `${ORG_DOC_CODE}/${nextOutgoingPreview}` : (insertBase ? `${ORG_DOC_CODE}/${insertBase}.x (เลขแทรกลำดับถัดไป)` : `${ORG_DOC_CODE}/(เลือกเลขที่เดิมก่อน)`)} />
+                  value={!insertMode ? `${ORG_DOC_CODE}/${nextOutgoingPreview}` : (insertBase ? `${ORG_DOC_CODE}/${insertBase}.${insertPreview ?? '...'}` : `${ORG_DOC_CODE}/(เลือกเลขที่เดิมก่อน)`)} />
                 {!insertMode ? (
                   <p className="mt-1">เลขที่นี้จะถูกออกโดยอัตโนมัติเมื่อกดบันทึก</p>
                 ) : (
@@ -357,6 +406,11 @@ export default function RegistryPage({ cfg }) {
                       </div>
                     );
                   })()
+                ) : f.type === 'select-users' ? (
+                  <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
+                    <option value="">-- เลือกผู้รับผิดชอบ --</option>
+                    {people.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}
+                  </select>
                 ) : (
                   <input id={`f-${f.key}`} type={f.type === 'date' ? 'date' : 'text'} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
                 )}

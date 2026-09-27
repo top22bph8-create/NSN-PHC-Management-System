@@ -50,6 +50,13 @@ label { @apply text-slate-600; }
   @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-700 to-brand-500 px-3 py-1.5 text-sm font-extrabold uppercase tracking-wide text-white shadow-sm;
 }
 
+/* อิโมจิกระพริบสวยๆ ประจำหัวข้อแต่ละงาน */
+.emoji-blink { display: inline-block; animation: emoji-pulse 1.8s ease-in-out infinite; }
+@keyframes emoji-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .55; transform: scale(1.18); }
+}
+
 /* ลายน้ำโลโก้จาง ๆ มุมขวาล่างของทุกหน้า */
 .watermark {
   position: fixed; right: -60px; bottom: -60px; width: 420px; height: 420px; z-index: 0;

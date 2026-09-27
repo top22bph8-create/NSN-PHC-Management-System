@@ -51,3 +51,10 @@ export function fiscalYearOptions() {
 
 export const fmtBaht = (n) =>
   Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// แสดงวันที่แบบยาว "18 ตุลาคม 2566" (ใช้ในแบบฟอร์มใบลาที่พิมพ์)
+export function fmtDateLong(s) {
+  if (!s) return '';
+  const [y, m, d] = s.split('-').map(Number);
+  return `${d} ${thMonths[m - 1]} ${y + 543}`;
+}

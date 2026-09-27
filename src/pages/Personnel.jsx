@@ -222,7 +222,7 @@ export default function Personnel() {
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
-      <PageHeader icon={Users} title="ทำเนียบบุคลากร" subtitle="รายชื่อเจ้าหน้าที่ บัญชีผู้ใช้ และสิทธิ์การใช้งาน"
+      <PageHeader icon={Users} emoji="👥" title="ทำเนียบบุคลากร" subtitle="รายชื่อเจ้าหน้าที่ บัญชีผู้ใช้ และสิทธิ์การใช้งาน"
         actions={writable && (
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-outline" onClick={() => setModal({ t: 'import' })}><FileSpreadsheet className="h-5 w-5" /> นำเข้า Excel</button>

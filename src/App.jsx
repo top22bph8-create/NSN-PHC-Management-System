@@ -10,6 +10,7 @@ import Logo from './components/Logo';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import PrintReport from './pages/PrintReport';
+import PrintLeave from './pages/PrintLeave';
 import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
@@ -60,6 +61,18 @@ function PrintGate() {
   );
 }
 
+// เกตหน้าพิมพ์ใบลา: ต้องล็อกอินและมีสิทธิ์อ่านโมดูลวันลาก่อนจึงเห็นแบบฟอร์ม
+function PrintLeaveGate() {
+  const { loading, user, profile, problem, error } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Login />;
+  if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (!canRead(profile.role, 'leave')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์เข้าถึงแบบฟอร์มนี้</div>;
+  }
+  return <PrintLeave />;
+}
+
 // ป้องกันหน้า: ต้องล็อกอิน และมีสิทธิ์อ่านโมดูลนั้น
 function Guard({ module, children }) {
   const { profile } = useAuth();
@@ -106,6 +119,7 @@ export default function App() {
         <Routes>
           <Route path="/signup" element={<Signup />} />
           <Route path="/print/:key" element={<PrintGate />} />
+          <Route path="/print-leave/:id" element={<PrintLeaveGate />} />
           <Route path="/*" element={<Shell />} />
         </Routes>
       </AuthProvider>

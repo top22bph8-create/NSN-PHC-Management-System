@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, User, Users, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, Printer, User, Users, X } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -26,6 +26,44 @@ function QuotaGrid({ quota, used, pending }) {
             <div className="text-2xl font-bold text-brand-800">{Math.max(0, q - u)} <span className="text-sm font-normal text-slate-500">/ {q} วัน คงเหลือ</span></div>
             <div className="mt-1 h-2 overflow-hidden rounded bg-brand-100"><div className="h-2 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
             <div className="mt-1 text-xs text-slate-500">ใช้แล้ว {u}{p ? ` · รออนุมัติ ${p}` : ''}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ลำดับตำแหน่งที่ใช้จัดเรียงรายชื่อบุคลากรในแท็บ "รายบุคคล"
+const POSITION_ORDER = [
+  'นักวิชาการสาธารณสุขชำนาญการพิเศษ',
+  'นักวิชาการสาธารณสุข',
+  'พยาบาลวิชาชีพ',
+  'แพทย์แผนไทย',
+  'ผู้ช่วยเหลือคนไข้',
+  'พนักงานบริการ',
+  'พนักงานการเงินและบัญชี',
+  'คนขับรถ',
+];
+const posRank = (position) => {
+  const p = String(position || '');
+  const i = POSITION_ORDER.findIndex((k) => p.includes(k));
+  return i === -1 ? POSITION_ORDER.length : i;
+};
+
+// แถบโควตาแบบย่อ แสดงเฉพาะตัวเลขคงเหลือ/ใช้ไป ต่อประเภทลา (ใช้ในการ์ดรายบุคคล)
+function MiniQuota({ quota, used }) {
+  if (!quota) return null;
+  return (
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      {Object.entries(quota).map(([type, q]) => {
+        const u = used[type] || 0;
+        const left = Math.max(0, q - u);
+        const pct = q ? Math.min(100, (u / q) * 100) : 0;
+        return (
+          <div key={type} className="rounded-lg bg-slate-50 px-2 py-1.5">
+            <div className="truncate text-[11px] text-slate-500" title={type}>{type}</div>
+            <div className="text-sm font-bold text-brand-800">{left} <span className="text-[11px] font-normal text-slate-400">/{q}</span></div>
+            <div className="mt-0.5 h-1 overflow-hidden rounded bg-brand-100"><div className="h-1 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
           </div>
         );
       })}
@@ -140,7 +178,7 @@ function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, on
       <div className="card overflow-x-auto">
         {mine.length === 0 ? <EmptyState title="ยังไม่มีประวัติการลาในปีงบประมาณนี้" /> : (
           <table className="w-full min-w-[640px] text-left">
-            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">ช่วงวันที่</th><th className="px-3 py-2">วัน</th><th className="px-3 py-2">สถานะ</th></tr></thead>
+            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">ช่วงวันที่</th><th className="px-3 py-2">วัน</th><th className="px-3 py-2">สถานะ</th><th className="px-3 py-2" /></tr></thead>
             <tbody>
               {mine.map((l) => (
                 <tr key={l.id} className="border-t border-slate-100">
@@ -148,6 +186,7 @@ function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, on
                   <td className="px-3 py-2 text-sm">{fmtDate(l.start)} - {fmtDate(l.end)}</td>
                   <td className="px-3 py-2">{l.days}</td>
                   <td className="px-3 py-2"><Badge className={LEAVE_STATUS_COLORS[l.status]}>{l.status}</Badge></td>
+                  <td className="px-3 py-2"><button className="btn btn-outline !px-2 !py-1 text-sm" title="พิมพ์ใบลา (PDF)" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-leave/${l.id}`, '_blank')}><Printer className="h-4 w-4" /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -186,13 +225,17 @@ export default function Leave() {
       (e) => setError(e.message));
   }, [fy, viewAll, profile.email]);
 
-  // รายชื่อบุคลากรทั้งหมด สำหรับแท็บ "รายบุคคล" (เห็นเฉพาะผู้ที่มีสิทธิ์ดูรายการลาทุกคน)
+  // รายชื่อบุคลากรทั้งหมด สำหรับแท็บ "รายบุคคล" (เห็นเฉพาะผู้ที่มีสิทธิ์ดูรายการลาทุกคน) เรียงตามลำดับตำแหน่งที่กำหนด
   useEffect(() => {
     if (!viewAll) return;
     return onSnapshot(collection(db, 'users'),
-      (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending').sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email), 'th'))),
+      (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending').sort((a, b) => {
+        const r = posRank(a.position) - posRank(b.position);
+        return r !== 0 ? r : String(a.name || a.email).localeCompare(String(b.name || b.email), 'th');
+      })),
       () => setPeople([]));
   }, [viewAll]);
+  const [quickForm, setQuickForm] = useState(null); // ยื่นใบลาแบบเร็วจากท้ายแถวในลิสต์รายบุคคล
 
   const mine = useMemo(() => (rows || []).filter((l) => l.userEmail === profile.email), [rows, profile.email]);
   const { used, pending } = useMemo(() => usage(mine), [mine]);
@@ -217,28 +260,38 @@ export default function Leave() {
   if (tab === 'people' && viewAll) {
     return (
       <div className="mx-auto max-w-6xl p-4 lg:p-6">
-        <PageHeader icon={Users} title="วันลารายบุคคล" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`} />
+        <PageHeader icon={Users} emoji="🗓️" title="วันลารายบุคคล" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`} />
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {tabs.map(([k, l]) => <button key={k} onClick={() => { setTab(k); setPerson(null); }} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
         </div>
         {person ? (
           <PersonDashboard person={person} rows={rows || []} quota={quota} fy={fy} canFileForOthers={canFileForOthers} isSelf={person.email === profile.email} onBack={() => setPerson(null)} say={say} />
         ) : people === null ? <Spinner /> : people.length === 0 ? <EmptyState title="ยังไม่มีบุคลากร" /> : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
             {people.map((p) => {
-              const cnt = (rows || []).filter((l) => l.userEmail === p.email && l.status === 'อนุมัติ').length;
+              const mineP = (rows || []).filter((l) => l.userEmail === p.email);
+              const { used } = usage(mineP);
+              const canFile = p.email === profile.email || canFileForOthers;
               return (
-                <button key={p.email} onClick={() => setPerson(p)} className="card flex items-center gap-3 p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-brand-100 text-brand-700"><User className="h-5 w-5" /></div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-slate-800">{p.name || p.email}</div>
-                    <div className="truncate text-sm text-slate-500">{p.position || '-'}</div>
+                <div key={p.email} className="card p-3 sm:p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setPerson(p)}>
+                      <div className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-brand-100 text-brand-700"><User className="h-5 w-5" /></div>
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-bold text-slate-800">{p.name || p.email}</div>
+                        <div className="truncate text-sm text-slate-500">{p.position || '-'}</div>
+                      </div>
+                    </button>
+                    {canFile && <button className="btn btn-primary !py-1.5 shrink-0" onClick={() => setQuickForm(p)}><Plus className="h-4 w-4" /> ยื่นใบลา</button>}
                   </div>
-                  <Badge className="bg-brand-50 text-brand-700">{cnt} ครั้ง</Badge>
-                </button>
+                  <div className="mt-3"><MiniQuota quota={quota} used={used} /></div>
+                </div>
               );
             })}
           </div>
+        )}
+        {quickForm && quota && (
+          <LeaveForm profile={quickForm} quota={quota} mine={(rows || []).filter((l) => l.userEmail === quickForm.email)} pageFy={fy} onClose={() => setQuickForm(null)} say={say} />
         )}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
@@ -247,7 +300,7 @@ export default function Leave() {
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
-      <PageHeader icon={CalendarDays} title="ระบบควบคุมวันลา" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`}
+      <PageHeader icon={CalendarDays} emoji="🗓️" title="ระบบควบคุมวันลา" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`}
         actions={<button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>} />
 
       <QuotaGrid quota={quota} used={used} pending={pending} />
@@ -271,13 +324,16 @@ export default function Leave() {
                   <td className="max-w-[220px] px-3 py-2 text-sm text-slate-600">{l.reason}{l.decisionNote && <div className="text-xs text-brand-700">ผู้พิจารณา: {l.decisionNote}</div>}</td>
                   <td className="px-3 py-2"><Badge className={LEAVE_STATUS_COLORS[l.status]}>{l.status}</Badge></td>
                   <td className="whitespace-nowrap px-3 py-2">
-                    {l.status === 'รอพิจารณา' && canApprove && (
-                      <span className="flex gap-1">
-                        <button className="btn btn-primary !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'อนุมัติ' })}><Check className="h-4 w-4" /> อนุมัติ</button>
-                        <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'ไม่อนุมัติ' })}><X className="h-4 w-4" /></button>
-                      </span>
-                    )}
-                    {l.status === 'รอพิจารณา' && l.userEmail === profile.email && !canApprove && <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => cancel(l)}>ยกเลิก</button>}
+                    <span className="flex flex-wrap gap-1">
+                      <button className="btn btn-outline !px-2 !py-1 text-sm" title="พิมพ์ใบลา (PDF)" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-leave/${l.id}`, '_blank')}><Printer className="h-4 w-4" /></button>
+                      {l.status === 'รอพิจารณา' && canApprove && (
+                        <>
+                          <button className="btn btn-primary !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'อนุมัติ' })}><Check className="h-4 w-4" /> อนุมัติ</button>
+                          <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'ไม่อนุมัติ' })}><X className="h-4 w-4" /></button>
+                        </>
+                      )}
+                      {l.status === 'รอพิจารณา' && l.userEmail === profile.email && !canApprove && <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => cancel(l)}>ยกเลิก</button>}
+                    </span>
                   </td>
                 </tr>
               ))}
