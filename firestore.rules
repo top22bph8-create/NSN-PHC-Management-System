@@ -60,7 +60,12 @@ service cloud.firestore {
 
     // ตั้งค่าระบบ
     match /settings/{id} {
-      allow read: if isActive();
+      // settings/lineNotify เก็บ TOKEN สำหรับแจ้งเตือนไลน์ — ห้ามอ่านจากฝั่งไคลเอนต์เด็ดขาด (Cloud Function ใช้ Admin SDK อ่านได้อยู่แล้ว ไม่ผ่านกติกานี้)
+      allow read: if isActive() && id != 'lineNotify';
+      allow write: if hasRole(['super_admin']);
+    }
+    match /settings/lineNotify {
+      allow read: if false;
       allow write: if hasRole(['super_admin']);
     }
 

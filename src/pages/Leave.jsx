@@ -72,7 +72,7 @@ function MiniQuota({ quota, used }) {
 }
 
 function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
-  const [f, setF] = useState({ type: LEAVE_TYPES[0], start: todayStr(), end: todayStr(), days: 1, reason: '', contact: '', delegateTo: '' });
+  const [f, setF] = useState({ type: LEAVE_TYPES[0], start: todayStr(), end: todayStr(), days: 1, reason: '', contact: '', phone: '', delegateTo: '' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => {
     const v = e.target.value;
@@ -103,7 +103,7 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
       const delegate = delegates.find((p) => p.name === f.delegateTo);
       const data = {
         userEmail: profile.email, name: profile.name || profile.email, position: profile.position || '',
-        type: f.type, start: f.start, end: f.end, days, reason: f.reason.trim(), contact: f.contact.trim(),
+        type: f.type, start: f.start, end: f.end, days, reason: f.reason.trim(), contact: f.contact.trim(), phone: f.phone.trim(),
         delegateTo: f.delegateTo || '', delegatePosition: delegate?.position || '',
         fy, status: 'รอพิจารณา', createdAt: serverTimestamp(),
       };
@@ -128,7 +128,10 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
         </div>
         <p className="text-xs text-slate-500">นับเฉพาะวันจันทร์-ศุกร์ อัตโนมัติ (ปรับเป็น 0.5 ได้กรณีลาครึ่งวัน) วันหยุดนักขัตฤกษ์ให้ปรับจำนวนวันเอง</p>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lr">เหตุผลการลา</label><textarea id="lr" required rows={2} className="input" value={f.reason} onChange={set('reason')} /></div>
-        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lc">ติดต่อได้ที่ (เบอร์โทร/ที่อยู่ ระหว่างลา)</label><input id="lc" className="input" value={f.contact} onChange={set('contact')} /></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lc">ติดต่อได้ที่ (ที่อยู่/สถานที่ระหว่างลา)</label><input id="lc" className="input" value={f.contact} onChange={set('contact')} /></div>
+          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lp">หมายเลขโทรศัพท์มือถือ</label><input id="lp" className="input" value={f.phone} onChange={set('phone')} /></div>
+        </div>
         <div>
           <label className="mb-1 block text-sm text-slate-600" htmlFor="ldg">มอบหมายงานในหน้าที่ให้ (ผู้ดำเนินการแทนระหว่างลา)</label>
           <select id="ldg" className="input" value={f.delegateTo} onChange={set('delegateTo')}>

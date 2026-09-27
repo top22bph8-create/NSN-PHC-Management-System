@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MessageCircle } from 'lucide-react';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
 import { DEFAULT_NUMBERING, ORG_DOC_CODE, formatNumber, getNumbering } from '../lib/numbering';
@@ -8,17 +8,24 @@ import { writeAudit } from '../lib/audit';
 import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_QUOTA, getQuota } from '../lib/leave';
+import { DEFAULT_LINE_EVENTS, getLineMeta, saveLineMeta, saveLineToken } from '../lib/lineNotify';
 import { Settings } from 'lucide-react';
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState(null);
   const [quota, setQuota] = useState(null);
+  const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
+  const [lineToken, setLineToken] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 3500); };
 
-  useEffect(() => { getNumbering().then(setCfg).catch((e) => setError(e.message)); getQuota().then(setQuota).catch(() => setQuota({ ...DEFAULT_QUOTA })); }, []);
+  useEffect(() => {
+    getNumbering().then(setCfg).catch((e) => setError(e.message));
+    getQuota().then(setQuota).catch(() => setQuota({ ...DEFAULT_QUOTA }));
+    getLineMeta().then(setLineMeta).catch(() => {});
+  }, []);
 
   const save = async (e) => {
     e.preventDefault();
@@ -29,6 +36,12 @@ export default function SettingsPage() {
       const qv = Object.fromEntries(Object.entries(quota || {}).map(([k, v]) => [k, Number(v) || 0]));
       await setDoc(doc(db, 'settings', 'leaveQuota'), qv);
       await writeAudit({ action: 'settings', module: 'settings', docId: 'numbering', label: 'รูปแบบเลขทะเบียน', after: value });
+      await saveLineMeta(lineMeta);
+      if (lineToken.trim()) {
+        await saveLineToken(lineToken.trim());
+        setLineToken('');
+      }
+      await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Notify)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged: !!lineToken.trim() } });
       say({ type: 'ok', text: 'บันทึกการตั้งค่าแล้ว' });
     } catch (err) {
       say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) });
@@ -82,6 +95,30 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="text-sm text-slate-500">การเปลี่ยนรูปแบบมีผลกับรายการใหม่เท่านั้น เลขที่ออกไปแล้วจะไม่ถูกแก้ไข ค่าเริ่มต้น: {DEFAULT_NUMBERING.digits} หลัก, พ.ศ.</p>
+
+          <div className="border-t border-brand-100 pt-4">
+            <h2 className="mb-1 flex items-center gap-2 font-semibold"><MessageCircle className="h-5 w-5 text-brand-600" /> แจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณาวันลา (LINE Notify)</h2>
+            <p className="mb-3 text-sm text-slate-500">
+              วาง TOKEN จาก <a className="text-brand-700 underline" href="https://notify-bot.line.me/my/" target="_blank" rel="noreferrer">notify-bot.line.me/my</a> (สร้าง Token แล้วเลือกกลุ่มไลน์ที่จะแจ้งเตือน)
+              ที่นี่ครั้งเดียว — ระบบเก็บ TOKEN นี้แบบเขียนได้อย่างเดียว ไม่มีใครดึงกลับมาดูได้อีก แม้แต่ผู้ดูแลระบบ (ป้องกันการรั่วไหล)
+              การส่งข้อความจริงต้องติดตั้ง Cloud Function เสริม 1 ตัว (ดูขั้นตอนใน README หัวข้อ "แจ้งเตือนไลน์") มิฉะนั้นจะบันทึก TOKEN ไว้เฉยๆ ยังไม่ส่งข้อความ
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">LINE Notify TOKEN</label>
+                <input id="lineToken" type="password" autoComplete="off" className="input" placeholder="วาง TOKEN ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไข TOKEN เดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" className="h-5 w-5" checked={lineMeta.enabled} onChange={(e) => setLineMeta({ ...lineMeta, enabled: e.target.checked })} /> เปิดใช้งานแจ้งเตือนไลน์
+              </label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.submit} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, submit: e.target.checked } })} /> เมื่อยื่นใบลาใหม่</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.decide} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, decide: e.target.checked } })} /> เมื่ออนุมัติ/ไม่อนุมัติ</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.cancel} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, cancel: e.target.checked } })} /> เมื่อยกเลิกใบลา</label>
+              </div>
+            </div>
+          </div>
+
           <button className="btn btn-primary" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
         </form>
       )}
