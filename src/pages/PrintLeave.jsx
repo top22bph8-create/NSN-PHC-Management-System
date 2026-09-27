@@ -12,7 +12,7 @@ import thSarabunBoldItalic from '../assets/fonts/THSarabunIT9-BoldItalic.ttf';
 
 const FONT_STACK = '"TH SarabunIT๙", "TH SarabunPSK", "THSarabunNew", "Sarabun", sans-serif';
 
-// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษตามหนังสือราชการ (หัวท้าย 2.5 ซม. ซ้าย/ขวา 2 ซม.)
+// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษตามหนังสือราชการ (2.5 ซม. เท่ากันทั้ง 4 ด้าน)
 // หมายเหตุ: มีเฉพาะไฟล์ปกติ/เอียง/หนา-เอียง ไม่มีไฟล์ตัวหนาตรงแยกต่างหาก จึงให้เบราว์เซอร์สังเคราะห์ตัวหนาปกติ (faux bold) จากไฟล์ปกติแทน
 function PrintFonts() {
   return (
@@ -20,13 +20,13 @@ function PrintFonts() {
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunRegular}') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
-      @page { size: A4; margin: 2.5cm 2cm 2.5cm 2cm; }
+      @page { size: A4; margin: 2.5cm; }
     `}</style>
   );
 }
 
 const ORG_ADDRESS_LINE1 = 'โรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
-const ORG_ADDRESS_LINE2 = 'อำเภอเมือง จังหวัดสกลนคร ๔๗๐๐๐';
+const ORG_ADDRESS_LINE2 = 'ตำบลเชียงเครือ อำเภอเมืองสกลนคร จังหวัดสกลนคร 47000';
 const ORG_LONG = `${ORG_ADDRESS_LINE1} กองสาธารณสุข ${ORG_UNDER}`;
 const ORG_DEPT = `กองสาธารณสุข ${ORG_UNDER}`;
 // ผู้ตรวจสอบ/ผู้บังคับบัญชา ที่พิมพ์ชื่อ-ตำแหน่งไว้ล่วงหน้าในแบบใบลาพักผ่อน (ตามแบบฟอร์มตัวอย่างจริง)
@@ -67,9 +67,10 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
       <div className="border-b border-dotted border-slate-400">&nbsp;</div>
       {presetName ? (
         <div className="mt-4 text-center">
+          <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {presetName} )</div>
-          <div className="mt-2">{presetPosition}</div>
-          {presetExtra ? <div className="mt-2">{presetExtra}</div> : null}
+          <div>{presetPosition}</div>
+          {presetExtra ? <div>{presetExtra}</div> : null}
           <div className="mt-2">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
         </div>
       ) : (
@@ -100,13 +101,16 @@ function CheckerLine({ presetName, presetPosition }) {
 function DelegateBox({ l }) {
   return (
     <div className="mt-3 text-sm leading-6">
-      <div className="font-bold underline">คำสั่ง</div>
-      <p className="mt-1">ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
+      <p>ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
       <p>ให้ {l.delegateTo ? <b>{l.delegateTo}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
-      <div className="mt-2"><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
-      <div>( {l.name} )</div>
-      <div className="mt-2"><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้รับมอบงาน</div>
-      <div>( {l.delegateTo || <Blank w="w-44" />} )</div>
+      <div className="mt-2 text-center">
+        <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
+        <div>( {l.name} )</div>
+      </div>
+      <div className="mt-2 text-center">
+        <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้รับมอบงาน</div>
+        <div>( {l.delegateTo || <Blank w="w-44" />} )</div>
+      </div>
     </div>
   );
 }
@@ -201,7 +205,7 @@ function Head({ title, dateText }) {
   return (
     <div className="mb-3">
       <div className="text-center text-lg font-bold underline">{title}</div>
-      <div className="mt-2 text-right text-sm leading-5">
+      <div className="mt-2 text-left text-sm leading-5">
         <div>{ORG_ADDRESS_LINE1}</div>
         <div>{ORG_ADDRESS_LINE2}</div>
       </div>
@@ -238,9 +242,9 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
       </p>
       <p className="leading-7">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
       <p className="leading-7">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-3 text-center text-sm">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
-        <div className="mt-1">( {l.name} )</div>
+        <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
@@ -275,9 +279,9 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
       <p className="leading-7">
         ระหว่างวันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} รวม {l.days} วันทำการ ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่โทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-56" />}
       </p>
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-3 text-center text-sm">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
-        <div className="mt-1">( {l.name} )</div>
+        <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
@@ -313,9 +317,9 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
         จึงขออนุญาตลาตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
       <p className="leading-7">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-3 text-center text-sm">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
-        <div className="mt-1">( {l.name} )</div>
+        <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
@@ -344,9 +348,9 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
       <p className="leading-7">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-3 text-center text-sm">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
-        <div className="mt-1">( {l.name} )</div>
+        <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-6">
@@ -437,7 +441,7 @@ export default function PrintLeave() {
         <button className="btn btn-outline" onClick={() => window.close()}>ปิดหน้านี้</button>
         <button className="btn btn-primary" onClick={() => window.print()}>พิมพ์ / บันทึกเป็น PDF</button>
       </div>
-      <p className="mb-2 text-xs text-amber-700 print:hidden">เคล็ดลับ: ตอนสั่งพิมพ์ ให้เปิด "การตั้งค่าเพิ่มเติม" แล้วปิดตัวเลือก "ส่วนหัวและส่วนท้าย" (Headers and footers) เพื่อไม่ให้เบราว์เซอร์แทรกวันที่/URL ลงในกระดาษ · แบบฟอร์มนี้ใช้ฟอนต์ TH SarabunIT๙ ที่แนบมาฝังไว้ในไฟล์ให้แล้ว จึงแสดงผลเหมือนกันทุกเครื่อง</p>
+      <p className="mb-2 text-xs text-amber-700 print:hidden">เคล็ดลับ: ตอนสั่งพิมพ์ ให้เปิด "การตั้งค่าเพิ่มเติม" แล้วปิดตัวเลือก "ส่วนหัวและส่วนท้าย" (Headers and footers) เพื่อไม่ให้เบราว์เซอร์แทรกวันที่/URL ลงในกระดาษ · แบบฟอร์มนี้ใช้ฟอนต์ TH SarabunIT๙ ที่แนบมาฝังไว้ในไฟล์ให้แล้ว จึงแสดงผลเหมือนกันทุกเครื่อง · หากต้องการให้ไฟล์ PDF ที่บันทึกจากหน้าพิมพ์นี้ไปเก็บที่โฟลเดอร์ Downloads ของเครื่องโดยอัตโนมัติทุกครั้ง (ไม่ต้องเลือกที่เก็บเอง) ให้ไปที่การตั้งค่าเบราว์เซอร์ (เช่น Chrome: การตั้งค่า → ดาวน์โหลด) แล้วปิดตัวเลือก "ถามก่อนว่าจะบันทึกไฟล์แต่ละไฟล์ไว้ที่ไหน"</p>
       {l.type === 'ลาพักผ่อน' ? (
         <Vacation l={l} to={to} quotaAccrued={quotaAccrued} quotaRemain={quotaRemain} quotaTotal={quotaTotal} before={vBefore || ''} thisTime={vThisTime || ''} total={vTotal || ''} isOwnerLeave={isOwnerLeave} dateText={dateText} decidedDate={decidedDate} />
       ) : ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาคลอดบุตร'].includes(l.type) ? (
