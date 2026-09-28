@@ -18,6 +18,7 @@ export default function SettingsPage() {
   const [lineToken, setLineToken] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
   const [lineTargets, setLineTargets] = useState([]);
+  const [lineTargetsError, setLineTargetsError] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
@@ -27,7 +28,10 @@ export default function SettingsPage() {
     getNumbering().then(setCfg).catch((e) => setError(e.message));
     getQuota().then(setQuota).catch(() => setQuota({ ...DEFAULT_QUOTA }));
     getLineMeta().then(setLineMeta).catch(() => {});
-    getLineWebhookLog().then(setLineTargets).catch(() => {});
+    getLineWebhookLog().then(setLineTargets).catch((e) => {
+      console.error('getLineWebhookLog failed:', e);
+      setLineTargetsError(`${e.code || ''} ${e.message || e}`.trim());
+    });
   }, []);
 
   const save = async (e) => {
@@ -120,7 +124,11 @@ export default function SettingsPage() {
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
-                {lineTargets.length === 0 ? (
+                {lineTargetsError ? (
+                  <p className="text-sm text-rose-600">
+                    โหลดไม่สำเร็จ: <code className="break-all">{lineTargetsError}</code> (ส่งข้อความนี้ให้ผู้ดูแลระบบช่วยตรวจสอบ)
+                  </p>
+                ) : lineTargets.length === 0 ? (
                   <p className="text-sm text-slate-500">
                     ยังไม่พบ Target ID — ต้อง (1) ติดตั้งฟังก์ชัน <code>lineWebhook</code> ด้วย <code>firebase deploy --only functions</code>
                     (2) นำ URL ของฟังก์ชันไปวางเป็น Webhook URL ในหน้า Messaging API ของ LINE Developers Console แล้วเปิดสวิตช์ "Use webhook"
