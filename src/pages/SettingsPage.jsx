@@ -8,7 +8,7 @@ import { writeAudit } from '../lib/audit';
 import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_QUOTA, getQuota } from '../lib/leave';
-import { DEFAULT_LINE_EVENTS, getLineMeta, saveLineMeta, saveLineToken } from '../lib/lineNotify';
+import { DEFAULT_LINE_EVENTS, getLineMeta, saveLineCredentials, saveLineMeta } from '../lib/lineNotify';
 import { Settings } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [quota, setQuota] = useState(null);
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
+  const [lineTargetId, setLineTargetId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
@@ -37,11 +38,13 @@ export default function SettingsPage() {
       await setDoc(doc(db, 'settings', 'leaveQuota'), qv);
       await writeAudit({ action: 'settings', module: 'settings', docId: 'numbering', label: 'รูปแบบเลขทะเบียน', after: value });
       await saveLineMeta(lineMeta);
-      if (lineToken.trim()) {
-        await saveLineToken(lineToken.trim());
-        setLineToken('');
+      const tokenChanged = !!lineToken.trim();
+      const targetChanged = !!lineTargetId.trim();
+      if (tokenChanged || targetChanged) {
+        await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim() });
+        setLineToken(''); setLineTargetId('');
       }
-      await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Notify)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged: !!lineToken.trim() } });
+      await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged } });
       say({ type: 'ok', text: 'บันทึกการตั้งค่าแล้ว' });
     } catch (err) {
       say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) });
@@ -97,16 +100,21 @@ export default function SettingsPage() {
           <p className="text-sm text-slate-500">การเปลี่ยนรูปแบบมีผลกับรายการใหม่เท่านั้น เลขที่ออกไปแล้วจะไม่ถูกแก้ไข ค่าเริ่มต้น: {DEFAULT_NUMBERING.digits} หลัก, พ.ศ.</p>
 
           <div className="border-t border-brand-100 pt-4">
-            <h2 className="mb-1 flex items-center gap-2 font-semibold"><MessageCircle className="h-5 w-5 text-brand-600" /> แจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณาวันลา (LINE Notify)</h2>
+            <h2 className="mb-1 flex items-center gap-2 font-semibold"><MessageCircle className="h-5 w-5 text-brand-600" /> แจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณาวันลา (LINE Messaging API)</h2>
             <p className="mb-3 text-sm text-slate-500">
-              วาง TOKEN จาก <a className="text-brand-700 underline" href="https://notify-bot.line.me/my/" target="_blank" rel="noreferrer">notify-bot.line.me/my</a> (สร้าง Token แล้วเลือกกลุ่มไลน์ที่จะแจ้งเตือน)
-              ที่นี่ครั้งเดียว — ระบบเก็บ TOKEN นี้แบบเขียนได้อย่างเดียว ไม่มีใครดึงกลับมาดูได้อีก แม้แต่ผู้ดูแลระบบ (ป้องกันการรั่วไหล)
-              การส่งข้อความจริงต้องติดตั้ง Cloud Function เสริม 1 ตัว (ดูขั้นตอนใน README หัวข้อ "แจ้งเตือนไลน์") มิฉะนั้นจะบันทึก TOKEN ไว้เฉยๆ ยังไม่ส่งข้อความ
+              <b>LINE Notify แบบเดิมปิดให้บริการถาวรแล้วตั้งแต่ 31 มี.ค. 2568</b> ระบบนี้จึงเปลี่ยนมาใช้ LINE Messaging API แทน ต้องมี LINE Official Account ของหน่วยงานเอง (สมัครฟรีได้ที่{' '}
+              <a className="text-brand-700 underline" href="https://developers.line.biz/console/" target="_blank" rel="noreferrer">LINE Developers Console</a>) แล้วนำ <b>Channel access token</b> (แบบ long-lived) กับ <b>Target ID</b> ของกลุ่ม/ผู้ใช้ปลายทางมาวางไว้ที่นี่
+              — ระบบเก็บค่าทั้งสองนี้แบบเขียนได้อย่างเดียว ไม่มีใครดึงกลับมาดูได้อีก แม้แต่ผู้ดูแลระบบ (ป้องกันการรั่วไหล)
+              การส่งข้อความจริงต้องติดตั้ง Cloud Function เสริม 1 ตัว (ดูขั้นตอนเตรียมทั้งหมดใน README หัวข้อ "แจ้งเตือนไลน์") มิฉะนั้นจะบันทึกค่าไว้เฉยๆ ยังไม่ส่งข้อความ
             </p>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">LINE Notify TOKEN</label>
-                <input id="lineToken" type="password" autoComplete="off" className="input" placeholder="วาง TOKEN ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไข TOKEN เดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">Channel access token</label>
+                <input id="lineToken" type="password" autoComplete="off" className="input" placeholder="วาง Channel access token ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไขค่าเดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง)</label>
+                <input id="lineTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" className="h-5 w-5" checked={lineMeta.enabled} onChange={(e) => setLineMeta({ ...lineMeta, enabled: e.target.checked })} /> เปิดใช้งานแจ้งเตือนไลน์

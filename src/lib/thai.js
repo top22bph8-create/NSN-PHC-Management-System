@@ -12,6 +12,12 @@ export function todayStr() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// เวลาปัจจุบันรูปแบบ HH:mm ตามเวลาเครื่อง (ใช้บันทึกเวลารับหนังสือแบบอัตโนมัติ)
+export function nowTimeStr() {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function addDays(dateStr, days) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const dt = new Date(y, m - 1, d + days);

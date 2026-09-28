@@ -88,8 +88,9 @@ export default function Dashboard() {
         out: data.outgoing.filter((x) => (x.sendDate || '').slice(5, 7) === key).length,
       };
     });
-    const byUnit = {};
-    inc.forEach((x) => { const u = x.unit || 'ไม่ระบุ'; byUnit[u] = (byUnit[u] || 0) + 1; });
+    // จัดกลุ่มตามความเร่งด่วนแทนกลุ่มงาน (ตัดช่องกลุ่มงานออกจากทะเบียนหนังสือรับแล้ว)
+    const byUrgency = {};
+    inc.forEach((x) => { const u = x.urgency || 'ไม่ระบุ'; byUrgency[u] = (byUrgency[u] || 0) + 1; });
     const recent = [
       ...inc.map((x) => ({ ...x, mod: 'incoming', no: x.receiveNo, date: x.receiveDate })),
       ...data.outgoing.map((x) => ({ ...x, mod: 'outgoing', no: x.sendNo, date: x.sendDate })),
@@ -97,8 +98,8 @@ export default function Dashboard() {
     return {
       inTotal: inc.length, inMonth: inc.filter((x) => (x.receiveDate || '').startsWith(thisMonth)).length,
       outTotal: data.outgoing.length, outMonth: data.outgoing.filter((x) => (x.sendDate || '').startsWith(thisMonth)).length,
-      pending, overdue, near, monthly, byUnit: Object.entries(byUnit).sort((a, b) => b[1] - a[1]),
-      recent, outDraft: data.outgoing.filter((x) => x.status === 'ร่าง').length,
+      pending, overdue, near, monthly, byUnit: Object.entries(byUrgency).sort((a, b) => b[1] - a[1]),
+      recent,
     };
   }, [data]);
 
@@ -178,7 +179,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="card p-4">
-                  <h3 className="mb-3 font-semibold">หนังสือรับตามกลุ่มงาน</h3>
+                  <h3 className="mb-3 font-semibold">หนังสือรับตามความเร่งด่วน</h3>
                   {m.byUnit.length === 0 ? <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูล</p> : (
                     <ul className="space-y-2">
                       {m.byUnit.map(([u, n]) => (
@@ -205,7 +206,6 @@ export default function Dashboard() {
                       ))}
                     </ul>
                   )}
-                  {m.outDraft > 0 && <p className="mt-2 text-sm text-amber-700">หนังสือส่งสถานะ "ร่าง" ค้างอยู่ {m.outDraft} รายการ</p>}
                 </div>
 
                 <div className="card p-4">
