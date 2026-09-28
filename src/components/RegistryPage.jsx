@@ -51,6 +51,7 @@ export default function RegistryPage({ cfg }) {
   const [people, setPeople] = useState([]);
   const [justCreated, setJustCreated] = useState(null); // { id, number, date, time } แสดงผลหลังบันทึกทะเบียนหนังสือรับ
   const [incomingPreview, setIncomingPreview] = useState(null); // เลขรับที่จะออกให้ พรีวิวก่อนบันทึกจริง
+  const [otherActive, setOtherActive] = useState({}); // select-other กำลังอยู่ในโหมด "อื่นๆ" หรือไม่ (คีย์ตาม field key) — เก็บแยกจากค่าฟิลด์ เพราะค่าฟิลด์จะถูกเคลียร์เป็นค่าว่างตอนเลือก "อื่นๆ"
   const [otherOpen, setOtherOpen] = useState({}); // ช่องพิมพ์เองของ select-other ถูกกดปุ่ม "+" เปิดแล้วหรือยัง (คีย์ตาม field key)
   const isOutgoing = cfg.key === 'outgoing';
   const isIncoming = cfg.key === 'incoming';
@@ -150,7 +151,7 @@ export default function RegistryPage({ cfg }) {
   const nextOutgoingPreview = outgoingBases.length ? outgoingBases[0].baseSeq + 1 : 1;
 
   const openCreate = () => {
-    setErrors({}); setInsertMode(false); setInsertBase(''); setJustCreated(null); setOtherOpen({});
+    setErrors({}); setInsertMode(false); setInsertBase(''); setJustCreated(null); setOtherOpen({}); setOtherActive({});
     setForm({ values: emptyForm(cfg) });
   };
   const openEdit = (it) => {
@@ -159,6 +160,7 @@ export default function RegistryPage({ cfg }) {
     setErrors({});
     setViewId(null);
     setOtherOpen({});
+    setOtherActive({});
     setForm({ id: it.id, number: it[cfg.numberField], values });
   };
 
@@ -442,23 +444,32 @@ export default function RegistryPage({ cfg }) {
                   (() => {
                     const raw = form.values[f.key] || '';
                     const isFixed = f.options.includes(raw);
-                    const selectVal = isFixed ? raw : raw ? 'อื่นๆ' : '';
-                    const inputOpen = selectVal === 'อื่นๆ' && (otherOpen[f.key] || !!raw);
+                    // active = กำลังอยู่ในโหมด "อื่นๆ" — เก็บเป็น state แยกต่างหาก เพราะพอเลือก "อื่นๆ" ค่าฟิลด์จริงจะถูกเคลียร์เป็นค่าว่างทันที
+                    // (ถ้าอิงจากค่าฟิลด์อย่างเดียว พอค่าว่าง ตัวเลือกจะเด้งกลับไปเป็น "-- เลือก --" ทุกครั้ง)
+                    const active = otherActive[f.key] || (!isFixed && !!raw);
+                    const selectVal = isFixed ? raw : (active ? 'อื่นๆ' : '');
+                    const inputOpen = active && (otherOpen[f.key] || !!raw);
                     return (
                       <div className="space-y-2">
                         <select
                           id={`f-${f.key}`} className="input" value={selectVal}
                           onChange={(e) => {
                             const v = e.target.value;
-                            setForm({ ...form, values: { ...form.values, [f.key]: v === 'อื่นๆ' ? '' : v } });
-                            if (v !== 'อื่นๆ') setOtherOpen({ ...otherOpen, [f.key]: false });
+                            if (v === 'อื่นๆ') {
+                              setOtherActive({ ...otherActive, [f.key]: true });
+                              setForm({ ...form, values: { ...form.values, [f.key]: '' } });
+                            } else {
+                              setOtherActive({ ...otherActive, [f.key]: false });
+                              setOtherOpen({ ...otherOpen, [f.key]: false });
+                              setForm({ ...form, values: { ...form.values, [f.key]: v } });
+                            }
                           }}
                         >
                           <option value="">-- เลือก --</option>
                           {f.options.map((o) => <option key={o}>{o}</option>)}
                           <option value="อื่นๆ">อื่นๆ (ระบุ)</option>
                         </select>
-                        {selectVal === 'อื่นๆ' && !inputOpen && (
+                        {active && !inputOpen && (
                           <button type="button" className="btn btn-outline !py-1.5 text-sm" onClick={() => setOtherOpen({ ...otherOpen, [f.key]: true })}>
                             <Plus className="h-4 w-4" /> เพิ่มช่องพิมพ์เอง
                           </button>
