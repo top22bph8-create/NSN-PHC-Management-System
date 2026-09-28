@@ -32,25 +32,25 @@ export const REGISTRIES = {
     statusColors: {
       'รอดำเนินการ': 'bg-amber-100 text-amber-800',
       'กำลังดำเนินการ': 'bg-blue-100 text-blue-800',
+      'ส่งให้ ผอ.รพ.สต.พิจารณามอบหมาย': 'bg-purple-100 text-purple-800',
       'ดำเนินการแล้ว': 'bg-emerald-100 text-emerald-800',
     },
     // วันที่รับ/เวลารับ เป็นค่าที่ระบบกำหนดให้อัตโนมัติตามเวลาจริงที่กดบันทึก (auto: true) แก้ไขเองไม่ได้ เพื่อไม่ให้ขัดกับเลขรับที่ออกอัตโนมัติ
+    // ตัดช่อง "เลขที่หนังสือ"/"ลงวันที่" (ของหนังสือต้นฉบับ) ออกแล้วตามคำขอ เหลือเฉพาะเลขรับ/วันที่รับ/เวลารับที่ระบบออกให้อัตโนมัติ
     fields: [
       { key: 'receiveNo', label: 'เลขรับ', type: 'text', auto: true, list: true, search: true },
       { key: 'receiveDate', label: 'วันที่รับ', type: 'date', auto: true, list: true },
       { key: 'receiveTime', label: 'เวลารับ', type: 'text', auto: true, list: true },
-      { key: 'docNo', label: 'เลขที่หนังสือ', type: 'text', required: true, list: true, search: true },
-      { key: 'docDate', label: 'ลงวันที่', type: 'date' },
       { key: 'from', label: 'จาก', type: 'text', required: true, list: true, search: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
       { key: 'to', label: 'ถึง', type: 'select-users', search: true },
       { key: 'urgency', label: 'ความเร่งด่วน', type: 'select', options: ['ปกติ', 'ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'], default: 'ปกติ' },
       { key: 'secrecy', label: 'ชั้นความลับ', type: 'select', options: ['ปกติ', 'ลับ', 'ลับมาก', 'ลับที่สุด'], default: 'ปกติ' },
-      { key: 'status', label: 'สถานะ', type: 'select', options: ['รอดำเนินการ', 'กำลังดำเนินการ', 'ดำเนินการแล้ว'], default: 'รอดำเนินการ', list: true },
+      { key: 'status', label: 'สถานะ', type: 'select', options: ['รอดำเนินการ', 'กำลังดำเนินการ', 'ส่งให้ ผอ.รพ.สต.พิจารณามอบหมาย', 'ดำเนินการแล้ว'], default: 'รอดำเนินการ', list: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'F5A623',
-    reportColumns: ['receiveNo', 'receiveDate', 'from', 'to', 'subject', 'docDate'],
+    reportColumns: ['receiveNo', 'receiveDate', 'from', 'to', 'subject', 'status'],
   },
   outgoing: {
     key: 'outgoing',
@@ -68,7 +68,7 @@ export const REGISTRIES = {
       // เลือกจากช้อยรายชื่อหน่วยงานที่ใช้บ่อย หรือเลือก "อื่นๆ (ระบุ)" แล้วช่องพิมพ์เองจะปรากฏขึ้นอัตโนมัติ
       { key: 'to', label: 'ถึง', type: 'select-other', options: OUTGOING_TO_OPTIONS, required: true, list: true, search: true },
       { key: 'owner', label: 'ผู้รับผิดชอบ', type: 'select-users', list: true, search: true },
-      { key: 'method', label: 'วิธีส่ง', type: 'select', options: ['ไปรษณีย์', 'ส่งด้วยตนเอง', 'อีเมล', 'ระบบสารบรรณอิเล็กทรอนิกส์', 'อื่น ๆ'], default: 'ไปรษณีย์' },
+      { key: 'method', label: 'วิธีส่ง', type: 'select', options: ['ไปรษณีย์', 'ส่งด้วยตนเอง', 'อีเมล', 'ระบบสารบรรณอิเล็กทรอนิกส์', 'แจ้งเวียนภายใน รพ.สต.', 'แจ้งเวียนโดย จนท.การเงินและบัญชี', 'อื่น ๆ'], default: 'ไปรษณีย์' },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'F6C90E',
