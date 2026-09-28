@@ -30,3 +30,14 @@ export async function saveLineCredentials({ channelAccessToken, targetId }) {
 export async function saveLineMeta({ enabled, events }) {
   await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events } });
 }
+
+// settings/lineWebhookLog → Cloud Function "lineWebhook" (functions/index.js) เขียนไว้ทุกครั้งที่มีคนพิมพ์ข้อความ
+// หรือเพิ่มบอทเข้ากลุ่ม เก็บ Target ID ล่าสุดที่เจอ (ไม่ลับ อ่านได้ปกติ) เพื่อให้หาค่ามาใส่ Target ID ด้านบนได้ง่ายขึ้น
+// โดยไม่ต้องไปไล่ดู Cloud Functions Logs เอง
+export async function getLineWebhookLog() {
+  const s = await getDoc(doc(db, 'settings', 'lineWebhookLog'));
+  const targets = s.exists() ? s.data().targets || {} : {};
+  return Object.entries(targets)
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+}

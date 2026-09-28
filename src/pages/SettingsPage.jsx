@@ -8,7 +8,7 @@ import { writeAudit } from '../lib/audit';
 import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_QUOTA, getQuota } from '../lib/leave';
-import { DEFAULT_LINE_EVENTS, getLineMeta, saveLineCredentials, saveLineMeta } from '../lib/lineNotify';
+import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineMeta } from '../lib/lineNotify';
 import { Settings } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -17,6 +17,7 @@ export default function SettingsPage() {
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
+  const [lineTargets, setLineTargets] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
@@ -26,6 +27,7 @@ export default function SettingsPage() {
     getNumbering().then(setCfg).catch((e) => setError(e.message));
     getQuota().then(setQuota).catch(() => setQuota({ ...DEFAULT_QUOTA }));
     getLineMeta().then(setLineMeta).catch(() => {});
+    getLineWebhookLog().then(setLineTargets).catch(() => {});
   }, []);
 
   const save = async (e) => {
@@ -115,6 +117,28 @@ export default function SettingsPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง)</label>
                 <input id="lineTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
+                {lineTargets.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    ยังไม่พบ Target ID — ต้อง (1) ติดตั้งฟังก์ชัน <code>lineWebhook</code> ด้วย <code>firebase deploy --only functions</code>
+                    (2) นำ URL ของฟังก์ชันไปวางเป็น Webhook URL ในหน้า Messaging API ของ LINE Developers Console แล้วเปิดสวิตช์ "Use webhook"
+                    (3) พิมพ์ข้อความอะไรก็ได้ 1 ครั้งในแชท/กลุ่มที่มีบอทอยู่ แล้วรีเฟรชหน้านี้ (ดูขั้นตอนละเอียดใน README หัวข้อ "แจ้งเตือนไลน์")
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {lineTargets.map((t) => (
+                      <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2 text-sm">
+                        <div className="min-w-0">
+                          <div><span className="rounded bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-800">{t.type}</span> <code className="break-all">{t.id}</code></div>
+                          <div className="truncate text-xs text-slate-500">ข้อความล่าสุด: {t.lastMessage}</div>
+                        </div>
+                        <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้ Target ID นี้</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" className="h-5 w-5" checked={lineMeta.enabled} onChange={(e) => setLineMeta({ ...lineMeta, enabled: e.target.checked })} /> เปิดใช้งานแจ้งเตือนไลน์

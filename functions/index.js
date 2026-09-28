@@ -11,6 +11,7 @@
  * วิธีติดตั้ง/เผยแพร่ และวิธีเตรียม LINE Official Account + หา Target ID: ดู README.md หัวข้อ "แจ้งเตือนไลน์"
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onRequest } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
@@ -42,6 +43,38 @@ async function sendLine(channelAccessToken, targetId, message) {
     console.error('LINE Messaging API ส่งไม่สำเร็จ:', res.status, await res.text());
   }
 }
+
+// Webhook รับข้อความจาก LINE — ใช้เพื่อ "หา Target ID" ของกลุ่ม/ผู้ใช้ปลายทางเท่านั้น (LINE ไม่มีหน้าจอโชว์ Target ID
+// ให้ดูตรงๆ ต้องอ่านจากเหตุการณ์ที่ยิงเข้ามาตอนมีคนพิมพ์ข้อความในแชท/กลุ่มที่มีบอทอยู่ หรือตอนเชิญบอทเข้ากลุ่ม)
+// วิธีใช้: ตั้งค่า URL ของฟังก์ชันนี้เป็น Webhook URL ใน LINE Developers Console (Messaging API) แล้วเปิดสวิตช์ "Use webhook"
+// จากนั้นพิมพ์ข้อความอะไรก็ได้ในแชท/กลุ่มที่มีบอทอยู่ 1 ครั้ง แล้วเข้าหน้า "ตั้งค่าระบบ" ของเว็บ จะเห็น Target ID
+// ที่เพิ่งตรวจพบขึ้นมาให้กดใช้ได้เลย ไม่ต้องเปิดดู Cloud Functions Logs เอง
+// หมายเหตุ: ฟังก์ชันนี้ไม่ได้ตรวจลายเซ็น (signature) ของ LINE เพราะใช้แค่ "อ่าน" หา Target ID ชั่วคราวเท่านั้น
+// ไม่ได้ใช้ตัดสินใจอะไรที่กระทบข้อมูลจริงในระบบ
+exports.lineWebhook = onRequest(async (req, res) => {
+  try {
+    const events = (req.body && req.body.events) || [];
+    const now = new Date().toISOString();
+    const patch = {};
+    for (const ev of events) {
+      const src = ev.source || {};
+      const id = src.groupId || src.roomId || src.userId;
+      if (!id) continue;
+      const type = src.groupId ? 'กลุ่ม' : src.roomId ? 'ห้องแชท' : 'รายบุคคล';
+      const lastMessage = ev.type === 'message' && ev.message && ev.message.type === 'text'
+        ? ev.message.text
+        : `(เหตุการณ์: ${ev.type})`;
+      patch[`targets.${id}`] = { type, lastMessage, at: now };
+    }
+    if (Object.keys(patch).length) {
+      await db.doc('settings/lineWebhookLog').set(patch, { merge: true });
+    }
+  } catch (e) {
+    console.error('lineWebhook error:', e);
+  }
+  // ต้องตอบ 200 กลับให้ LINE เสมอและเร็ว มิฉะนั้น LINE จะขึ้นสถานะ error ให้ Webhook นี้
+  res.status(200).send('OK');
+});
 
 // เมื่อมีการยื่นใบลาใหม่
 exports.onLeaveCreated = onDocumentCreated('leaves/{id}', async (event) => {
