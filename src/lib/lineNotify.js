@@ -28,7 +28,15 @@ export async function saveLineCredentials({ channelAccessToken, targetId }) {
 
 // บันทึกสถานะเปิด/ปิด และเหตุการณ์ที่จะแจ้งเตือน (แก้ได้อิสระจาก Token/Target ID)
 export async function saveLineMeta({ enabled, events }) {
-  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events } });
+  const s = await getDoc(doc(db, 'settings', 'lineNotifyMeta'));
+  const directorUserId = s.exists() ? s.data().directorUserId || '' : '';
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events }, directorUserId });
+}
+
+// บันทึก LINE User ID ของ "ผู้อำนวยการ" — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ลับ อ่านได้ปกติ
+// เหมือน lineNotifyMeta ทั้งก้อน) ต้องเป็น LINE User ID ที่ได้จากการคุยกับบอทแบบส่วนตัว (1:1) เท่านั้น ไม่ใช่รหัสกลุ่ม
+export async function saveLineDirectorId(directorUserId) {
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { directorUserId }, { merge: true });
 }
 
 // settings/lineWebhookLog → Cloud Function "lineWebhook" (functions/index.js) เขียนไว้ทุกครั้งที่มีคนพิมพ์ข้อความ

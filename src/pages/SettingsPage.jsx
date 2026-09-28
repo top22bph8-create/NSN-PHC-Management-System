@@ -8,7 +8,7 @@ import { writeAudit } from '../lib/audit';
 import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_QUOTA, getQuota } from '../lib/leave';
-import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineMeta } from '../lib/lineNotify';
+import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
 import { Settings } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -113,6 +113,10 @@ export default function SettingsPage() {
               — ระบบเก็บค่าทั้งสองนี้แบบเขียนได้อย่างเดียว ไม่มีใครดึงกลับมาดูได้อีก แม้แต่ผู้ดูแลระบบ (ป้องกันการรั่วไหล)
               การส่งข้อความจริงต้องติดตั้ง Cloud Function เสริม 1 ตัว (ดูขั้นตอนเตรียมทั้งหมดใน README หัวข้อ "แจ้งเตือนไลน์") มิฉะนั้นจะบันทึกค่าไว้เฉยๆ ยังไม่ส่งข้อความ
             </p>
+            <p className="mb-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">
+              ✨ เมื่อมีการยื่นใบลาใหม่ ข้อความที่ส่งเข้ากลุ่มจะมีปุ่ม <b>"อนุมัติ" / "ไม่อนุมัติ"</b> ให้กดตัดสินใจได้ทันทีในไลน์
+              (กดได้เฉพาะ LINE ของ "ผู้อำนวยการ" ที่ตั้งค่าไว้ด้านล่างเท่านั้น) พอกดแล้วระบบจะส่งลิงก์เปิดหน้าใบลาที่พร้อมพิมพ์กลับเข้ากลุ่มให้อัตโนมัติ
+            </p>
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">Channel access token</label>
@@ -122,6 +126,14 @@ export default function SettingsPage() {
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง)</label>
                 <input id="lineTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
               </div>
+              <p className="text-sm text-slate-600">
+                LINE ผู้อำนวยการ (สำหรับปุ่มอนุมัติ):{' '}
+                {lineMeta.directorUserId ? (
+                  <span className="font-medium text-emerald-700">ตั้งค่าแล้ว ({lineMeta.directorUserId})</span>
+                ) : (
+                  <span className="font-medium text-amber-700">ยังไม่ได้ตั้งค่า — ให้ผู้อำนวยการพิมพ์ข้อความคุยกับบอทแบบส่วนตัว (1:1) 1 ครั้ง แล้วกด "ตั้งเป็นผู้อำนวยการ" ที่รายการด้านล่าง</span>
+                )}
+              </p>
               <div className="rounded-lg border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
                 {lineTargetsError ? (
@@ -139,10 +151,26 @@ export default function SettingsPage() {
                     {lineTargets.map((t) => (
                       <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2 text-sm">
                         <div className="min-w-0">
-                          <div><span className="rounded bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-800">{t.type}</span> <code className="break-all">{t.id}</code></div>
+                          <div>
+                            <span className="rounded bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-800">{t.type}</span>{' '}
+                            <code className="break-all">{t.id}</code>
+                            {lineMeta.directorUserId && t.id === lineMeta.directorUserId && (
+                              <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">ผู้อำนวยการ</span>
+                            )}
+                          </div>
                           <div className="truncate text-xs text-slate-500">ข้อความล่าสุด: {t.lastMessage}</div>
                         </div>
-                        <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้ Target ID นี้</button>
+                        <div className="flex shrink-0 gap-1.5">
+                          <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้ Target ID นี้</button>
+                          {t.type === 'รายบุคคล' && (
+                            <button
+                              type="button" className="btn btn-outline !py-1 text-xs"
+                              onClick={async () => { await saveLineDirectorId(t.id); setLineMeta({ ...lineMeta, directorUserId: t.id }); say('ตั้งเป็นผู้อำนวยการแล้ว'); }}
+                            >
+                              ตั้งเป็นผู้อำนวยการ
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
