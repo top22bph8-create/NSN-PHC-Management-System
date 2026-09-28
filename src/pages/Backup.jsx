@@ -9,7 +9,7 @@ import { fmtDateTime } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import { Toast } from '../components/ui';
 
-const LABEL = { users: 'บุคลากรและสิทธิ์', settings: 'การตั้งค่า', counters: 'ตัวนับเลขทะเบียน', incoming: 'หนังสือรับ', outgoing: 'หนังสือส่ง', leaves: 'ใบลา', auditLogs: 'Audit Log' };
+const LABEL = { users: 'บุคลากรและสิทธิ์', credentials: 'รหัสผ่านผู้ใช้งาน', settings: 'การตั้งค่า', counters: 'ตัวนับเลขทะเบียน', incoming: 'หนังสือรับ', outgoing: 'หนังสือส่ง', leaves: 'ใบลา', auditLogs: 'Audit Log' };
 
 export default function Backup() {
   const { profile } = useAuth();
@@ -29,15 +29,36 @@ export default function Backup() {
 
   const download = async () => {
     setBusy(true);
+    // สร้างแท็บเปล่าไว้ตั้งแต่ตอนกด (ยังอยู่ในจังหวะที่เบราว์เซอร์นับว่าเป็นการกระทำของผู้ใช้)
+    // เผื่อเบราว์เซอร์บางตัว (เช่น Safari) บล็อกการดาวน์โหลด/เปิดแท็บอัตโนมัติหลังรอข้อมูลจาก Firestore เสร็จ (มีช่วง await คั่นกลาง)
+    const preOpened = window.open('', '_blank');
     try {
       const b = await buildBackup();
       const blob = new Blob([JSON.stringify(b)], { type: 'application/json' });
-      const a = document.createElement('a');
       const d = new Date();
-      a.href = URL.createObjectURL(blob);
-      a.download = `NSN-PHC-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const fileName = `NSN-PHC-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
+      const url = URL.createObjectURL(blob);
+      let downloaded = false;
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        downloaded = true;
+      } catch { downloaded = false; }
+      if (preOpened && !preOpened.closed) {
+        if (downloaded) {
+          // ดาวน์โหลดสำเร็จผ่านทางลัดด้านบนแล้ว ไม่ต้องใช้แท็บที่เปิดไว้ ปิดทิ้ง
+          preOpened.close();
+        } else {
+          // ทางลัดดาวน์โหลดอัตโนมัติถูกบล็อก ให้ผู้ใช้กดลิงก์ในแท็บที่เปิดไว้แทน
+          preOpened.document.title = 'ไฟล์สำรองข้อมูล NSN-PHC';
+          preOpened.document.body.innerHTML = `<p style="font-family:sans-serif">กดลิงก์นี้เพื่อดาวน์โหลดไฟล์สำรองข้อมูล: <a href="${url}" download="${fileName}">${fileName}</a></p>`;
+        }
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
       const c = countOf(b);
       await markBackupDone(profile.email, c);
       await writeAudit({ action: 'export', module: 'backup', label: 'สำรองข้อมูลทั้งระบบ', after: c });
@@ -45,6 +66,7 @@ export default function Backup() {
       loadLast();
       say({ type: 'ok', text: 'ดาวน์โหลดไฟล์สำรองข้อมูลแล้ว' });
     } catch (e) {
+      if (preOpened && !preOpened.closed) preOpened.close();
       say({ type: 'error', text: 'สำรองข้อมูลไม่สำเร็จ: ' + (e.code || e.message) });
     } finally { setBusy(false); }
   };
@@ -86,7 +108,7 @@ export default function Backup() {
       <div className="card mb-5 p-5">
         <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold"><Download className="h-5 w-5 text-brand-600" /> สำรองข้อมูล</h2>
         <p className="mb-1 text-sm text-slate-600">สำรอง: {BACKUP_COLLECTIONS.map((c) => LABEL[c]).join(', ')}</p>
-        <p className="mb-3 text-sm text-slate-500">ไม่รวมไฟล์แนบ (PDF/รูป) ซึ่งเก็บใน Firebase Storage และไม่รวมรหัสผ่าน (รหัสผ่านอยู่ที่ Firebase Authentication)</p>
+        <p className="mb-3 text-sm text-slate-500">ไม่รวมไฟล์แนบ (PDF/รูป) ซึ่งเก็บใน Firebase Storage · รวมสำเนารหัสผ่าน (plaintext) ที่ผู้ดูแลระบบตั้งไว้เพื่อแจ้งผู้ใช้งาน แต่ไม่รวมค่ารหัสผ่านที่เข้ารหัสจริงของระบบยืนยันตัวตน (Firebase Authentication) ซึ่งไม่สามารถอ่านออกมาได้อยู่แล้ว</p>
         {last?.lastBackupAt && <p className="mb-3 text-sm">สำรองล่าสุด: <b>{fmtDateTime(last.lastBackupAt)}</b> โดย {last.by}</p>}
         <button className="btn btn-primary" onClick={download} disabled={busy}>{busy && !file && <Loader2 className="h-4 w-4 animate-spin" />} ดาวน์โหลดไฟล์สำรองข้อมูล (.json)</button>
         {counts && <ul className="mt-3 grid grid-cols-2 gap-1 text-sm text-slate-600 sm:grid-cols-3">{Object.entries(counts).map(([k, v]) => <li key={k}>{LABEL[k] || k}: <b>{v}</b></li>)}</ul>}

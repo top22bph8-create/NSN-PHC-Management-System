@@ -74,7 +74,6 @@ export const REGISTRIES = {
     fields: [
       { key: 'sendNo', label: 'เลขส่ง', type: 'text', auto: true, list: true, search: true },
       { key: 'sendDate', label: 'วันที่ส่ง', type: 'date', required: true, list: true },
-      { key: 'docNo', label: 'เลขที่หนังสือ', type: 'text', required: true, list: true, search: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
       { key: 'to', label: 'ถึง', type: 'select-other', options: OUTGOING_TO_OPTIONS, required: true, list: true, search: true },
       { key: 'owner', label: 'ผู้รับผิดชอบ', type: 'select-users', list: true, search: true },

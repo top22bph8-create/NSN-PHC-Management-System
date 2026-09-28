@@ -22,8 +22,8 @@ export const ASSIGNABLE_ROLES = ROLES;
 export const PENDING_LABEL = 'รอผู้ดูแลระบบอนุมัติ';
 
 export const ACCESS = {
-  incoming: { read: ['super_admin', 'director', 'admin_clerk', 'viewer'], write: ['super_admin', 'admin_clerk'] },
-  outgoing: { read: ['super_admin', 'director', 'admin_clerk', 'viewer'], write: ['super_admin', 'admin_clerk'] },
+  incoming: { read: ALL, write: ALL },
+  outgoing: { read: ALL, write: ALL },
   vehicle: { read: ALL, write: ['super_admin', 'admin_clerk', 'director'] },
   duty: { read: ALL, write: ['super_admin', 'admin_clerk', 'director'] },
   homevisit: { read: ALL, write: ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'] },

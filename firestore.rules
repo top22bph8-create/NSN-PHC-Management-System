@@ -77,12 +77,12 @@ service cloud.firestore {
 
     // ทะเบียนหนังสือรับ / หนังสือส่ง
     match /incoming/{id} {
-      allow read: if hasRole(['super_admin', 'director', 'admin_clerk', 'viewer']);
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk']);
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
     }
     match /outgoing/{id} {
-      allow read: if hasRole(['super_admin', 'director', 'admin_clerk', 'viewer']);
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk']);
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
     }
 
     // ทะเบียนควบคุมยานพาหนะ
@@ -108,6 +108,20 @@ service cloud.firestore {
       allow read: if hasRole(['super_admin', 'director']);
       allow create: if isActive() && request.resource.data.userEmail == request.auth.token.email;
       allow update, delete: if false;
+    }
+
+    // สำเนารหัสผ่านปัจจุบัน (plaintext) ของแต่ละบัญชี ให้ Super Admin ดูได้เพื่อแจ้งผู้ใช้งาน
+    // แยกออกจาก users/{email} โดยเจตนา เพราะเอกสาร users อ่านได้กว้าง (ทุกคนที่ active) แต่ credentials ต้องเห็นได้เฉพาะ Super Admin เท่านั้น
+    match /credentials/{email} {
+      allow read, write: if hasRole(['super_admin']);
+    }
+
+    // คำขอเปลี่ยน Username/Password ที่ผู้ใช้งานส่งมาจากหน้าล็อกอิน (ยังไม่ได้ล็อกอินตอนส่งคำขอ)
+    match /accountChangeRequests/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['currentUsername', 'wantUsername', 'wantPassword', 'note', 'status', 'createdAt'])
+                    && request.resource.data.status == 'รอดำเนินการ'
+                    && request.resource.data.currentUsername is string && request.resource.data.currentUsername.size() > 0;
+      allow read, update, delete: if hasRole(['super_admin']);
     }
   }
 }

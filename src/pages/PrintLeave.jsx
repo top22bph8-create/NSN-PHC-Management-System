@@ -66,12 +66,12 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
       <div className="border-b border-dotted border-slate-400">&nbsp;</div>
       {presetName ? (
-        <div className="mt-4 text-center">
+        <div className="mt-2 text-center leading-[1.15]">
           <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {presetName} )</div>
           <div>{presetPosition}</div>
           {presetExtra ? <div>{presetExtra}</div> : null}
-          <div className="mt-2">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
+          <div className="mt-1">วันที่ <Blank w="w-40" /></div>
         </div>
       ) : (
         <div className="mt-2">
@@ -88,11 +88,11 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
 // บรรทัดลงชื่อ "ผู้ตรวจสอบ" — จัดชื่อ/ตำแหน่ง/เส้นปะให้อยู่กึ่งกลางเพื่อความสวยงาม เว้นแต่ระบุ presetName ไว้ล่วงหน้า
 function CheckerLine({ presetName, presetPosition }) {
   return (
-    <div className="mt-3 text-center text-sm leading-6">
-      <div><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
+    <div className="mt-3 text-center text-sm leading-[1.15]">
+      <div className="leading-6"><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
       <div className="mt-1">( {presetName || <Blank w="w-52" />} )</div>
       <div>ตำแหน่ง {presetPosition || <Blank w="w-52" />}</div>
-      <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
+      <div className="mt-1">วันที่ <Blank w="w-40" /></div>
     </div>
   );
 }
@@ -136,9 +136,9 @@ function OrderBox({ status, isOwnerLeave, decidedDate }) {
           <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
         </div>
       ) : (
-        <div className="mt-4 text-center">
+        <div className="mt-2 text-center leading-[1.15]">
           <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
-          <div className="mt-1">( {DIRECTOR_NAME} )</div>
+          <div>( {DIRECTOR_NAME} )</div>
           <div>{DIRECTOR_POSITION}</div>
           {decidedDate ? <div className="mt-1">วันที่ {decidedDate}</div> : <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
         </div>
@@ -205,9 +205,11 @@ function Head({ title, dateText }) {
   return (
     <div className="mb-3">
       <div className="text-center text-lg font-bold underline">{title}</div>
-      <div className="mt-2 text-left text-sm leading-5">
-        <div>{ORG_ADDRESS_LINE1}</div>
-        <div>{ORG_ADDRESS_LINE2}</div>
+      <div className="mt-2 flex justify-end">
+        <div className="text-left text-sm leading-5">
+          <div>{ORG_ADDRESS_LINE1}</div>
+          <div>{ORG_ADDRESS_LINE2}</div>
+        </div>
       </div>
       <div className="text-center text-sm">วันที่ {dateText || <Blank w="w-40" />}</div>
     </div>

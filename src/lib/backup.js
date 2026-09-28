@@ -2,7 +2,7 @@ import { Timestamp, collection, doc, getDocs, serverTimestamp, setDoc, writeBatc
 import { db } from '../firebase';
 
 // คอลเลกชันที่สำรอง (auditLogs สำรองไว้เก็บถาวร แต่ไม่กู้คืนกลับ เพื่อคงความเป็นหลักฐาน)
-export const BACKUP_COLLECTIONS = ['users', 'settings', 'counters', 'incoming', 'outgoing', 'leaves', 'auditLogs'];
+export const BACKUP_COLLECTIONS = ['users', 'credentials', 'settings', 'counters', 'incoming', 'outgoing', 'leaves', 'auditLogs'];
 export const RESTORE_COLLECTIONS = BACKUP_COLLECTIONS.filter((c) => c !== 'auditLogs');
 export const BACKUP_VERSION = 1;
 
