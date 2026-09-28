@@ -6,7 +6,7 @@ import { CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Plus, Printer
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
-import { canWrite, OWNER_EMAIL } from '../lib/roles';
+import { canWrite } from '../lib/roles';
 import { diffFields, writeAudit } from '../lib/audit';
 import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, formatNumber, getNumbering, ORG_DOC_CODE } from '../lib/numbering';
 import { exportCsv } from '../lib/exportFile';
@@ -51,6 +51,7 @@ export default function RegistryPage({ cfg }) {
   const [people, setPeople] = useState([]);
   const [justCreated, setJustCreated] = useState(null); // { id, number, date, time } แสดงผลหลังบันทึกทะเบียนหนังสือรับ
   const [incomingPreview, setIncomingPreview] = useState(null); // เลขรับที่จะออกให้ พรีวิวก่อนบันทึกจริง
+  const [otherOpen, setOtherOpen] = useState({}); // ช่องพิมพ์เองของ select-other ถูกกดปุ่ม "+" เปิดแล้วหรือยัง (คีย์ตาม field key)
   const isOutgoing = cfg.key === 'outgoing';
   const isIncoming = cfg.key === 'incoming';
   const hasUserSelect = cfg.fields.some((f) => f.type === 'select-users');
@@ -149,20 +150,15 @@ export default function RegistryPage({ cfg }) {
   const nextOutgoingPreview = outgoingBases.length ? outgoingBases[0].baseSeq + 1 : 1;
 
   const openCreate = () => {
-    setErrors({}); setInsertMode(false); setInsertBase(''); setJustCreated(null);
-    const values = emptyForm(cfg);
-    if (isIncoming) {
-      // ค่าเริ่มต้นช่อง "ถึง" เป็นผู้อำนวยการ (ผู้รับหนังสือส่วนใหญ่) เปลี่ยนเป็นบุคลากรท่านอื่นได้จากช้อย
-      const director = people.find((p) => p.email === OWNER_EMAIL) || people.find((p) => p.role === 'director');
-      if (director?.name) values.to = director.name;
-    }
-    setForm({ values });
+    setErrors({}); setInsertMode(false); setInsertBase(''); setJustCreated(null); setOtherOpen({});
+    setForm({ values: emptyForm(cfg) });
   };
   const openEdit = (it) => {
     const values = {};
     cfg.fields.forEach((f) => { if (!f.auto) values[f.key] = it[f.key] ?? ''; });
     setErrors({});
     setViewId(null);
+    setOtherOpen({});
     setForm({ id: it.id, number: it[cfg.numberField], values });
   };
 
@@ -353,14 +349,18 @@ export default function RegistryPage({ cfg }) {
           <div className="flex flex-col items-center gap-3 py-4 text-center">
             <CheckCircle2 className="h-12 w-12 text-emerald-500" />
             <p className="text-slate-600">บันทึกลงทะเบียนหนังสือรับแล้ว ด้วยเลขรับ วันที่ และเวลาที่ระบบออกให้อัตโนมัติ ณ ขณะกดบันทึกจริง</p>
-            <div className="w-full max-w-sm space-y-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">เลขรับ</label>
-                <input readOnly className="input bg-brand-50 text-center text-xl font-extrabold text-brand-800" value={justCreated.number} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">วันที่/เวลาที่รับหนังสือ</label>
-                <input readOnly className="input bg-brand-50 text-center font-semibold text-brand-800" value={`${fmtDate(justCreated.date)} เวลา ${justCreated.time} น.`} />
+            <div className="w-full max-w-md">
+              <div className="mb-1 text-center text-sm font-medium text-slate-600">เลขรับ</div>
+              <input readOnly className="input mb-3 bg-brand-50 text-center text-xl font-extrabold text-brand-800" value={justCreated.number} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-center text-sm font-medium text-slate-600">วันที่รับ</label>
+                  <input readOnly className="input bg-brand-50 text-center font-semibold text-brand-800" value={fmtDate(justCreated.date)} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-center text-sm font-medium text-slate-600">เวลารับ</label>
+                  <input readOnly className="input bg-brand-50 text-center font-semibold text-brand-800" value={`${justCreated.time} น.`} />
+                </div>
               </div>
             </div>
           </div>
@@ -383,10 +383,22 @@ export default function RegistryPage({ cfg }) {
             {!form.id && !isOutgoing && !isIncoming && <p className="rounded-lg bg-brand-50 p-2 text-sm text-brand-800 sm:col-span-2">{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>}
             {!form.id && isIncoming && (
               <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800 sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-brand-900" htmlFor="incoming-number-preview">เลขรับ / วันที่ / เวลารับหนังสือ</label>
-                <input id="incoming-number-preview" readOnly className="input bg-white font-semibold text-brand-800"
-                  value={incomingPreview ? `${incomingPreview.number} · ${fmtDate(incomingPreview.date)} · เวลา ${incomingPreview.time} น.` : 'กำลังคำนวณ...'} />
-                <p className="mt-1">ระบบจะออกเลขรับและบันทึกวันที่-เวลาให้อัตโนมัติตามเวลาจริงตอนกดบันทึก แก้ไขเองไม่ได้ (ค่าที่แสดงนี้เป็นตัวอย่างล่วงหน้า อาจขยับได้เล็กน้อยหากมีผู้อื่นบันทึกก่อนคุณ)</p>
+                <p className="mb-2 font-medium text-brand-900">เลขรับ / วันที่ / เวลารับหนังสือ (ออกให้อัตโนมัติ)</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-brand-700" htmlFor="incoming-number-preview">เลขรับ</label>
+                    <input id="incoming-number-preview" readOnly className="input bg-white text-center font-semibold text-brand-800" value={incomingPreview?.number ?? 'กำลังคำนวณ...'} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-brand-700" htmlFor="incoming-date-preview">วันที่รับ</label>
+                    <input id="incoming-date-preview" readOnly className="input bg-white text-center font-semibold text-brand-800" value={incomingPreview ? fmtDate(incomingPreview.date) : '...'} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-brand-700" htmlFor="incoming-time-preview">เวลารับ</label>
+                    <input id="incoming-time-preview" readOnly className="input bg-white text-center font-semibold text-brand-800" value={incomingPreview ? `${incomingPreview.time} น.` : '...'} />
+                  </div>
+                </div>
+                <p className="mt-2">ระบบจะออกเลขรับและบันทึกวันที่-เวลาให้อัตโนมัติตามเวลาจริงตอนกดบันทึก แก้ไขเองไม่ได้ (ค่าที่แสดงนี้เป็นตัวอย่างล่วงหน้า อาจขยับได้เล็กน้อยหากมีผู้อื่นบันทึกก่อนคุณ)</p>
               </div>
             )}
             {!form.id && isOutgoing && (
@@ -431,6 +443,7 @@ export default function RegistryPage({ cfg }) {
                     const raw = form.values[f.key] || '';
                     const isFixed = f.options.includes(raw);
                     const selectVal = isFixed ? raw : raw ? 'อื่นๆ' : '';
+                    const inputOpen = selectVal === 'อื่นๆ' && (otherOpen[f.key] || !!raw);
                     return (
                       <div className="space-y-2">
                         <select
@@ -438,13 +451,19 @@ export default function RegistryPage({ cfg }) {
                           onChange={(e) => {
                             const v = e.target.value;
                             setForm({ ...form, values: { ...form.values, [f.key]: v === 'อื่นๆ' ? '' : v } });
+                            if (v !== 'อื่นๆ') setOtherOpen({ ...otherOpen, [f.key]: false });
                           }}
                         >
                           <option value="">-- เลือก --</option>
                           {f.options.map((o) => <option key={o}>{o}</option>)}
                           <option value="อื่นๆ">อื่นๆ (ระบุ)</option>
                         </select>
-                        {selectVal === 'อื่นๆ' && (
+                        {selectVal === 'อื่นๆ' && !inputOpen && (
+                          <button type="button" className="btn btn-outline !py-1.5 text-sm" onClick={() => setOtherOpen({ ...otherOpen, [f.key]: true })}>
+                            <Plus className="h-4 w-4" /> เพิ่มช่องพิมพ์เอง
+                          </button>
+                        )}
+                        {inputOpen && (
                           <input
                             className="input" placeholder="ระบุถึง..." autoFocus value={raw}
                             onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}
@@ -456,6 +475,7 @@ export default function RegistryPage({ cfg }) {
                 ) : f.type === 'select-users' ? (
                   <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
                     <option value="">-- เลือก{f.label} --</option>
+                    {f.pinnedOption && <option value={f.pinnedOption}>{f.pinnedOption}</option>}
                     {people.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}
                   </select>
                 ) : (

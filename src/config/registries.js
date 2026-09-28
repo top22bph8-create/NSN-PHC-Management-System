@@ -1,6 +1,9 @@
 // นิยามทะเบียน: เพิ่มทะเบียนใหม่ได้โดยเพิ่มค่าในไฟล์นี้ ไม่ต้องเขียนหน้าใหม่
 const UNITS = ['ธุรการ', 'การเงินและบัญชี', 'พัสดุ', 'ส่งเสริมป้องกันควบคุมโรค', 'เวชปฏิบัติครอบครัว', 'ผู้อำนวยการ'];
 
+// ตำแหน่งผู้อำนวยการ รพ.สต. — ใช้เป็นช้อยตรึงไว้ (pinned) และค่าเริ่มต้นของช่อง "ถึง" ในทะเบียนหนังสือรับ
+export const DIRECTOR_TITLE = 'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
+
 // รายชื่อ "ถึง" มาตรฐานของหนังสือส่ง (เลือกจากรายการ หรือเลือก "อื่น ๆ" แล้วพิมพ์เอง)
 export const OUTGOING_TO_OPTIONS = [
   'นายกองค์การบริหารส่วนจังหวัดสกลนคร',
@@ -43,7 +46,7 @@ export const REGISTRIES = {
       { key: 'receiveTime', label: 'เวลารับ', type: 'text', auto: true, list: true },
       { key: 'from', label: 'จาก', type: 'text', required: true, list: true, search: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
-      { key: 'to', label: 'ถึง', type: 'select-users', search: true },
+      { key: 'to', label: 'ถึง', type: 'select-users', pinnedOption: DIRECTOR_TITLE, default: DIRECTOR_TITLE, search: true },
       { key: 'urgency', label: 'ความเร่งด่วน', type: 'select', options: ['ปกติ', 'ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'], default: 'ปกติ' },
       { key: 'secrecy', label: 'ชั้นความลับ', type: 'select', options: ['ปกติ', 'ลับ', 'ลับมาก', 'ลับที่สุด'], default: 'ปกติ' },
       { key: 'status', label: 'สถานะ', type: 'select', options: ['รอดำเนินการ', 'กำลังดำเนินการ', 'ส่งให้ ผอ.รพ.สต.พิจารณามอบหมาย', 'ดำเนินการแล้ว'], default: 'รอดำเนินการ', list: true },
