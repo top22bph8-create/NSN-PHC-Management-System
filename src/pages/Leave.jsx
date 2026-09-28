@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
-import { LEAVE_STATUS_COLORS, LEAVE_TYPES, getQuota, usage, workingDays } from '../lib/leave';
+import { LEAVE_STATUS_COLORS, LEAVE_TYPES, getQuota, posRank, usage, workingDays } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
@@ -32,23 +32,6 @@ function QuotaGrid({ quota, used, pending }) {
     </div>
   );
 }
-
-// ลำดับตำแหน่งที่ใช้จัดเรียงรายชื่อบุคลากรในแท็บ "รายบุคคล"
-const POSITION_ORDER = [
-  'นักวิชาการสาธารณสุขชำนาญการพิเศษ',
-  'นักวิชาการสาธารณสุข',
-  'พยาบาลวิชาชีพ',
-  'แพทย์แผนไทย',
-  'ผู้ช่วยเหลือคนไข้',
-  'พนักงานบริการ',
-  'พนักงานการเงินและบัญชี',
-  'คนขับรถ',
-];
-const posRank = (position) => {
-  const p = String(position || '');
-  const i = POSITION_ORDER.findIndex((k) => p.includes(k));
-  return i === -1 ? POSITION_ORDER.length : i;
-};
 
 // แถบโควตาแบบย่อ แสดงเฉพาะตัวเลขคงเหลือ/ใช้ไป ต่อประเภทลา (ใช้ในการ์ดรายบุคคล)
 function MiniQuota({ quota, used }) {
@@ -84,6 +67,15 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
     });
   };
   const delegates = (people || []).filter((p) => p.email !== profile.email);
+
+  // แจ้งเตือนแบบเรียลไทม์ก่อนกดยื่น: เทียบวันลาที่กำลังจะยื่น + ที่ใช้ไปแล้ว/รออนุมัติ กับโควตาตามระเบียบ
+  const fyNow = fiscalYearBE(f.start);
+  const { used: usedNow, pending: pendingNow } = usage(mine.filter((l) => l.fy === fyNow));
+  const qNow = quota[f.type];
+  const daysNow = Number(f.days) || 0;
+  const alreadyNow = (usedNow[f.type] || 0) + (pendingNow[f.type] || 0);
+  const overNow = qNow != null && alreadyNow + daysNow > qNow;
+  const remainNow = qNow != null ? Math.max(0, qNow - alreadyNow) : null;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -127,6 +119,12 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ld">จำนวนวัน</label><input id="ld" type="number" step="0.5" min="0.5" required className="input" value={f.days} onChange={set('days')} /></div>
         </div>
         <p className="text-xs text-slate-500">นับเฉพาะวันจันทร์-ศุกร์ อัตโนมัติ (ปรับเป็น 0.5 ได้กรณีลาครึ่งวัน) วันหยุดนักขัตฤกษ์ให้ปรับจำนวนวันเอง</p>
+        {qNow != null && (
+          <div className={`rounded-lg px-3 py-2 text-sm ${overNow ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-brand-50 text-brand-800 ring-1 ring-brand-200'}`}>
+            สิทธิ์{f.type}ตามระเบียบ {qNow} วัน/ปี · ใช้แล้ว/รออนุมัติ {alreadyNow} วัน · คงเหลือก่อนยื่นครั้งนี้ {remainNow} วัน
+            {overNow && <div className="mt-0.5 font-semibold">⚠️ เกินสิทธิ์ตามระเบียบ {alreadyNow + daysNow - qNow} วัน — ระบบจะไม่ให้บันทึกใบลานี้ กรุณาปรับจำนวนวันหรือเลือกประเภทอื่น</div>}
+          </div>
+        )}
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lr">เหตุผลการลา</label><textarea id="lr" required rows={2} className="input" value={f.reason} onChange={set('reason')} /></div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lc">ติดต่อได้ที่ (ที่อยู่/สถานที่ระหว่างลา)</label><input id="lc" className="input" value={f.contact} onChange={set('contact')} /></div>
@@ -139,7 +137,7 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
             {delegates.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}
           </select>
         </div>
-        <button className="btn btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยื่นใบลา</button>
+        <button className="btn btn-primary w-full" disabled={busy || overNow}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยื่นใบลา</button>
       </form>
     </Modal>
   );

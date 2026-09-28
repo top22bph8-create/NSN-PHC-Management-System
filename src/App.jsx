@@ -1,7 +1,7 @@
 import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FiscalYearProvider } from './context/FiscalYearContext';
-import { canRead } from './lib/roles';
+import { can, canRead } from './lib/roles';
 import { REGISTRIES } from './config/registries';
 import Layout from './components/Layout';
 import RegistryPage from './components/RegistryPage';
@@ -11,11 +11,13 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import PrintReport from './pages/PrintReport';
 import PrintLeave from './pages/PrintLeave';
+import PrintLeaveReport from './pages/PrintLeaveReport';
 import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
 import Personnel from './pages/Personnel';
 import Leave from './pages/Leave';
+import LeaveReports from './pages/LeaveReports';
 import Backup from './pages/Backup';
 import Account, { ForcedChange } from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
@@ -73,6 +75,27 @@ function PrintLeaveGate() {
   return <PrintLeave />;
 }
 
+// เกตหน้าพิมพ์รายงาน/สถิติการลา: ต้องล็อกอินและมีสิทธิ์อ่านโมดูลวันลาก่อนจึงเห็นรายงาน
+// รายงานที่รวมข้อมูลทุกคน (ทะเบียนรวม/สถิติรวม) ต้องมีสิทธิ์ "ดูวันลาของทุกคน" เท่านั้น (ตรงกับ Firestore Rules)
+function PrintLeaveReportGate() {
+  const { loading, user, profile, problem, error } = useAuth();
+  const { kind } = useParams();
+  if (loading) return <Spinner />;
+  if (!user) return <Login />;
+  if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (!canRead(profile.role, 'leave')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์เข้าถึงรายงานนี้</div>;
+  }
+  if (['combined', 'statsAll'].includes(kind) && !can(profile.role, 'leave', 'viewAll')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์ดูรายงานรวมทุกคน (ดูได้เฉพาะรายงานของตัวเอง)</div>;
+  }
+  return (
+    <FiscalYearProvider>
+      <PrintLeaveReport />
+    </FiscalYearProvider>
+  );
+}
+
 // ป้องกันหน้า: ต้องล็อกอิน และมีสิทธิ์อ่านโมดูลนั้น
 function Guard({ module, children }) {
   const { profile } = useAuth();
@@ -99,6 +122,7 @@ function Shell() {
           ))}
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
           <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />
+          <Route path="leave-reports" element={<Guard module="leave"><LeaveReports /></Guard>} />
           <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
           <Route path="account" element={<Account />} />
           <Route path="users" element={<Navigate to="/personnel" replace />} />
@@ -120,6 +144,7 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/print/:key" element={<PrintGate />} />
           <Route path="/print-leave/:id" element={<PrintLeaveGate />} />
+          <Route path="/print-leave-report/:kind" element={<PrintLeaveReportGate />} />
           <Route path="/*" element={<Shell />} />
         </Routes>
       </AuthProvider>
