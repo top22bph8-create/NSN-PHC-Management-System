@@ -103,6 +103,13 @@ service cloud.firestore {
       allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med']);
     }
 
+    // ปฏิทินมอบหมายงาน (ประชุม/อบรม/หน่วยปฐมพยาบาล/อื่นๆ) — ทุกคนดูได้ แก้ไข/สร้าง/ลบเฉพาะผู้ดูแล/ธุรการ/ผู้อำนวยการ
+    // (แจ้งเตือนเข้าไลน์กลุ่มอัตโนมัติทุกวัน 06:00 น. ผ่าน Cloud Function dailyAssignmentReminder — ดู README หัวข้อ "ปฏิทินมอบหมายงาน")
+    match /assignments/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+    }
+
     // Audit Log: เพิ่มได้อย่างเดียว แก้ไข/ลบไม่ได้
     match /auditLogs/{id} {
       allow read: if hasRole(['super_admin', 'director']);

@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Building2,
   Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
-  ClipboardList, MapPinned, BarChart3,
+  ClipboardList, MapPinned, BarChart3, CalendarClock,
 } from 'lucide-react';
 
 // ready = พร้อมใช้งานแล้ว, module = ชื่อสิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
@@ -33,6 +33,7 @@ export const MENU = [
     items: [
       { key: 'duty', label: 'แผนเวรนอกเวลาประจำเดือน', emoji: '🌙', path: '/duty', icon: ClipboardList, ready: true, module: 'duty' },
       { key: 'homevisit', label: 'แผน/รายงานเยี่ยมบ้านเชิงรุกประจำเดือน', emoji: '🏠', path: '/homevisit', icon: MapPinned, ready: true, module: 'homevisit' },
+      { key: 'assignments', label: 'ปฏิทินมอบหมายงาน', emoji: '🗂️', path: '/assignments', icon: CalendarClock, ready: true, module: 'assignments' },
       { key: 'leave-reports', label: 'รายงาน/สถิติการลา', emoji: '📊', path: '/leave-reports', icon: BarChart3, ready: true, module: 'leave' },
     ],
   },

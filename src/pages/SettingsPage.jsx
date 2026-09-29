@@ -116,6 +116,7 @@ export default function SettingsPage() {
             <p className="mb-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">
               ✨ เมื่อมีการยื่นใบลาใหม่ ข้อความที่ส่งเข้ากลุ่มจะมีปุ่ม <b>"อนุมัติ" / "ไม่อนุมัติ"</b> ให้กดตัดสินใจได้ทันทีในไลน์
               (กดได้เฉพาะ LINE ของ "ผู้อำนวยการ" ที่ตั้งค่าไว้ด้านล่างเท่านั้น) พอกดแล้วระบบจะส่งลิงก์เปิดหน้าใบลาที่พร้อมพิมพ์กลับเข้ากลุ่มให้อัตโนมัติ
+              · หน้า "ปฏิทินมอบหมายงาน" ก็ใช้การตั้งค่าชุดเดียวกันนี้ส่งแจ้งเตือนงานที่มอบหมายไว้ล่วงหน้าเข้ากลุ่มอัตโนมัติทุกวันเวลา 06:00 น. (เฉพาะวันที่มีการมอบหมายงานไว้)
             </p>
             <div className="space-y-3">
               <div>
@@ -179,10 +180,11 @@ export default function SettingsPage() {
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" className="h-5 w-5" checked={lineMeta.enabled} onChange={(e) => setLineMeta({ ...lineMeta, enabled: e.target.checked })} /> เปิดใช้งานแจ้งเตือนไลน์
               </label>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.submit} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, submit: e.target.checked } })} /> เมื่อยื่นใบลาใหม่</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.decide} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, decide: e.target.checked } })} /> เมื่ออนุมัติ/ไม่อนุมัติ</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.cancel} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, cancel: e.target.checked } })} /> เมื่อยกเลิกใบลา</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.assignmentReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, assignmentReminder: e.target.checked } })} /> ปฏิทินมอบหมายงาน (ทุกวัน 06:00 น.)</label>
               </div>
             </div>
           </div>

@@ -29,6 +29,7 @@ export const ACCESS = {
   homevisit: { read: ALL, write: ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'] },
   personnel: { read: ALL, write: ['super_admin'] },
   leave: { read: ALL, write: ALL, viewAll: ['super_admin', 'director', 'admin_clerk'], approve: ['super_admin', 'director'] },
+  assignments: { read: ALL, write: ['super_admin', 'admin_clerk', 'director'] },
   users: { read: ['super_admin'], write: ['super_admin'] },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },

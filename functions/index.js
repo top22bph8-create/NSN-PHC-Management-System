@@ -17,6 +17,7 @@
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onRequest } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
@@ -230,4 +231,32 @@ exports.onLeaveUpdated = onDocumentUpdated('leaves/{id}', async (event) => {
     }
     await sendLine(channelAccessToken, targetId, text);
   }
+});
+
+// วันที่ปัจจุบันแบบ YYYY-MM-DD ตามเวลาไทย (UTC+7 คงที่ ไม่มีปรับเวลาออมแสง จึงบวกตรงๆ ได้โดยไม่ต้องใช้ Intl timezone)
+function bangkokDateStr() {
+  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return bkk.toISOString().slice(0, 10);
+}
+
+// แจ้งเตือนปฏิทินมอบหมายงานทุกวัน เวลา 06:00 น. (เวลาไทย) — ส่งเฉพาะวันที่มีการสร้างปฏิทินมอบหมายงานไว้ล่วงหน้าเท่านั้น
+// (ไม่มีงานมอบหมายในวันนั้น = ไม่ส่งข้อความ) อ่านจากคอลเลกชัน "assignments" (หน้า "ปฏิทินมอบหมายงาน" ในเว็บ)
+exports.dailyAssignmentReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || !events.assignmentReminder) return;
+
+  const today = bangkokDateStr();
+  const snap = await db.collection('assignments').where('date', '==', today).get();
+  if (snap.empty) return;
+
+  const items = snap.docs.map((d) => d.data()).sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+  const lines = items.map((a, i) => {
+    const names = (a.assignees || []).map((p) => p.name).join(', ') || '-';
+    const timePart = a.time ? ` เวลา ${a.time}` : '';
+    const locPart = a.location ? ` ณ ${a.location}` : '';
+    const notePart = a.note ? `\n   หมายเหตุ: ${a.note}` : '';
+    return `${i + 1}. [${a.type}] ${a.title}${timePart}${locPart}\n   ผู้ปฏิบัติงาน: ${names}${notePart}`;
+  });
+  const text = `📅 แจ้งเตือนงานมอบหมายวันนี้ (${today})\n\n${lines.join('\n\n')}`;
+  await sendLine(channelAccessToken, targetId, text);
 });

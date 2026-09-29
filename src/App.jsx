@@ -18,6 +18,7 @@ import ComingSoon from './pages/ComingSoon';
 import Personnel from './pages/Personnel';
 import Leave from './pages/Leave';
 import LeaveReports from './pages/LeaveReports';
+import Assignments from './pages/Assignments';
 import Backup from './pages/Backup';
 import Account, { ForcedChange } from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
@@ -123,6 +124,7 @@ function Shell() {
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
           <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />
           <Route path="leave-reports" element={<Guard module="leave"><LeaveReports /></Guard>} />
+          <Route path="assignments" element={<Guard module="assignments"><Assignments /></Guard>} />
           <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
           <Route path="account" element={<Account />} />
           <Route path="users" element={<Navigate to="/personnel" replace />} />
