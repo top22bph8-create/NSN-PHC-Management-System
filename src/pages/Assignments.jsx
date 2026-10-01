@@ -7,7 +7,7 @@ import { canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { ASSIGNMENT_TYPES, ASSIGNMENT_TYPE_OTHER, assignmentTypeColor } from '../lib/assignments';
 import { sortPeople } from '../lib/leave';
-import { fmtDate, todayStr } from '../lib/thai';
+import { fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 
@@ -130,6 +130,12 @@ export default function Assignments() {
     const d = new Date(y, m - 1 + delta, 1);
     setYm(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
+  // ปฏิทินไทย: เลือกเดือน/ปีด้วยชื่อเดือนไทย + พ.ศ. แทน input type=month ของเบราว์เซอร์ (ซึ่งแสดงผลเป็นปฏิทินอังกฤษ/คริสต์ศักราช)
+  const [ymYear, ymMonth] = ym.split('-').map(Number);
+  const setMonthSel = (newM) => setYm(`${ymYear}-${String(newM).padStart(2, '0')}`);
+  const setYearSelBE = (newYearBE) => setYm(`${newYearBE - 543}-${String(ymMonth).padStart(2, '0')}`);
+  const nowYearBE = new Date().getFullYear() + 543;
+  const yearOptionsBE = Array.from({ length: 6 }, (_, i) => nowYearBE - 2 + i);
 
   const remove = async () => {
     if (!toDelete) return;
@@ -150,7 +156,12 @@ export default function Assignments() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <button className="btn btn-outline !px-2 !py-1.5" onClick={() => shiftMonth(-1)} aria-label="เดือนก่อนหน้า"><ChevronLeft className="h-4 w-4" /></button>
-          <input type="month" className="input !w-auto" value={ym} onChange={(e) => setYm(e.target.value)} aria-label="เดือน" />
+          <select className="input !w-auto" value={ymMonth} onChange={(e) => setMonthSel(Number(e.target.value))} aria-label="เดือน">
+            {thMonths.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
+          </select>
+          <select className="input !w-auto" value={ymYear + 543} onChange={(e) => setYearSelBE(Number(e.target.value))} aria-label="ปี พ.ศ.">
+            {(yearOptionsBE.includes(ymYear + 543) ? yearOptionsBE : [...yearOptionsBE, ymYear + 543].sort((a, b) => a - b)).map((yb) => <option key={yb} value={yb}>{yb}</option>)}
+          </select>
           <button className="btn btn-outline !px-2 !py-1.5" onClick={() => shiftMonth(1)} aria-label="เดือนถัดไป"><ChevronRight className="h-4 w-4" /></button>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">

@@ -4,6 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAGnLzjmmmTIo3Ks_InRopMihfSYKOg0yg',
@@ -18,3 +19,5 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+// Cloud Functions ของโปรเจกต์นี้ deploy โดยไม่ระบุ region จึงอยู่ที่ us-central1 (ค่าเริ่มต้นของ Firebase) — ไม่ระบุ region ที่นี่เช่นกันเพื่อให้ตรงกัน
+export const functions = getFunctions(app);

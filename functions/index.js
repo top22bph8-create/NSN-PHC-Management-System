@@ -16,10 +16,11 @@
  * วิธีติดตั้ง/เผยแพร่ และวิธีเตรียม LINE Official Account + หา Target ID: ดู README.md หัวข้อ "แจ้งเตือนไลน์"
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 
 initializeApp();
 const db = getFirestore();
@@ -27,6 +28,11 @@ const db = getFirestore();
 // URL ของเว็บที่เผยแพร่จริง (GitHub Pages) — ใช้สร้างลิงก์พิมพ์ใบลาที่ส่งเข้าไลน์
 const HOSTING_URL = 'https://top22bph8-create.github.io/NSN-PHC-Management-System';
 const printLeaveUrl = (id) => `${HOSTING_URL}/#/print-leave/${id}`;
+
+// ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
+// เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
+// ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -39,7 +45,7 @@ async function getLineSettings() {
     channelAccessToken: cred.channelAccessToken || '',
     targetId: cred.targetId || '',
     enabled: !!meta.enabled,
-    events: meta.events || {},
+    events: { ...DEFAULT_LINE_EVENTS, ...(meta.events || {}) },
     // LINE User ID ของผู้อำนวยการ — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ใช่ข้อมูลลับ อ่านได้ปกติ)
     directorUserId: meta.directorUserId || '',
   };
@@ -259,4 +265,54 @@ exports.dailyAssignmentReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 
   });
   const text = `📅 แจ้งเตือนงานมอบหมายวันนี้ (${today})\n\n${lines.join('\n\n')}`;
   await sendLine(channelAccessToken, targetId, text);
+});
+
+// ต้องตรงกับ src/lib/accounts.js (firebasePassword) — Firebase Auth บังคับรหัสผ่านอย่างน้อย 6 ตัวอักษร
+// รหัสผ่านที่สั้นกว่านั้น (เช่น "05449" ที่ผู้อำนวยการต้องการ) จะถูกต่อท้ายด้วย "#nsn" ก่อนส่งให้ Firebase Auth จริง
+// ส่วนค่าดิบ (ไม่ต่อท้าย) คือค่าที่ผู้ใช้งานพิมพ์ตอนล็อกอิน และเป็นค่าที่เก็บไว้ในคอลเลกชัน credentials ให้ Super Admin ดู
+function firebasePasswordServer(p) {
+  const s = String(p);
+  return s.length >= 6 ? s : `${s}#nsn`;
+}
+
+// รีเซ็ตรหัสผ่านของผู้ใช้งานทุกคน (ยกเว้น Super Admin และบัญชี "รอสมัครใหม่" ที่ยังไม่อนุมัติ) เป็นรหัสผ่านเดียวกัน
+// โดยคง Username เดิมของแต่ละคนไว้ (ไม่แตะ Username) — ต้องใช้ Admin SDK (getAuth().updateUser) เพราะ Client SDK
+// ของเว็บไม่มีสิทธิ์แก้รหัสผ่านของบัญชีคนอื่น (แก้ได้แต่รหัสผ่านของตัวเองตอนล็อกอินอยู่เท่านั้น) — ดูคำอธิบายเพิ่มเติม
+// ในคอมเมนต์ที่ src/pages/Personnel.jsx จุดที่เรียกใช้ฟังก์ชันนี้
+// ตรวจสิทธิ์ผู้เรียกเองในนี้ด้วย (ไม่พึ่งกฎ Firestore) เพราะ Admin SDK ข้ามกฎ Firestore ไปโดยสิ้นเชิง
+exports.adminBulkResetPassword = onCall(async (request) => {
+  const callerEmail = request.auth && request.auth.token && request.auth.token.email;
+  if (!callerEmail) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
+
+  const callerSnap = await db.doc(`users/${callerEmail}`).get();
+  const callerRole = callerSnap.exists ? callerSnap.data().role : null;
+  if (callerRole !== 'super_admin') throw new HttpsError('permission-denied', 'เฉพาะ Super Admin เท่านั้นที่ใช้งานฟังก์ชันนี้ได้');
+
+  const rawPassword = String((request.data && request.data.password) || '').trim();
+  if (!rawPassword) throw new HttpsError('invalid-argument', 'กรุณาระบุรหัสผ่านใหม่');
+  const authPassword = firebasePasswordServer(rawPassword);
+
+  const usersSnap = await db.collection('users').get();
+  const targets = usersSnap.docs
+    .map((d) => d.data())
+    .filter((u) => u.email && u.email !== callerEmail && u.role !== 'super_admin' && u.role !== 'pending');
+
+  const results = { success: [], failed: [] };
+  for (const u of targets) {
+    try {
+      const authUser = await getAuth().getUserByEmail(u.email);
+      await getAuth().updateUser(authUser.uid, { password: authPassword });
+      await db.doc(`users/${u.email}`).set({ mustChangePassword: true }, { merge: true });
+      await db.doc(`credentials/${u.email}`).set({
+        username: (u.username || u.email.split('@')[0]),
+        password: rawPassword,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      results.success.push(u.email);
+    } catch (err) {
+      console.error('adminBulkResetPassword ล้มเหลวสำหรับ', u.email, err);
+      results.failed.push({ email: u.email, name: u.name || u.username || u.email, reason: err.message || String(err) });
+    }
+  }
+  return results;
 });

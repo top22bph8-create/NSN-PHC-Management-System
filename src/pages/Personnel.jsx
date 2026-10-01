@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { Eye, EyeOff, FileSpreadsheet, KeyRound, Loader2, Pencil, Search, Trash2, UserPlus, Users } from 'lucide-react';
-import { db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { Eye, EyeOff, FileSpreadsheet, KeyRound, Loader2, Pencil, Search, ShieldAlert, Trash2, UserPlus, Users } from 'lucide-react';
+import { db, functions } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { ASSIGNABLE_ROLES, PENDING_LABEL, ROLES, canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
@@ -274,6 +275,65 @@ function EditProfileModal({ user, onClose, say, prefill }) {
   );
 }
 
+// รีเซ็ตรหัสผ่านของทุกคนพร้อมกัน (ยกเว้น Super Admin และบัญชี "รอสมัครใหม่") เป็นรหัสผ่านเดียวกัน โดย Username ของแต่ละคนยังคงเดิม
+// ต่างจาก "ตั้งรหัสเริ่มต้นใหม่"/"แก้ไขข้อมูลส่วนตัว" ที่ติดข้อจำกัดต้องลบบัญชีใน Firebase Console ก่อนทีละคน — ปุ่มนี้เรียก
+// Cloud Function "adminBulkResetPassword" (functions/index.js) ซึ่งใช้ Admin SDK แก้รหัสผ่านของทุกบัญชีได้โดยตรงในคำสั่งเดียว
+function BulkResetModal({ onClose, say }) {
+  const [pw, setPw] = useState('05449');
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const go = async (e) => {
+    e.preventDefault();
+    if (!confirmed) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const call = httpsCallable(functions, 'adminBulkResetPassword');
+      const res = await call({ password: pw });
+      const data = res.data || { success: [], failed: [] };
+      setResult(data);
+      await writeAudit({ action: 'update', module: 'personnel', docId: 'bulk', label: `รีเซ็ตรหัสผ่านทุกคน (สำเร็จ ${data.success?.length || 0} คน)` });
+      say({ type: data.failed?.length ? 'error' : 'ok', text: `รีเซ็ตรหัสผ่านสำเร็จ ${data.success?.length || 0} คน${data.failed?.length ? ` ไม่สำเร็จ ${data.failed.length} คน` : ''}` });
+    } catch (err) {
+      say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.message || String(err)) });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal title="รีเซ็ตรหัสผ่านทุกคนพร้อมกัน" onClose={onClose}>
+      {!result ? (
+        <form onSubmit={go} className="space-y-3">
+          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            คำสั่งนี้จะตั้งรหัสผ่านใหม่เป็นค่าเดียวกันให้กับผู้ใช้งาน <b>ทุกคน ยกเว้น Super Admin</b> (และบัญชี "รอสมัครใหม่") — Username ของแต่ละคนจะยังคงเดิม
+            ทุกคนจะต้องเปลี่ยนรหัสผ่านใหม่เองตอนล็อกอินครั้งถัดไป การกระทำนี้ย้อนกลับไม่ได้
+          </p>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600" htmlFor="brp">รหัสผ่านใหม่ (ตั้งให้ทุกคน)</label>
+            <input id="brp" required className="input" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="รหัสผ่านใหม่สำหรับทุกคน" />
+          </div>
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" className="mt-0.5 h-5 w-5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+            ยืนยันว่าต้องการรีเซ็ตรหัสผ่านของผู้ใช้งานทุกคน (ยกเว้น Super Admin) เป็นรหัสผ่านนี้
+          </label>
+          <button className="btn btn-primary w-full" disabled={busy || !confirmed}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยืนยันรีเซ็ตรหัสผ่านทุกคน</button>
+        </form>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <p className="rounded-lg bg-brand-50 p-3 text-brand-900">สำเร็จ {result.success?.length || 0} คน{result.failed?.length ? ` · ไม่สำเร็จ ${result.failed.length} คน` : ''}</p>
+          {result.failed?.length > 0 && (
+            <ul className="max-h-48 list-disc space-y-1 overflow-y-auto rounded-lg bg-red-50 p-3 pl-7 text-red-800">
+              {result.failed.map((f) => <li key={f.email}>{f.name || f.email}: {f.reason}</li>)}
+            </ul>
+          )}
+          <button className="btn btn-outline w-full" onClick={onClose}>ปิด</button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function Personnel() {
   const { profile } = useAuth();
   const writable = canWrite(profile.role, 'personnel');
@@ -351,6 +411,7 @@ export default function Personnel() {
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-outline" onClick={() => setModal({ t: 'import' })}><FileSpreadsheet className="h-5 w-5" /> นำเข้า Excel</button>
             <button className="btn btn-primary" onClick={() => setModal({ t: 'add' })}><UserPlus className="h-5 w-5" /> เพิ่มบุคลากร</button>
+            {isSuperAdmin && <button className="btn btn-outline text-red-700" onClick={() => setModal({ t: 'bulkReset' })}><ShieldAlert className="h-5 w-5" /> รีเซ็ตรหัสผ่านทุกคน</button>}
           </div>
         )} />
       {isSuperAdmin && requests.length > 0 && (
@@ -451,6 +512,7 @@ export default function Personnel() {
       {modal?.t === 'add' && <AddModal existing={existing} onClose={() => setModal(null)} say={say} />}
       {modal?.t === 'reset' && <ResetModal user={modal.u} onClose={() => setModal(null)} say={say} />}
       {modal?.t === 'edit' && <EditProfileModal user={modal.u} prefill={modal.prefill} onClose={() => setModal(null)} say={say} />}
+      {modal?.t === 'bulkReset' && <BulkResetModal onClose={() => setModal(null)} say={say} />}
       {toDelete && (
         <ConfirmDialog
           message={`ลบ ${toDelete.name || usernameOf(toDelete.email)} ออกจากระบบถาวรหรือไม่? (ผู้ใช้นี้จะเข้าระบบไม่ได้อีกทันที — บัญชีใน Firebase Authentication จะยังค้างอยู่ ลบทิ้งเองที่ Console ภายหลังได้หากต้องการ)`}

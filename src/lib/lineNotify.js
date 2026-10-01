@@ -14,7 +14,11 @@ export const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, 
 
 export async function getLineMeta() {
   const s = await getDoc(doc(db, 'settings', 'lineNotifyMeta'));
-  return { enabled: false, events: { ...DEFAULT_LINE_EVENTS }, ...(s.exists() ? s.data() : {}) };
+  const data = s.exists() ? s.data() : {};
+  // รวม (merge) events แบบลึกเสมอ ห้าม spread ค่าที่บันทึกไว้เดิมทับ events ทั้งก้อนตรงๆ
+  // มิฉะนั้นเหตุการณ์ใหม่ที่เพิ่งเพิ่มเข้ามาทีหลัง (เช่น assignmentReminder) จะหายไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
+  // (เป็นสาเหตุที่แจ้งเตือนปฏิทินมอบหมายงานไม่ทำงาน ทั้งที่โค้ดตั้งค่าเริ่มต้นเป็นเปิดไว้)
+  return { enabled: false, ...data, events: { ...DEFAULT_LINE_EVENTS, ...(data.events || {}) } };
 }
 
 // บันทึก Channel Access Token และ/หรือ Target ID ใหม่ (ใช้ merge เพื่อแก้ทีละช่องได้ โดยไม่ต้องอ่านค่าเดิมกลับมาก่อน
