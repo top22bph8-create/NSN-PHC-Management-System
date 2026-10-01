@@ -13,6 +13,12 @@
   --color-brand-700: #1a6db5;
   --color-brand-800: #175a96;
   --color-brand-900: #144a7a;
+  --color-brand-950: #0d3357;
+  /* สีทอง: ใช้เป็นสีเน้น (accent) ให้แถบเมนูดูเป็นทางการและตัดกับโทนฟ้าที่ใช้อยู่ทั่วทั้งระบบ */
+  --color-gold-300: #f0d78c;
+  --color-gold-400: #d9b64f;
+  --color-gold-500: #c89f33;
+  --color-gold-600: #a8841f;
 }
 
 html, body, #root { min-height: 100%; }
@@ -45,9 +51,10 @@ label { @apply text-slate-600; }
 .btn-danger { @apply bg-red-600 text-white hover:bg-red-700; }
 .card { @apply rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-100/60; }
 
-/* แถบหัวข้องานหลัก: ใหญ่ ตัวหนา สังเกตง่ายกว่างานรอง */
+/* แถบหัวข้องานหลัก: ใหญ่ ตัวหนา เด่นชัดกว่าหัวข้องานย่อยและรายการเมนูย่อยอย่างชัดเจน
+   ใช้สีทองตัดกับพื้นแถบเมนูสีกรมท่า (navy) ให้ดูเป็นทางการและสังเกตง่ายกว่าเดิมที่เป็นฟ้าบนฟ้า */
 .menu-band-title {
-  @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-700 to-brand-500 px-3 py-1.5 text-sm font-extrabold uppercase tracking-wide text-white shadow-sm;
+  @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-gold-500 to-gold-400 px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-950 shadow-sm;
 }
 
 /* อิโมจิกระพริบสวยๆ ประจำหัวข้อแต่ละงาน */

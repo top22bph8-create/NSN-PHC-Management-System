@@ -27,46 +27,48 @@ export default function Layout() {
     if (q.trim()) { nav(`/search?q=${encodeURIComponent(q.trim())}`); setOpen(false); }
   };
 
+  // พื้นแถบเมนูเปลี่ยนจากฟ้าอ่อนไล่ระดับเป็นกรมท่า (navy) เข้มทึบ ให้ดูเป็นทางการขึ้น และใช้สีทอง (gold)
+  // เป็นสีเน้นของหัวข้อหลัก/รายการที่กำลังเลือกอยู่ เพื่อให้ตัดกับโทนฟ้าที่ใช้อยู่ทั่วทั้งระบบอย่างชัดเจน
   const Sidebar = (
-    <nav className="flex h-full flex-col border-r border-brand-200 bg-gradient-to-b from-brand-100 via-brand-50 to-white text-brand-900" aria-label="เมนูหลัก">
-      <div className="flex items-center gap-3 border-b border-brand-200 px-4 py-4">
+    <nav className="flex h-full flex-col border-r border-brand-950 bg-gradient-to-b from-brand-950 to-brand-900 text-white" aria-label="เมนูหลัก">
+      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-4">
         <Logo size={48} />
         <div className="leading-tight">
-          <div className="font-bold text-brand-800">{ORG_SHORT}</div>
-          <div className="text-xs text-brand-700">{SYSTEM_NAME_EN}</div>
+          <div className="font-bold text-white">{ORG_SHORT}</div>
+          <div className="text-xs text-brand-300">{SYSTEM_NAME_EN}</div>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {visible.map((s, idx) => (
-          <div key={s.title} className={`mb-4 ${idx > 0 ? 'border-t border-brand-200/70 pt-3' : ''}`}>
+          <div key={s.title} className={`mb-4 ${idx > 0 ? 'border-t border-white/10 pt-3' : ''}`}>
             {s.main ? (
               <div className="menu-band-title mb-2">
                 {s.icon && <s.icon className="h-4 w-4" />} {s.title}
               </div>
             ) : (
-              <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-500">
+              <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-300">
                 {s.icon && <s.icon className="h-3.5 w-3.5" />} {s.title}
               </div>
             )}
             {s.items.map((i) => (
               <NavLink
                 key={i.key} to={i.path} end={i.path === '/'} onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 transition ${isActive ? 'bg-brand-600 font-semibold text-white shadow-sm' : `text-slate-700 hover:bg-brand-100 ${s.main ? 'font-semibold' : ''}`}`}
+                className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-gradient-to-r from-gold-500 to-gold-400 font-bold text-brand-950 shadow-sm' : `text-brand-100 hover:bg-white/10 hover:text-white ${s.main ? 'font-semibold' : ''}`}`}
               >
                 <i.icon className="h-5 w-5 shrink-0" />
                 <span className="flex-1">{i.emoji && <span className="mr-1">{i.emoji}</span>}{i.label}</span>
-                {!i.ready && <span className="rounded bg-brand-100 px-1.5 text-xs text-brand-700">เร็วๆ นี้</span>}
+                {!i.ready && <span className="rounded bg-white/10 px-1.5 text-xs text-brand-200">เร็วๆ นี้</span>}
               </NavLink>
             ))}
           </div>
         ))}
       </div>
-      <div className="border-t border-brand-200 bg-white/70 p-3 text-sm">
-        <div className="truncate font-medium">{profile.name || profile.email}</div>
-        <div className="truncate text-slate-500">{ROLES[profile.role]} · {usernameOf(profile.email)}</div>
+      <div className="border-t border-white/10 bg-black/10 p-3 text-sm">
+        <div className="truncate font-medium text-white">{profile.name || profile.email}</div>
+        <div className="truncate text-brand-300">{ROLES[profile.role]} · {usernameOf(profile.email)}</div>
         <div className="mt-2 flex items-center gap-4">
-          <NavLink to="/account" onClick={() => setOpen(false)} className="flex items-center gap-1 text-brand-700 hover:underline"><KeyRound className="h-4 w-4" /> รหัสผ่าน</NavLink>
-          <button onClick={logout} className="flex items-center gap-1 text-slate-600 hover:text-red-600"><LogOut className="h-4 w-4" /> ออกจากระบบ</button>
+          <NavLink to="/account" onClick={() => setOpen(false)} className="flex items-center gap-1 text-gold-300 hover:underline"><KeyRound className="h-4 w-4" /> รหัสผ่าน</NavLink>
+          <button onClick={logout} className="flex items-center gap-1 text-brand-200 hover:text-red-300"><LogOut className="h-4 w-4" /> ออกจากระบบ</button>
         </div>
       </div>
     </nav>
