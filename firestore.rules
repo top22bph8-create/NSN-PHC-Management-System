@@ -103,6 +103,42 @@ service cloud.firestore {
       allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med']);
     }
 
+    // ทะเบียนประกอบฎีกาและทะเบียนต่างๆ — กลุ่มคำสั่ง/ประกาศ (ธุรการดูแล)
+    match /reg-orders/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+    }
+    match /reg-announce/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+    }
+
+    // ทะเบียนประกอบฎีกาและทะเบียนต่างๆ — กลุ่มการเงิน/พัสดุ/สัญญา (งานการเงินดูแล)
+    match /reg-procurement/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+    match /reg-contract-no/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+    match /reg-loan/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+    match /reg-cheque/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+    match /reg-receipt/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+    match /reg-deeka/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+
     // ปฏิทินมอบหมายงาน (ประชุม/อบรม/หน่วยปฐมพยาบาล/อื่นๆ) — ทุกคนดูได้ แก้ไข/สร้าง/ลบเฉพาะผู้ดูแล/ธุรการ/ผู้อำนวยการ
     // (แจ้งเตือนเข้าไลน์กลุ่มอัตโนมัติทุกวัน 06:00 น. ผ่าน Cloud Function dailyAssignmentReminder — ดู README หัวข้อ "ปฏิทินมอบหมายงาน")
     match /assignments/{id} {

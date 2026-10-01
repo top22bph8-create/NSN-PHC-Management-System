@@ -14,10 +14,11 @@ export function PageHeader({ icon: Icon, emoji, title, subtitle, actions }) {
       <div className="relative flex flex-wrap items-center gap-3">
         {Icon && <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white shadow ring-1 ring-white/30"><Icon className="h-6 w-6" /></div>}
         <div className="min-w-0 flex-1">
-          <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-white drop-shadow-sm sm:text-2xl">
-            {emoji && <span className="emoji-blink text-2xl sm:text-3xl">{emoji}</span>} {title}
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-white drop-shadow-md sm:text-3xl">
+            {emoji && <span className="emoji-blink text-3xl sm:text-4xl">{emoji}</span>} {title}
           </h1>
-          {subtitle && <p className="text-sm font-medium text-white/90">{subtitle}</p>}
+          <div className="mt-1 h-1 w-14 rounded-full bg-white/60 sm:w-20" />
+          {subtitle && <p className="mt-1.5 text-sm font-medium text-white/90">{subtitle}</p>}
         </div>
         {actions}
       </div>

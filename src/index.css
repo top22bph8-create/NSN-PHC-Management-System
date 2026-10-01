@@ -52,11 +52,11 @@ label { @apply text-slate-600; }
 .card { @apply rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-100/60; }
 
 /* แถบหัวข้องานหลัก: ใหญ่ ตัวหนา เด่นชัดกว่าหัวข้องานย่อยและรายการเมนูย่อยอย่างชัดเจน
-   เปลี่ยนจากสีทอง/มิ้นท์เป็น "ป้ายขาว" (name-plate) แบบป้ายหน่วยงานราชการ: พื้นขาวสบายตา ตัวหนังสือน้ำเงินกรมท่า
-   มีเส้นขอบซ้ายสีฟ้าเด่น (brand-400) คั่น — ให้สีสันรับกับโทนฟ้า/การ์ดขาวที่ใช้อยู่ทั่วทั้งหน้าเพจหลัก ไม่ใช่สีแปลกใหม่ที่ขัดกัน
-   และยังตัดกับพื้นแถบเมนูสีกรมท่า (navy) เข้มได้ชัดเจนเพราะขาวสว่างกว่าพื้นมาก */
+   ยังคงคอนเซปต์ "ป้ายหน่วยงานราชการ" ไว้เหมือนเดิม แต่ลดความจ้าของพื้นขาวล้วนลง (ตามแจ้งว่าสว่างจ้าไป)
+   เปลี่ยนพื้นจาก bg-white เป็นโทน brand-50 (ฟ้าอมขาวนวลตา) ให้สบายตาขึ้นแต่ยังคงตัดกับพื้นแถบเมนูสีกรมท่า (navy) เข้มได้ชัดเจน
+   และยังเป็นทางการ/กลมกลืนกับโทนฟ้าที่ใช้อยู่ทั่วทั้งหน้าเพจหลักเช่นเดิม — ใช้คลาสนี้กับหัวข้อหลักทุกกลุ่มในเมนูซ้ายอย่างสม่ำเสมอ */
 .menu-band-title {
-  @apply flex items-center gap-2 rounded-lg border-l-4 border-brand-400 bg-white px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-800 shadow-md;
+  @apply flex items-center gap-2 rounded-lg border-l-4 border-brand-400 bg-brand-50 px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-800 shadow-md;
 }
 
 /* อิโมจิกระพริบสวยๆ ประจำหัวข้อแต่ละงาน */

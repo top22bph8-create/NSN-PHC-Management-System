@@ -11,6 +11,7 @@ export const MENU = [
   {
     title: 'ภาพรวม',
     icon: Home,
+    main: true,
     items: [
       { key: 'dash', label: 'Dashboard', path: '/', icon: Home, ready: true },
       { key: 'search', label: 'ค้นหาแบบรวม', path: '/search', icon: Search, ready: true },
@@ -52,6 +53,7 @@ export const MENU = [
   {
     title: 'งานบุคคล',
     icon: Users,
+    main: true,
     items: [
       { key: 'personnel', label: 'ทำเนียบบุคลากร', emoji: '👥', path: '/personnel', icon: Users, ready: true, module: 'personnel' },
     ],
@@ -59,8 +61,8 @@ export const MENU = [
   {
     title: 'กลุ่มงานบริหาร',
     icon: Building2,
+    main: true,
     items: [
-      { key: 'orders', label: 'คำสั่งและประกาศ', emoji: '📋', path: '/soon/orders', icon: ScrollText },
       { key: 'finance', label: 'การเงินและบัญชี', emoji: '💰', path: '/soon/finance', icon: Wallet },
       { key: 'equipment', label: 'ครุภัณฑ์', emoji: '🪑', path: '/soon/equipment', icon: Armchair },
       { key: 'supplies', label: 'พัสดุ', emoji: '📦', path: '/soon/supplies', icon: Package },
@@ -70,6 +72,7 @@ export const MENU = [
   {
     title: 'งานบริการสุขภาพ',
     icon: HeartPulse,
+    main: true,
     items: [
       { key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', emoji: '🦠', path: '/soon/disease', icon: Activity },
       { key: 'family', label: 'เวชปฏิบัติครอบครัว', emoji: '❤️‍🩹', path: '/soon/family', icon: HeartPulse },
@@ -78,6 +81,7 @@ export const MENU = [
   {
     title: 'ผู้ดูแลระบบ',
     icon: Settings,
+    main: true,
     items: [
       { key: 'settings', label: 'ตั้งค่าระบบ', emoji: '⚙️', path: '/settings', icon: Settings, ready: true, module: 'settings' },
       { key: 'backup', label: 'สำรอง/กู้คืนข้อมูล', emoji: '💾', path: '/backup', icon: DatabaseBackup, ready: true, module: 'backup' },
@@ -90,33 +94,22 @@ export const MENU = [
 // รายการทะเบียนในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — แสดงเป็นการ์ดไอคอนกลางหน้าในหน้ารวม (src/pages/RegistriesHub.jsx)
 // ตัดเหลือ 8 รายการ (ตัด "ทะเบียนคุมเลขที่คำสั่ง" ออกแล้ว เพราะเป็นทะเบียนเดียวกับ "ทะเบียนคำสั่ง")
 export const REGISTRY_LINKS = [
-  { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', path: '/soon/reg-orders', icon: ScrollText },
-  { key: 'reg-announce', label: 'ทะเบียนประกาศ', path: '/soon/reg-announce', icon: Megaphone },
-  { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', path: '/soon/reg-procurement', icon: ShoppingCart },
-  { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', path: '/soon/reg-contract-no', icon: FileSignature },
-  { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', path: '/soon/reg-loan', icon: HandCoins },
-  { key: 'reg-cheque', label: 'ทะเบียนคุมการใช้เช็ค', path: '/soon/reg-cheque', icon: Landmark },
-  { key: 'reg-receipt', label: 'ทะเบียนใบเสร็จรับเงิน', path: '/soon/reg-receipt', icon: Receipt },
-  { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/soon/reg-deeka', icon: FileStack },
+  { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', path: '/reg-orders', icon: ScrollText },
+  { key: 'reg-announce', label: 'ทะเบียนประกาศ', path: '/reg-announce', icon: Megaphone },
+  { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', path: '/reg-procurement', icon: ShoppingCart },
+  { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', path: '/reg-contract-no', icon: FileSignature },
+  { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', path: '/reg-loan', icon: HandCoins },
+  { key: 'reg-cheque', label: 'ทะเบียนคุมการใช้เช็ค', path: '/reg-cheque', icon: Landmark },
+  { key: 'reg-receipt', label: 'ทะเบียนใบเสร็จรับเงิน', path: '/reg-receipt', icon: Receipt },
+  { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/reg-deeka', icon: FileStack },
 ];
 
 // รายละเอียดโมดูลที่กำลังพัฒนา (แสดงในหน้า "เร็วๆ นี้")
 export const SOON = {
-  orders: { label: 'งานคำสั่งและประกาศ', features: ['ทะเบียนคำสั่ง', 'ทะเบียนประกาศ', 'ค้นหาคำสั่ง/ประกาศ', 'แนบไฟล์ PDF'] },
   finance: { label: 'งานการเงินและบัญชี', features: ['ทะเบียนยืมเงิน (แจ้งเตือนใกล้ครบกำหนด/เกินกำหนด)', 'ทะเบียนสั่งซื้อ/สั่งจ้าง', 'ทะเบียนคุมเลขที่สัญญา (แจ้งเตือนก่อนสัญญาหมดอายุ)', 'ทะเบียนเอกสารทางการเงิน'] },
   equipment: { label: 'งานครุภัณฑ์', features: ['ทะเบียนครุภัณฑ์ (เลขครุภัณฑ์เป็นรหัสหลัก)', 'โอนย้าย / จำหน่าย / ซ่อมบำรุง', 'ตรวจสอบครุภัณฑ์ประจำปี', 'รองรับ QR Code/Barcode ในอนาคต'] },
   supplies: { label: 'งานพัสดุ', features: ['ทะเบียนพัสดุ', 'รับพัสดุ / เบิกจ่าย', 'คงเหลือและจุดสั่งซื้อ', 'แจ้งเตือนพัสดุใกล้หมด'] },
   land: { label: 'งานที่ดินและสิ่งก่อสร้าง', features: ['ทะเบียนที่ดิน อาคาร สิ่งก่อสร้าง', 'ประวัติการซ่อมและปรับปรุง', 'เอกสารสิทธิ์ แบบแปลน รูปภาพ'] },
   disease: { label: 'งานส่งเสริมป้องกันควบคุมโรค', features: ['บันทึกกิจกรรม/โครงการ ตามหมู่บ้านและกลุ่มเป้าหมาย', 'รายงานตามเดือน ไตรมาส ปีงบประมาณ', 'งานเฝ้าระวังโรค วัคซีน คัดกรอง ไข้เลือดออก ฯลฯ'] },
   family: { label: 'งานเวชปฏิบัติครอบครัว', features: ['NCD / LTC / ผู้ป่วยติดบ้านติดเตียง / เยี่ยมบ้าน', 'ต้องออกแบบสิทธิ์เข้มงวดและ PDPA ก่อน (เฟสหลัง)'] },
-  // กลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — รอไฟล์ทะเบียนตัวอย่างจากผู้อำนวยการเพื่อออกแบบฟอร์ม/คอลัมน์จริงในรอบถัดไป
-  // หมายเหตุ: ตัด "ทะเบียนคุมเลขที่คำสั่ง" ออกแล้วตามที่แจ้ง เพราะเป็นทะเบียนเดียวกับ "ทะเบียนคำสั่ง"
-  'reg-orders': { label: 'ทะเบียนคำสั่ง', features: ['บันทึกเลขที่คำสั่ง เรื่อง วันที่ลงนาม ผู้ลงนาม', 'แนบไฟล์คำสั่ง PDF', 'ค้นหา/พิมพ์รายงานย้อนหลัง'] },
-  'reg-announce': { label: 'ทะเบียนประกาศ', features: ['บันทึกเลขที่ประกาศ เรื่อง วันที่ประกาศ', 'แนบไฟล์ประกาศ PDF', 'ค้นหา/พิมพ์รายงานย้อนหลัง'] },
-  'reg-procurement': { label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', features: ['บันทึกรายการจัดซื้อจัดจ้าง งบประมาณ คู่สัญญา', 'ติดตามสถานะดำเนินการ'] },
-  'reg-contract-no': { label: 'ทะเบียนคุมเลขหนังสือสัญญา', features: ['ออกเลขที่สัญญาอัตโนมัติ ไม่ซ้ำ', 'แจ้งเตือนก่อนสัญญาหมดอายุ'] },
-  'reg-loan': { label: 'ทะเบียนคุมสัญญายืมเงิน', features: ['บันทึกผู้ยืม วันที่ยืม กำหนดส่งคืน', 'แจ้งเตือนใกล้ครบกำหนด/เกินกำหนด'] },
-  'reg-cheque': { label: 'ทะเบียนคุมการใช้เช็ค', features: ['บันทึกเลขที่เช็ค วันที่สั่งจ่าย ผู้รับเงิน จำนวนเงิน', 'ตรวจสอบเช็คคงเหลือ/ใช้ไปแล้ว'] },
-  'reg-receipt': { label: 'ทะเบียนใบเสร็จรับเงิน', features: ['บันทึกเลขที่ใบเสร็จ วันที่ ผู้ชำระ จำนวนเงิน', 'สรุปยอดรับเงินรายเดือน'] },
-  'reg-deeka': { label: 'ทะเบียนคุมฎีกาเบิกจ่าย', features: ['บันทึกเลขที่ฎีกา เรื่อง จำนวนเงิน วันที่เบิกจ่าย', 'ติดตามสถานะอนุมัติเบิกจ่าย'] },
 };
