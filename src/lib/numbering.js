@@ -35,6 +35,39 @@ export async function createNumbered({ collectionName, numberField, dateStr, dat
   return { id: newRef.id, number };
 }
 
+// ===== แทรกเลขที่ทะเบียนย้อนหลัง (ใช้ได้กับทุกทะเบียนที่ใช้ createNumbered() ด้านบน) =====
+// แกะรูปแบบเลขที่เดิม เช่น "001/2569" หรือมีคำนำหน้า "ธร001/2569" -> {prefix:'ธร', base:'001', year:'2569'}
+// (ไม่รองรับเลขที่ที่ถูกแทรกไปแล้ว เช่น "001.1/2569" เพราะแทรกซ้อนอีกชั้นจะสับสน ใช้ได้เฉพาะเลขที่ "หลัก" เท่านั้น)
+export function parseRegNumber(numStr) {
+  const s = String(numStr || '').trim();
+  const m = s.match(/^(\D*)(\d+)\/(\d+)$/);
+  if (!m) return null;
+  return { prefix: m[1], base: m[2], year: m[3] };
+}
+
+// แทรกเลขที่ใหม่หลังเลขที่เดิมที่ใช้ไปแล้ว เช่นเดิมเลขที่ 001/2569 ถูกใช้ไปแล้ว แทรกใหม่จะได้ 001.1/2569, 001.2/2569 ไปเรื่อยๆ
+// นับแยกตัวนับต่อ "เลขที่เดิม" แต่ละเลขที่ (ไม่ปนกับตัวนับเลขที่หลักของทะเบียน) จึงไม่กระทบลำดับเลขที่ปกติที่ออกต่อไป
+export async function insertRegNumbered({ collectionName, numberField, baseNumber, data }) {
+  const parsed = parseRegNumber(baseNumber);
+  if (!parsed) throw new Error('รูปแบบเลขที่เดิมไม่ถูกต้อง ไม่สามารถแทรกเลขที่ได้');
+  const counterRef = doc(db, 'counters', `${collectionName}_insert_${parsed.year}_${parsed.base}`);
+  const newRef = doc(collection(db, collectionName));
+  let number = '';
+  await runTransaction(db, async (tx) => {
+    const c = await tx.get(counterRef);
+    const idx = (c.exists() ? c.data().last : 0) + 1;
+    number = `${parsed.prefix}${parsed.base}.${idx}/${parsed.year}`;
+    tx.set(counterRef, { last: idx, updatedAt: serverTimestamp() });
+    tx.set(newRef, {
+      ...data,
+      [numberField]: number,
+      createdAt: serverTimestamp(),
+      createdBy: auth.currentUser.email.toLowerCase(),
+    });
+  });
+  return { id: newRef.id, number };
+}
+
 // ===== เลขทะเบียนหนังสือส่ง: รูปแบบตายตัวของหน่วยงาน (ไม่ผูกกับการตั้งค่าเลขทะเบียนทั่วไป) =====
 export const ORG_DOC_CODE = 'สน 51006.24';
 

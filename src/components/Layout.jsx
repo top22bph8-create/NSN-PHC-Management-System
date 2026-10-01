@@ -53,7 +53,7 @@ export default function Layout() {
             {s.items.map((i) => (
               <NavLink
                 key={i.key} to={i.path} end={i.path === '/'} onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${isActive ? 'border-brand-400 bg-brand-50 font-bold text-brand-800 shadow-md' : `border-transparent text-brand-100 hover:bg-white/10 hover:text-white ${s.main ? 'font-semibold' : ''}`}`}
+                className={({ isActive }) => `flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${isActive ? 'border-brand-300 bg-brand-600 font-bold text-white shadow-md' : `border-transparent text-brand-100 hover:bg-white/10 hover:text-white ${s.main ? 'font-semibold' : ''}`}`}
               >
                 {/* ตัดอิโมจิหน้าหัวข้อออกแล้วตามที่แจ้ง (เดิมมีทั้งไอคอนและอิโมจิซ้อนกันดูรก) เหลือไอคอนเดียว */}
                 <i.icon className="h-5 w-5 shrink-0" />

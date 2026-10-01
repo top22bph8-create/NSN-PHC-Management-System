@@ -11,6 +11,7 @@ import { exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
+import ThaiDateInput from '../components/ThaiDateInput';
 
 // การ์ดโควตา/สถิติการลาของบุคคลใดบุคคลหนึ่ง (ใช้ทั้งของตัวเองด้านบน และในแดชบอร์ดรายบุคคล)
 function QuotaGrid({ quota, used, pending }) {
@@ -66,6 +67,15 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
       return n;
     });
   };
+  // สำหรับ ThaiDateInput ที่ส่งค่าวันที่ ISO กลับมาตรงๆ (ไม่ใช่ event) ใช้ตรรกะเดียวกับ set() ด้านบน
+  const setDate = (k) => (v) => {
+    setF((p) => {
+      const n = { ...p, [k]: v };
+      if (k === 'start' && n.end < v) n.end = v;
+      if (k === 'start' || k === 'end') n.days = workingDays(n.start, n.end);
+      return n;
+    });
+  };
   const delegates = (people || []).filter((p) => p.email !== profile.email);
 
   // แจ้งเตือนแบบเรียลไทม์ก่อนกดยื่น: เทียบวันลาที่กำลังจะยื่น + ที่ใช้ไปแล้ว/รออนุมัติ กับโควตาตามระเบียบ
@@ -114,8 +124,8 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lt">ประเภทการลา</label>
           <select id="lt" className="input" value={f.type} onChange={set('type')}>{LEAVE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ls">ตั้งแต่วันที่</label><input id="ls" type="date" required className="input" value={f.start} onChange={set('start')} /></div>
-          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="le">ถึงวันที่</label><input id="le" type="date" required min={f.start} className="input" value={f.end} onChange={set('end')} /></div>
+          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ls">ตั้งแต่วันที่</label><ThaiDateInput id="ls" required value={f.start} onChange={setDate('start')} /></div>
+          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="le">ถึงวันที่</label><ThaiDateInput id="le" required min={f.start} value={f.end} onChange={setDate('end')} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ld">จำนวนวัน</label><input id="ld" type="number" step="0.5" min="0.5" required className="input" value={f.days} onChange={set('days')} /></div>
         </div>
         <p className="text-xs text-slate-500">นับเฉพาะวันจันทร์-ศุกร์ อัตโนมัติ (ปรับเป็น 0.5 ได้กรณีลาครึ่งวัน) วันหยุดนักขัตฤกษ์ให้ปรับจำนวนวันเอง</p>

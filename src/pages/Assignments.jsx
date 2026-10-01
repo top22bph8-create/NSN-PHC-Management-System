@@ -10,6 +10,7 @@ import { sortPeople } from '../lib/leave';
 import { fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
+import ThaiDateInput from '../components/ThaiDateInput';
 
 const thWeekday = (dateStr) => {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -30,6 +31,7 @@ function AssignmentForm({ item, people, profile, onClose, say }) {
   const [assignees, setAssignees] = useState(() => new Set((item?.assignees || []).map((p) => p.email)));
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const setDate = (k) => (v) => setF((p) => ({ ...p, [k]: v }));
   const toggle = (email) => setAssignees((s) => { const n = new Set(s); n.has(email) ? n.delete(email) : n.add(email); return n; });
 
   const submit = async (e) => {
@@ -64,7 +66,7 @@ function AssignmentForm({ item, people, profile, onClose, say }) {
     <Modal title={item ? 'แก้ไขการมอบหมายงาน' : 'เพิ่มการมอบหมายงาน'} wide onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-3">
-          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ad">วันที่ปฏิบัติงาน</label><input id="ad" type="date" required className="input" value={f.date} onChange={set('date')} /></div>
+          <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ad">วันที่ปฏิบัติงาน</label><ThaiDateInput id="ad" required value={f.date} onChange={setDate('date')} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="at">เวลา (ไม่บังคับ)</label><input id="at" placeholder="เช่น 08.30 น." className="input" value={f.time} onChange={set('time')} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="al">สถานที่ (ไม่บังคับ)</label><input id="al" className="input" value={f.location} onChange={set('location')} /></div>
         </div>
