@@ -14,7 +14,7 @@
   --color-brand-800: #175a96;
   --color-brand-900: #144a7a;
   --color-brand-950: #0d3357;
-  /* สีมิ้นท์ (เขียว-ฟ้ามิ้นท์ โทนทันสมัย): ใช้เป็นสีเน้น (accent) ของหัวข้อหลักในแถบเมนู ให้ตัดกับโทนฟ้า/กรมท่าที่ใช้อยู่ทั่วทั้งระบบ */
+  /* สีมิ้นท์ (เขียว-ฟ้ามิ้นท์): ยังใช้เป็นสีเน้นของการ์ดไอคอนในหน้า "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" */
   --color-mint-300: #99f6e4;
   --color-mint-400: #2dd4bf;
   --color-mint-500: #14b8a6;
@@ -52,9 +52,11 @@ label { @apply text-slate-600; }
 .card { @apply rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-100/60; }
 
 /* แถบหัวข้องานหลัก: ใหญ่ ตัวหนา เด่นชัดกว่าหัวข้องานย่อยและรายการเมนูย่อยอย่างชัดเจน
-   ใช้สีมิ้นท์ (เขียว-ฟ้ามิ้นท์ โทนทันสมัย) ตัดกับพื้นแถบเมนูสีกรมท่า (navy) ให้ดูเป็นทางการและสังเกตง่ายกว่าเดิมที่เป็นฟ้าบนฟ้า */
+   เปลี่ยนจากสีทอง/มิ้นท์เป็น "ป้ายขาว" (name-plate) แบบป้ายหน่วยงานราชการ: พื้นขาวสบายตา ตัวหนังสือน้ำเงินกรมท่า
+   มีเส้นขอบซ้ายสีฟ้าเด่น (brand-400) คั่น — ให้สีสันรับกับโทนฟ้า/การ์ดขาวที่ใช้อยู่ทั่วทั้งหน้าเพจหลัก ไม่ใช่สีแปลกใหม่ที่ขัดกัน
+   และยังตัดกับพื้นแถบเมนูสีกรมท่า (navy) เข้มได้ชัดเจนเพราะขาวสว่างกว่าพื้นมาก */
 .menu-band-title {
-  @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-mint-500 to-mint-400 px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-950 shadow-sm;
+  @apply flex items-center gap-2 rounded-lg border-l-4 border-brand-400 bg-white px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-800 shadow-md;
 }
 
 /* อิโมจิกระพริบสวยๆ ประจำหัวข้อแต่ละงาน */
