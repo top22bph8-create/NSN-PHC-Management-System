@@ -53,10 +53,11 @@ export default function Layout() {
             {s.items.map((i) => (
               <NavLink
                 key={i.key} to={i.path} end={i.path === '/'} onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-gradient-to-r from-gold-500 to-gold-400 font-bold text-brand-950 shadow-sm' : `text-brand-100 hover:bg-white/10 hover:text-white ${s.main ? 'font-semibold' : ''}`}`}
+                className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-gradient-to-r from-mint-500 to-mint-400 font-bold text-brand-950 shadow-sm' : `text-brand-100 hover:bg-white/10 hover:text-white ${s.main ? 'font-semibold' : ''}`}`}
               >
+                {/* ตัดอิโมจิหน้าหัวข้อออกแล้วตามที่แจ้ง (เดิมมีทั้งไอคอนและอิโมจิซ้อนกันดูรก) เหลือไอคอนเดียว */}
                 <i.icon className="h-5 w-5 shrink-0" />
-                <span className="flex-1">{i.emoji && <span className="mr-1">{i.emoji}</span>}{i.label}</span>
+                <span className="flex-1">{i.label}</span>
                 {!i.ready && <span className="rounded bg-white/10 px-1.5 text-xs text-brand-200">เร็วๆ นี้</span>}
               </NavLink>
             ))}
@@ -67,7 +68,7 @@ export default function Layout() {
         <div className="truncate font-medium text-white">{profile.name || profile.email}</div>
         <div className="truncate text-brand-300">{ROLES[profile.role]} · {usernameOf(profile.email)}</div>
         <div className="mt-2 flex items-center gap-4">
-          <NavLink to="/account" onClick={() => setOpen(false)} className="flex items-center gap-1 text-gold-300 hover:underline"><KeyRound className="h-4 w-4" /> รหัสผ่าน</NavLink>
+          <NavLink to="/account" onClick={() => setOpen(false)} className="flex items-center gap-1 text-mint-300 hover:underline"><KeyRound className="h-4 w-4" /> รหัสผ่าน</NavLink>
           <button onClick={logout} className="flex items-center gap-1 text-brand-200 hover:text-red-300"><LogOut className="h-4 w-4" /> ออกจากระบบ</button>
         </div>
       </div>

@@ -14,11 +14,11 @@
   --color-brand-800: #175a96;
   --color-brand-900: #144a7a;
   --color-brand-950: #0d3357;
-  /* สีทอง: ใช้เป็นสีเน้น (accent) ให้แถบเมนูดูเป็นทางการและตัดกับโทนฟ้าที่ใช้อยู่ทั่วทั้งระบบ */
-  --color-gold-300: #f0d78c;
-  --color-gold-400: #d9b64f;
-  --color-gold-500: #c89f33;
-  --color-gold-600: #a8841f;
+  /* สีมิ้นท์ (เขียว-ฟ้ามิ้นท์ โทนทันสมัย): ใช้เป็นสีเน้น (accent) ของหัวข้อหลักในแถบเมนู ให้ตัดกับโทนฟ้า/กรมท่าที่ใช้อยู่ทั่วทั้งระบบ */
+  --color-mint-300: #99f6e4;
+  --color-mint-400: #2dd4bf;
+  --color-mint-500: #14b8a6;
+  --color-mint-600: #0d9488;
 }
 
 html, body, #root { min-height: 100%; }
@@ -52,9 +52,9 @@ label { @apply text-slate-600; }
 .card { @apply rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-100/60; }
 
 /* แถบหัวข้องานหลัก: ใหญ่ ตัวหนา เด่นชัดกว่าหัวข้องานย่อยและรายการเมนูย่อยอย่างชัดเจน
-   ใช้สีทองตัดกับพื้นแถบเมนูสีกรมท่า (navy) ให้ดูเป็นทางการและสังเกตง่ายกว่าเดิมที่เป็นฟ้าบนฟ้า */
+   ใช้สีมิ้นท์ (เขียว-ฟ้ามิ้นท์ โทนทันสมัย) ตัดกับพื้นแถบเมนูสีกรมท่า (navy) ให้ดูเป็นทางการและสังเกตง่ายกว่าเดิมที่เป็นฟ้าบนฟ้า */
 .menu-band-title {
-  @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-gold-500 to-gold-400 px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-950 shadow-sm;
+  @apply flex items-center gap-2 rounded-lg bg-gradient-to-r from-mint-500 to-mint-400 px-3 py-2 text-base font-extrabold uppercase tracking-wide text-brand-950 shadow-sm;
 }
 
 /* อิโมจิกระพริบสวยๆ ประจำหัวข้อแต่ละงาน */

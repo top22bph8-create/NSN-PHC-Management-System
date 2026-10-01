@@ -2,7 +2,7 @@ import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Building2,
   Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, BarChart3, CalendarClock,
-  BookOpenCheck, Megaphone, Hash, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
+  BookOpenCheck, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
 } from 'lucide-react';
 
 // ready = พร้อมใช้งานแล้ว, module = ชื่อสิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
@@ -29,20 +29,13 @@ export const MENU = [
   },
   {
     // กลุ่มใหม่ตามคำขอ: รวมทะเบียนประกอบฎีกาและทะเบียนควบคุมต่างๆ ของงานธุรการ/การเงินไว้ในที่เดียว
-    // (ยังเป็นหน้า "เร็วๆ นี้" รอไฟล์ทะเบียนตัวอย่างจากผู้อำนวยการเพื่อออกแบบฟอร์มจริงในรอบถัดไป)
+    // ย่อเหลือ "ลิงก์เดียว" ในเมนูซ้าย (ไม่กางหัวข้อย่อยทั้ง 8 รายการในเมนูให้รกไปหมด) แล้วกดเข้าไปดูเป็นหน้ารวม
+    // แบบการ์ดไอคอนกลางหน้าแทน (ดู src/pages/RegistriesHub.jsx + REGISTRY_LINKS ด้านล่าง)
     title: 'ทะเบียนประกอบฎีกาและทะเบียนต่างๆ',
     icon: BookOpenCheck,
     main: true,
     items: [
-      { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', emoji: '📜', path: '/soon/reg-orders', icon: ScrollText },
-      { key: 'reg-announce', label: 'ทะเบียนประกาศ', emoji: '📢', path: '/soon/reg-announce', icon: Megaphone },
-      { key: 'reg-order-no', label: 'ทะเบียนคุมเลขที่คำสั่ง', emoji: '🔢', path: '/soon/reg-order-no', icon: Hash },
-      { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', emoji: '🛒', path: '/soon/reg-procurement', icon: ShoppingCart },
-      { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', emoji: '📝', path: '/soon/reg-contract-no', icon: FileSignature },
-      { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', emoji: '💵', path: '/soon/reg-loan', icon: HandCoins },
-      { key: 'reg-cheque', label: 'ทะเบียนคุมการใช้เช็ค', emoji: '🏦', path: '/soon/reg-cheque', icon: Landmark },
-      { key: 'reg-receipt', label: 'ทะเบียนใบเสร็จรับเงิน', emoji: '🧾', path: '/soon/reg-receipt', icon: Receipt },
-      { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', emoji: '📑', path: '/soon/reg-deeka', icon: FileStack },
+      { key: 'registries', label: 'ดูทะเบียนทั้งหมด', path: '/registries', icon: BookOpenCheck, ready: true },
     ],
   },
   {
@@ -94,6 +87,19 @@ export const MENU = [
   },
 ];
 
+// รายการทะเบียนในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — แสดงเป็นการ์ดไอคอนกลางหน้าในหน้ารวม (src/pages/RegistriesHub.jsx)
+// ตัดเหลือ 8 รายการ (ตัด "ทะเบียนคุมเลขที่คำสั่ง" ออกแล้ว เพราะเป็นทะเบียนเดียวกับ "ทะเบียนคำสั่ง")
+export const REGISTRY_LINKS = [
+  { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', path: '/soon/reg-orders', icon: ScrollText },
+  { key: 'reg-announce', label: 'ทะเบียนประกาศ', path: '/soon/reg-announce', icon: Megaphone },
+  { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', path: '/soon/reg-procurement', icon: ShoppingCart },
+  { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', path: '/soon/reg-contract-no', icon: FileSignature },
+  { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', path: '/soon/reg-loan', icon: HandCoins },
+  { key: 'reg-cheque', label: 'ทะเบียนคุมการใช้เช็ค', path: '/soon/reg-cheque', icon: Landmark },
+  { key: 'reg-receipt', label: 'ทะเบียนใบเสร็จรับเงิน', path: '/soon/reg-receipt', icon: Receipt },
+  { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/soon/reg-deeka', icon: FileStack },
+];
+
 // รายละเอียดโมดูลที่กำลังพัฒนา (แสดงในหน้า "เร็วๆ นี้")
 export const SOON = {
   orders: { label: 'งานคำสั่งและประกาศ', features: ['ทะเบียนคำสั่ง', 'ทะเบียนประกาศ', 'ค้นหาคำสั่ง/ประกาศ', 'แนบไฟล์ PDF'] },
@@ -104,9 +110,9 @@ export const SOON = {
   disease: { label: 'งานส่งเสริมป้องกันควบคุมโรค', features: ['บันทึกกิจกรรม/โครงการ ตามหมู่บ้านและกลุ่มเป้าหมาย', 'รายงานตามเดือน ไตรมาส ปีงบประมาณ', 'งานเฝ้าระวังโรค วัคซีน คัดกรอง ไข้เลือดออก ฯลฯ'] },
   family: { label: 'งานเวชปฏิบัติครอบครัว', features: ['NCD / LTC / ผู้ป่วยติดบ้านติดเตียง / เยี่ยมบ้าน', 'ต้องออกแบบสิทธิ์เข้มงวดและ PDPA ก่อน (เฟสหลัง)'] },
   // กลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — รอไฟล์ทะเบียนตัวอย่างจากผู้อำนวยการเพื่อออกแบบฟอร์ม/คอลัมน์จริงในรอบถัดไป
+  // หมายเหตุ: ตัด "ทะเบียนคุมเลขที่คำสั่ง" ออกแล้วตามที่แจ้ง เพราะเป็นทะเบียนเดียวกับ "ทะเบียนคำสั่ง"
   'reg-orders': { label: 'ทะเบียนคำสั่ง', features: ['บันทึกเลขที่คำสั่ง เรื่อง วันที่ลงนาม ผู้ลงนาม', 'แนบไฟล์คำสั่ง PDF', 'ค้นหา/พิมพ์รายงานย้อนหลัง'] },
   'reg-announce': { label: 'ทะเบียนประกาศ', features: ['บันทึกเลขที่ประกาศ เรื่อง วันที่ประกาศ', 'แนบไฟล์ประกาศ PDF', 'ค้นหา/พิมพ์รายงานย้อนหลัง'] },
-  'reg-order-no': { label: 'ทะเบียนคุมเลขที่คำสั่ง', features: ['ออกเลขที่คำสั่งอัตโนมัติ ไม่ซ้ำ', 'ตรวจสอบเลขที่ที่ใช้ไปแล้วในแต่ละปี'] },
   'reg-procurement': { label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', features: ['บันทึกรายการจัดซื้อจัดจ้าง งบประมาณ คู่สัญญา', 'ติดตามสถานะดำเนินการ'] },
   'reg-contract-no': { label: 'ทะเบียนคุมเลขหนังสือสัญญา', features: ['ออกเลขที่สัญญาอัตโนมัติ ไม่ซ้ำ', 'แจ้งเตือนก่อนสัญญาหมดอายุ'] },
   'reg-loan': { label: 'ทะเบียนคุมสัญญายืมเงิน', features: ['บันทึกผู้ยืม วันที่ยืม กำหนดส่งคืน', 'แจ้งเตือนใกล้ครบกำหนด/เกินกำหนด'] },
