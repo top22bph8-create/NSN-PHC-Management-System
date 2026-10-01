@@ -58,9 +58,11 @@ export default function ThaiDateInput({ id, value, onChange, required, min, max,
 
   const pick = (d) => { onChange(toISO(viewY, viewM, d)); setOpen(false); };
 
-  const curBE = today.getFullYear() + 543;
+  // สำคัญ: viewY ต้องเป็นปี ค.ศ. เสมอ (ใช้คำนวณ new Date()/toISO() ตรงๆ) ตัวเลือกปีจึงสร้างจากปี ค.ศ. จริง
+  // แล้วค่อย +543 เฉพาะตอนแสดงผลเป็นป้ายกำกับเท่านั้น ไม่ใช่เก็บเป็นค่า พ.ศ. ไว้ในตัวเลือกเอง (เดิมพลาดบวกซ้ำ 2 ครั้งทำให้ปีเพี้ยน)
+  const curCE = today.getFullYear();
   const yearOptions = [];
-  for (let y = curBE - 15; y <= curBE + 5; y++) yearOptions.push(y);
+  for (let y = curCE - 15; y <= curCE + 5; y++) yearOptions.push(y);
 
   return (
     <div className="relative" ref={wrapRef}>
@@ -108,7 +110,7 @@ export default function ThaiDateInput({ id, value, onChange, required, min, max,
             className="mt-2 w-full rounded-lg py-1.5 text-center text-xs font-medium text-brand-700 hover:bg-brand-50"
             onClick={() => { const t = new Date(); onChange(toISO(t.getFullYear(), t.getMonth() + 1, t.getDate())); setOpen(false); }}
           >
-            วันนี้ ({pad(today.getDate())}/{pad(today.getMonth() + 1)}/{curBE})
+            วันนี้ ({pad(today.getDate())}/{pad(today.getMonth() + 1)}/{curCE + 543})
           </button>
         </div>
       )}
