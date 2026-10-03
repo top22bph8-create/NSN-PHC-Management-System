@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { collection, doc, deleteDoc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
-import { CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -12,6 +12,7 @@ import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, insertR
 import { exportCsv } from '../lib/exportFile';
 import { exportRegistryExcel } from '../lib/report';
 import { fiscalYearBE, fmtDate, nowTimeStr, thMonths, todayStr } from '../lib/thai';
+import { REGISTRY_LINKS } from '../config/menu';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from './ui';
 import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
@@ -309,8 +310,16 @@ export default function RegistryPage({ cfg }) {
   };
   const openReportPdf = () => window.open(`${window.location.origin}${window.location.pathname}#/print/${cfg.key}?fy=${fy}`, '_blank');
 
+  // ปุ่มกลับหน้ารวม — แสดงเฉพาะทะเบียนที่อยู่ในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" (REGISTRY_LINKS)
+  const isHubRegistry = REGISTRY_LINKS.some((r) => r.key === cfg.key);
+
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
+      {isHubRegistry && (
+        <Link to="/registries" className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-900">
+          <ArrowLeft className="h-4 w-4" /> กลับหน้ารวมทะเบียน
+        </Link>
+      )}
       <PageHeader
         emoji={cfg.emoji} title={cfg.title}
         subtitle={`ปีงบประมาณ ${fy} · ${items ? `${filtered.length} จาก ${items.length} รายการ` : 'กำลังโหลด'}`}
