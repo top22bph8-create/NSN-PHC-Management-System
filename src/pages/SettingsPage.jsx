@@ -185,6 +185,9 @@ export default function SettingsPage() {
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.decide} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, decide: e.target.checked } })} /> เมื่ออนุมัติ/ไม่อนุมัติ</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.cancel} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, cancel: e.target.checked } })} /> เมื่อยกเลิกใบลา</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.assignmentReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, assignmentReminder: e.target.checked } })} /> ปฏิทินมอบหมายงาน (ทุกวัน 06:00 น.)</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanBorrow} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanBorrow: e.target.checked } })} /> ยืมเงิน (ทะเบียนสัญญายืมเงิน)</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanRepay} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanRepay: e.target.checked } })} /> ส่งใช้เงินยืม</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanOverdue} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanOverdue: e.target.checked } })} /> เงินยืมเกินกำหนดส่งใช้ (ทุกวัน 06:00 น.)</label>
               </div>
             </div>
           </div>

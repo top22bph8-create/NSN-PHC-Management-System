@@ -76,6 +76,7 @@ export default function RegistryPage({ cfg }) {
   const [stockModal, setStockModal] = useState(null); // null | 'in' | 'out'
   const [slForm, setSlForm] = useState({});
   const [slSaving, setSlSaving] = useState(false);
+  const [withdrawItem, setWithdrawItem] = useState(null); // เล่มที่กำลังจะกดเบิกออกจากคลัง (คุมคลังแบบรายเล่ม)
 
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 3500); };
 
@@ -188,14 +189,21 @@ export default function RegistryPage({ cfg }) {
     [items, canInsertNumber, cfg],
   );
 
-  // ยอดคงเหลือในคลังปัจจุบัน (เฉพาะทะเบียนคุมคลัง) — รับเข้า 1 รายการ = 1 เล่มเสมอ, เบิกออกหักตามจำนวนที่กรอก
-  const stockBalance = useMemo(() => {
-    if (!isStockLedger || !items) return 0;
-    return items.reduce((b, it) => (it[cfg.statusField] === SL.inValue ? b + 1 : it[cfg.statusField] === SL.outValue ? b - Number(it[SL.qtyKey] || 0) : b), 0);
-  }, [items, isStockLedger, SL, cfg]);
+  // ทะเบียนคุมคลังแบบรายเล่ม: แต่ละเล่มคือ 1 เอกสาร แยกเป็นเล่มที่ยังอยู่ในคลัง (คงคลัง) และเล่มที่เบิกใช้ไปแล้ว เรียงตามเลขที่เล่ม
+  const inStockBooks = useMemo(
+    () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.inValue).sort((a, b) => String(a[cfg.numberField]).localeCompare(String(b[cfg.numberField]))) : []),
+    [items, isStockLedger, SL, cfg],
+  );
+  const outBooks = useMemo(
+    () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.outValue).sort((a, b) => String(a[cfg.numberField]).localeCompare(String(b[cfg.numberField]))) : []),
+    [items, isStockLedger, SL, cfg],
+  );
 
   // เงื่อนไขแสดงฟิลด์แบบมีตัวเลือก (showIf) เช่น ทะเบียนหนังสือสัญญา: เลือกบุคลากรแทนช่องพิมพ์ชื่อเองเมื่อเป็น "ลูกจ้างชั่วคราว"
   const fieldVisible = (f, values) => !f.showIf || f.showIf(values);
+
+  // ทะเบียนสัญญายืมเงิน: เกินกำหนดส่งใช้ = ยังไม่คืน และวันนี้เกินกำหนดวันส่งใช้แล้ว (สถานะที่ 3 นอกเหนือจาก "ค้างจ่าย"/"คืนแล้ว" ซึ่งเป็นแค่สี ไม่ได้เก็บเป็นฟิลด์แยก)
+  const isLoanOverdue = (it) => isLoan && !!it.dueDate && it.repaid !== 'ส่งใช้เงินยืมเรียบร้อย' && it.dueDate < todayStr();
 
   const openCreate = () => {
     setErrors({}); setInsertMode(false); setInsertBase(''); setGenInsertMode(false); setGenInsertBase(''); setJustCreated(null); setOtherOpen({}); setOtherActive({});
@@ -306,13 +314,20 @@ export default function RegistryPage({ cfg }) {
   };
 
   // ===== ทะเบียนสัญญายืมเงิน: บันทึกการคืนเงินยืม (แทนทะเบียนคืนเงินยืมแยกเดิม) =====
-  const openRepay = (it) => { setRepayForm({ date: todayStr(), dikaList: [''] }); setRepayItem(it); };
+  const openRepay = (it) => { setRepayForm({ date: todayStr(), method: 'ฎีกา', amount: it.amount || '', dikaList: [''] }); setRepayItem(it); };
   const submitRepay = async () => {
     if (!repayForm.date) { say({ type: 'error', text: 'กรุณาเลือกวันที่ส่งใช้เงินยืม' }); return; }
+    if (!String(repayForm.amount || '').trim()) { say({ type: 'error', text: 'กรุณากรอกจำนวนเงินส่งใช้' }); return; }
     const dikaList = repayForm.dikaList.map((d) => d.trim()).filter(Boolean);
     setRepaySaving(true);
     try {
-      const after = { repaid: 'ส่งใช้เงินยืมเรียบร้อย', repayDate: repayForm.date, repayDika: dikaList.join(', ') };
+      const after = {
+        repaid: 'ส่งใช้เงินยืมเรียบร้อย',
+        repayDate: repayForm.date,
+        repayMethod: repayForm.method,
+        repayAmount: String(repayForm.amount).trim(),
+        repayDika: repayForm.method === 'ฎีกา' ? dikaList.join(', ') : '',
+      };
       await updateDoc(doc(db, cfg.key, repayItem.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
       await writeAudit({ action: 'update', module: cfg.key, docId: repayItem.id, label: repayItem[cfg.numberField], after });
       say({ type: 'ok', text: 'บันทึกการคืนเงินยืมแล้ว' });
@@ -324,9 +339,30 @@ export default function RegistryPage({ cfg }) {
     }
   };
 
-  // ===== ทะเบียนคุมคลัง (เล่มเช็ค/เล่มใบเสร็จ): เพิ่มเข้าคลัง / เบิกออกจากคลัง ผ่านป๊อปอัพเฉพาะ =====
-  const openStockIn = () => { setSlForm({ date: todayStr(), source: '', numFrom: '', numTo: '' }); setStockModal('in'); };
-  const openStockOut = () => { setSlForm({ date: todayStr(), qty: '', numFrom: '', numTo: '', requester: SL.defaultRequester || '', requesterPosition: SL.defaultRequesterPosition || '' }); setStockModal('out'); };
+  // ===== ทะเบียนสัญญายืมเงิน: ขอขยายเวลาส่งใช้เงินยืม (แก้ไขกำหนดวันส่งใช้) =====
+  const [extendItem, setExtendItem] = useState(null);
+  const [extendDate, setExtendDate] = useState('');
+  const [extendSaving, setExtendSaving] = useState(false);
+  const openExtend = (it) => { setExtendDate(it.dueDate || todayStr()); setExtendItem(it); };
+  const submitExtend = async () => {
+    if (!extendDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่กำหนดส่งใช้ใหม่' }); return; }
+    setExtendSaving(true);
+    try {
+      const after = { dueDate: extendDate };
+      await updateDoc(doc(db, cfg.key, extendItem.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: extendItem.id, label: extendItem[cfg.numberField], after: { dueDate: `${extendItem.dueDate || '-'} → ${extendDate}` } });
+      say({ type: 'ok', text: 'บันทึกการขยายเวลาส่งใช้เงินยืมแล้ว' });
+      setExtendItem(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setExtendSaving(false);
+    }
+  };
+
+  // ===== ทะเบียนคุมคลังแบบรายเล่ม (เล่มเช็ค/เล่มใบเสร็จ): เพิ่มเล่มเข้าคลัง → สร้างเอกสารใหม่ 1 เล่ม / เบิกออก → อัปเดตเอกสารเล่มเดิม (คลิกที่เล่มในแดชบอร์ด) =====
+  const openStockIn = () => { setSlForm({ date: todayStr(), source: '', numFrom: SL.defaultNumFrom || '', numTo: SL.defaultNumTo || '' }); setStockModal('in'); };
+  const openWithdraw = (it) => { setSlForm({ date: todayStr(), requester: SL.defaultRequester || '', requesterPosition: SL.defaultRequesterPosition || '' }); setWithdrawItem(it); setStockModal('out'); };
 
   const submitStockIn = async () => {
     if (!slForm.source || !String(slForm.numFrom).trim() || !String(slForm.numTo).trim()) { say({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบ' }); return; }
@@ -338,17 +374,19 @@ export default function RegistryPage({ cfg }) {
         [SL.sourceKey]: slForm.source,
         [SL.numFromKey]: slForm.numFrom.trim(),
         [SL.numToKey]: slForm.numTo.trim(),
-        [SL.qtyKey]: '1',
         ...(SL.fixedAccountNoKey ? { [SL.fixedAccountNoKey]: SL.fixedAccountNo } : {}),
         ...(SL.fixedAccountNameKey ? { [SL.fixedAccountNameKey]: SL.fixedAccountName } : {}),
-        balanceAfter: String(stockBalance + 1),
         note: '',
       };
       const fyVal = fiscalYearBE(values[cfg.dateField]);
-      const { id, number } = await createNumbered({ collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField], data: { ...values, fy: fyVal, attachments: [] } });
+      const { id, number } = await createNumbered({
+        collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField],
+        data: { ...values, fy: fyVal, attachments: [] },
+        prefixOverride: cfg.numberPrefix, digitsOverride: cfg.numberDigits,
+      });
       await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
-      say({ type: 'ok', text: `บันทึกรับเล่มเข้าคลังแล้ว (คงเหลือ ${stockBalance + 1} ${SL.unitLabel})` });
-      setSlForm({ ...slForm, numFrom: '', numTo: '' });
+      say({ type: 'ok', text: `บันทึกรับเล่มที่ ${number} เข้าคลังแล้ว` });
+      setSlForm({ date: slForm.date, source: slForm.source, numFrom: SL.defaultNumFrom || '', numTo: SL.defaultNumTo || '' });
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
     } finally {
@@ -356,30 +394,21 @@ export default function RegistryPage({ cfg }) {
     }
   };
 
-  const submitStockOut = async () => {
-    const qty = Number(slForm.qty || 0);
-    if (!qty || !String(slForm.numFrom).trim() || !String(slForm.numTo).trim() || !String(slForm.requester || '').trim()) { say({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบ' }); return; }
+  const submitWithdraw = async () => {
+    if (!String(slForm.requester || '').trim()) { say({ type: 'error', text: 'กรุณากรอกผู้เบิก' }); return; }
     setSlSaving(true);
     try {
-      const newBalance = stockBalance - qty;
-      const values = {
-        [cfg.dateField]: slForm.date,
+      const after = {
         [cfg.statusField]: SL.outValue,
-        [SL.qtyKey]: String(qty),
-        [SL.numFromKey]: slForm.numFrom.trim(),
-        [SL.numToKey]: slForm.numTo.trim(),
+        [SL.dateOutKey]: slForm.date,
         [SL.requesterKey]: slForm.requester.trim(),
         [SL.requesterPositionKey]: (slForm.requesterPosition || '').trim(),
-        ...(SL.fixedAccountNoKey ? { [SL.fixedAccountNoKey]: SL.fixedAccountNo } : {}),
-        ...(SL.fixedAccountNameKey ? { [SL.fixedAccountNameKey]: SL.fixedAccountName } : {}),
-        balanceAfter: String(newBalance),
-        note: '',
       };
-      const fyVal = fiscalYearBE(values[cfg.dateField]);
-      const { id, number } = await createNumbered({ collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField], data: { ...values, fy: fyVal, attachments: [] } });
-      await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
-      say({ type: 'ok', text: `บันทึกเบิกออกจากคลังแล้ว (คงเหลือ ${newBalance} ${SL.unitLabel})` });
-      setSlForm({ ...slForm, numFrom: '', numTo: '', qty: '' });
+      await updateDoc(doc(db, cfg.key, withdrawItem.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: withdrawItem.id, label: withdrawItem[cfg.numberField], after });
+      say({ type: 'ok', text: `บันทึกเบิกเล่มที่ ${withdrawItem[cfg.numberField]} ออกจากคลังแล้ว` });
+      setStockModal(null);
+      setWithdrawItem(null);
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
     } finally {
@@ -439,10 +468,7 @@ export default function RegistryPage({ cfg }) {
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doReportExcel} disabled={reporting} title="ออกรายงาน Excel รูปแบบทะเบียนราชการ">{reporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Excel</button>
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={openReportPdf} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> PDF</button>
             {writable && isStockLedger && (
-              <>
-                <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockIn}><Plus className="h-4 w-4" /> เพิ่มเล่มเข้าคลัง</button>
-                <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockOut}><Plus className="h-4 w-4" /> เบิกออกจากคลัง</button>
-              </>
+              <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockIn}><Plus className="h-4 w-4" /> เพิ่มเล่มเข้าคลัง</button>
             )}
             {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
           </div>
@@ -450,9 +476,42 @@ export default function RegistryPage({ cfg }) {
       />
 
       {isStockLedger && items && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg bg-brand-50 px-4 py-2.5 text-brand-900">
-          <span className="font-semibold">คงเหลือในคลังขณะนี้:</span>
-          <span className="text-xl font-bold">{stockBalance}</span> {SL.unitLabel}
+        <div className="card mb-4 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1">
+            <span className="flex items-center gap-1.5"><span className="font-semibold text-slate-700">คงเหลือในคลัง:</span> <span className="text-xl font-bold text-emerald-700">{inStockBooks.length}</span> {SL.unitLabel}</span>
+            <span className="flex items-center gap-1.5"><span className="font-semibold text-slate-700">เบิกใช้แล้ว:</span> <span className="text-xl font-bold text-orange-700">{outBooks.length}</span> {SL.unitLabel}</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มในคลัง {writable && '(คลิกที่เล่มเพื่อเบิกออกใช้)'}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {inStockBooks.length === 0 && <span className="text-sm text-slate-400">ไม่มีเล่มคงคลัง</span>}
+                {inStockBooks.map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    disabled={!writable}
+                    onClick={() => openWithdraw(it)}
+                    title={writable ? `คลิกเพื่อเบิกเล่มที่ ${it[cfg.numberField]} ออกจากคลัง` : undefined}
+                    className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-default disabled:hover:bg-emerald-100"
+                  >
+                    เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มที่เบิกใช้แล้ว</p>
+              <div className="flex flex-wrap gap-1.5">
+                {outBooks.length === 0 && <span className="text-sm text-slate-400">ยังไม่มีเล่มที่เบิกใช้</span>}
+                {outBooks.map((it) => (
+                  <span key={it.id} className="rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-800">
+                    เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -486,7 +545,7 @@ export default function RegistryPage({ cfg }) {
                 <thead className="bg-slate-100 text-sm text-slate-600">
                   <tr>
                     {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
-                    {isLoan && <th className="px-3 py-2 text-center font-semibold">การคืนเงินยืม</th>}
+                    {isLoan && <th className="px-3 py-2 text-center font-semibold">กำหนดส่งใช้ / การคืนเงินยืม</th>}
                     <th className="px-3 py-2 text-center font-semibold">ไฟล์</th>
                   </tr>
                 </thead>
@@ -495,7 +554,9 @@ export default function RegistryPage({ cfg }) {
                     <tr key={it.id} className="cursor-pointer border-t border-slate-100 hover:bg-brand-50/60" onClick={() => setViewId(it.id)}>
                       {listFields.map((f) => (
                         <td key={f.key} className={`px-3 py-2 align-top ${f.key === 'subject' ? 'max-w-xs' : ''}`}>
-                          {f.key === cfg.statusField ? <Badge className={cfg.statusColors[it[f.key]]}>{it[f.key]}</Badge>
+                          {f.key === cfg.statusField ? (
+                            isLoanOverdue(it) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[it[f.key]]}>{it[f.key]}</Badge>
+                          )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
                             : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key])}</span>}
                         </td>
@@ -504,9 +565,22 @@ export default function RegistryPage({ cfg }) {
                         <td className="px-3 py-2 text-center align-top" onClick={(e) => e.stopPropagation()}>
                           {it.repaid === 'ส่งใช้เงินยืมเรียบร้อย' ? (
                             <span className="text-xs text-emerald-700">คืนแล้ว {fmtDate(it.repayDate)}</span>
-                          ) : writable ? (
-                            <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openRepay(it)}><Plus className="h-3.5 w-3.5" /> คืนเงินยืม</button>
-                          ) : <span className="text-xs text-red-600">ค้างจ่าย</span>}
+                          ) : (
+                            <div className="flex flex-col items-center gap-1">
+                              {it.dueDate && <span className="text-xs text-slate-500">กำหนด {fmtDate(it.dueDate)}</span>}
+                              {isLoanOverdue(it) ? (
+                                <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge>
+                              ) : (
+                                <span className="text-xs text-amber-700">สัญญาค้างจ่ายเงินยืม</span>
+                              )}
+                              {writable && (
+                                <div className="flex gap-1">
+                                  <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openRepay(it)}><Plus className="h-3.5 w-3.5" /> คืนเงินยืม</button>
+                                  <button className="btn btn-outline !py-1 !px-2 text-xs text-slate-600" onClick={() => openExtend(it)}>ขอขยายเวลา</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                       )}
                       <td className="px-3 py-2 text-center text-slate-500">{(it.attachments || []).length || '-'}</td>
@@ -717,7 +791,10 @@ export default function RegistryPage({ cfg }) {
             <>
               <button className="btn btn-outline text-red-600" onClick={() => setToDelete(viewItem)}><Trash2 className="h-4 w-4" /> ลบ</button>
               {isLoan && viewItem.repaid !== 'ส่งใช้เงินยืมเรียบร้อย' && (
-                <button className="btn btn-outline text-red-700" onClick={() => openRepay(viewItem)}><Plus className="h-4 w-4" /> คืนเงินยืม</button>
+                <>
+                  <button className="btn btn-outline text-slate-700" onClick={() => openExtend(viewItem)}>ขอขยายเวลาเงินยืม</button>
+                  <button className="btn btn-outline text-red-700" onClick={() => openRepay(viewItem)}><Plus className="h-4 w-4" /> คืนเงินยืม</button>
+                </>
               )}
               <button className="btn btn-primary" onClick={() => openEdit(viewItem)}><Pencil className="h-4 w-4" /> แก้ไข</button>
             </>
@@ -728,7 +805,9 @@ export default function RegistryPage({ cfg }) {
               <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
                 <dt className="text-sm text-slate-500">{f.label}</dt>
                 <dd className="whitespace-pre-wrap font-medium">
-                  {f.key === cfg.statusField ? <Badge className={cfg.statusColors[viewItem[f.key]]}>{viewItem[f.key]}</Badge> : display(f, viewItem[f.key])}
+                  {f.key === cfg.statusField ? (
+                    isLoanOverdue(viewItem) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[viewItem[f.key]]}>{viewItem[f.key]}</Badge>
+                  ) : display(f, viewItem[f.key])}
                 </dd>
               </div>
             ))}
@@ -755,22 +834,56 @@ export default function RegistryPage({ cfg }) {
               <ThaiDateInput value={repayForm.date} onChange={(v) => setRepayForm({ ...repayForm, date: v })} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">เลขฎีกาส่งใช้เงินยืม</label>
-              {repayForm.dikaList.map((d, i) => (
-                <div key={i} className="mb-2 flex gap-2">
-                  <input className="input" placeholder="เลขฎีกา" value={d} onChange={(e) => {
-                    const list = [...repayForm.dikaList]; list[i] = e.target.value; setRepayForm({ ...repayForm, dikaList: list });
-                  }} />
-                  {repayForm.dikaList.length > 1 && (
-                    <button type="button" className="btn btn-outline !px-2" onClick={() => setRepayForm({ ...repayForm, dikaList: repayForm.dikaList.filter((_, j) => j !== i) })}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button type="button" className="btn btn-outline !py-1.5 text-sm" onClick={() => setRepayForm({ ...repayForm, dikaList: [...repayForm.dikaList, ''] })}>
-                <Plus className="h-4 w-4" /> เพิ่มเลขฎีกา (ถ้ามีมากกว่า 1 ฎีกา)
-              </button>
+              <label className="mb-1 block text-sm font-medium text-slate-600">วิธีส่งใช้เงินยืม</label>
+              <select className="input" value={repayForm.method} onChange={(e) => setRepayForm({ ...repayForm, method: e.target.value })}>
+                {['ฎีกา', 'เงินสด', 'เงินโอน'].map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">จำนวนเงินส่งใช้</label>
+              <input className="input" value={repayForm.amount || ''} onChange={(e) => setRepayForm({ ...repayForm, amount: e.target.value })} />
+            </div>
+            {repayForm.method === 'ฎีกา' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">เลขฎีกาส่งใช้เงินยืม</label>
+                {repayForm.dikaList.map((d, i) => (
+                  <div key={i} className="mb-2 flex gap-2">
+                    <input className="input" placeholder="เลขฎีกา" value={d} onChange={(e) => {
+                      const list = [...repayForm.dikaList]; list[i] = e.target.value; setRepayForm({ ...repayForm, dikaList: list });
+                    }} />
+                    {repayForm.dikaList.length > 1 && (
+                      <button type="button" className="btn btn-outline !px-2" onClick={() => setRepayForm({ ...repayForm, dikaList: repayForm.dikaList.filter((_, j) => j !== i) })}>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" className="btn btn-outline !py-1.5 text-sm" onClick={() => setRepayForm({ ...repayForm, dikaList: [...repayForm.dikaList, ''] })}>
+                  <Plus className="h-4 w-4" /> เพิ่มเลขฎีกา (ถ้ามีมากกว่า 1 ฎีกา)
+                </button>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนสัญญายืมเงิน: ป๊อปอัพขอขยายเวลาส่งใช้เงินยืม */}
+      {extendItem && (
+        <Modal
+          title={`ขอขยายเวลาเงินยืม — ${extendItem.loanNo}`}
+          onClose={() => !extendSaving && setExtendItem(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={extendSaving} onClick={() => setExtendItem(null)}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={extendSaving} onClick={submitExtend}>{extendSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            {extendItem.dueDate && <p className="text-sm text-slate-500">กำหนดส่งใช้เดิม: <span className="font-medium text-slate-700">{fmtDate(extendItem.dueDate)}</span></p>}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">กำหนดวันส่งใช้ใหม่</label>
+              <ThaiDateInput value={extendDate} onChange={setExtendDate} />
             </div>
           </div>
         </Modal>
@@ -810,41 +923,30 @@ export default function RegistryPage({ cfg }) {
                 <input className="input" value={slForm.numTo || ''} onChange={(e) => setSlForm({ ...slForm, numTo: e.target.value })} />
               </div>
             </div>
-            <p className="text-xs text-slate-500">การบันทึกครั้งนี้นับเป็น 1 {SL?.unitLabel} หากมีมากกว่า 1 {SL?.unitLabel} ให้กดบันทึกแล้วกรอกเล่มถัดไปเพิ่มได้เรื่อยๆ</p>
+            <p className="text-xs text-slate-500">การบันทึกครั้งนี้นับเป็น 1 {SL?.unitLabel} ออกเลขที่เล่มให้อัตโนมัติตามลำดับ หากมีมากกว่า 1 {SL?.unitLabel} ให้กดบันทึกแล้วกรอกเล่มถัดไปเพิ่มได้เรื่อยๆ</p>
           </div>
         </Modal>
       )}
 
-      {/* ทะเบียนคุมคลัง: ป๊อปอัพเบิกออกจากคลัง */}
-      {stockModal === 'out' && (
+      {/* ทะเบียนคุมคลัง: ป๊อปอัพเบิกออกจากคลัง — คลิกเลือกเล่มจากแดชบอร์ดด้านบนแล้วมาที่นี่ ไม่ต้องกรอกช่วงเลขที่/จำนวนซ้ำ เพราะมาจากตอนรับเข้าแล้ว */}
+      {stockModal === 'out' && withdrawItem && (
         <Modal
-          title="เบิกออกจากคลัง"
-          onClose={() => !slSaving && setStockModal(null)}
+          title={`เบิกเล่มที่ ${withdrawItem[cfg.numberField]} ออกจากคลัง`}
+          onClose={() => !slSaving && (setStockModal(null), setWithdrawItem(null))}
           footer={
             <>
-              <button className="btn btn-outline" disabled={slSaving} onClick={() => setStockModal(null)}>ปิด</button>
-              <button className="btn btn-green" disabled={slSaving} onClick={submitStockOut}>{slSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+              <button className="btn btn-outline" disabled={slSaving} onClick={() => { setStockModal(null); setWithdrawItem(null); }}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={slSaving} onClick={submitWithdraw}>{slSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึกเบิก</button>
             </>
           }
         >
           <div className="grid gap-4">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {SL?.numFromLabel?.replace(' ตั้งแต่', '')}: <span className="font-semibold text-slate-800">{withdrawItem[SL?.numFromKey]} - {withdrawItem[SL?.numToKey]}</span>
+            </p>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">วันที่เบิก</label>
               <ThaiDateInput value={slForm.date} onChange={(v) => setSlForm({ ...slForm, date: v })} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">จำนวนเล่มที่ขอเบิก</label>
-              <input className="input" type="text" value={slForm.qty || ''} onChange={(e) => setSlForm({ ...slForm, qty: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">{SL?.numFromLabel}</label>
-                <input className="input" value={slForm.numFrom || ''} onChange={(e) => setSlForm({ ...slForm, numFrom: e.target.value })} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">{SL?.numToLabel}</label>
-                <input className="input" value={slForm.numTo || ''} onChange={(e) => setSlForm({ ...slForm, numTo: e.target.value })} />
-              </div>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">ผู้เบิก</label>

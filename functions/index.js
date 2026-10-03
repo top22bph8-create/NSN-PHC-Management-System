@@ -32,7 +32,7 @@ const printLeaveUrl = (id) => `${HOSTING_URL}/#/print-leave/${id}`;
 // ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
 // เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
 // ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
-const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true };
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -315,4 +315,51 @@ exports.adminBulkResetPassword = onCall(async (request) => {
     }
   }
   return results;
+});
+
+// แปลงวันที่ ISO (YYYY-MM-DD) เป็นรูปแบบไทย วัน/เดือน/ปี พ.ศ. สำหรับใช้ในข้อความแจ้งเตือนไลน์ของทะเบียนสัญญายืมเงินด้านล่าง
+function thDate(s) {
+  if (!s) return '-';
+  const [y, m, d] = s.split('-');
+  return `${d}/${m}/${Number(y) + 543}`;
+}
+
+// เมื่อมีการบันทึกสัญญายืมเงินใหม่ (ทะเบียนคุมสัญญายืมเงิน) — แจ้งเข้ากลุ่มไลน์
+exports.onLoanCreated = onDocumentCreated('reg-loan/{id}', async (event) => {
+  const l = event.data.data();
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || !events.loanBorrow) return;
+  const text = `💵 มีการยืมเงินใหม่\nเลขที่สัญญา: ${l.loanNo}\nผู้ยืม: ${l.borrower}\nเรื่อง: ${l.subject || '-'}\nจำนวนเงิน: ${l.amount || '-'} บาท\nวันที่ยืม: ${thDate(l.loanDate)}\nกำหนดส่งใช้: ${thDate(l.dueDate)}`;
+  await sendLine(channelAccessToken, targetId, text);
+});
+
+// เมื่อมีการบันทึกการคืนเงินยืม (สถานะเปลี่ยนจาก "ค้างจ่าย" เป็น "ส่งใช้เรียบร้อย") หรือเมื่อขอขยายเวลา (dueDate เปลี่ยน) — แจ้งเข้ากลุ่มไลน์
+exports.onLoanUpdated = onDocumentUpdated('reg-loan/{id}', async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled) return;
+
+  if (before.repaid !== after.repaid && after.repaid === 'ส่งใช้เงินยืมเรียบร้อย') {
+    if (!events.loanRepay) return;
+    const text = `✅ ส่งใช้เงินยืมเรียบร้อย\nเลขที่สัญญา: ${after.loanNo}\nผู้ยืม: ${after.borrower}\nวันที่ส่งใช้: ${thDate(after.repayDate)}${after.repayMethod ? `\nวิธีส่งใช้: ${after.repayMethod}` : ''}${after.repayAmount ? `\nจำนวนเงิน: ${after.repayAmount} บาท` : ''}${after.repayDika ? `\nเลขฎีกาส่งใช้: ${after.repayDika}` : ''}`;
+    await sendLine(channelAccessToken, targetId, text);
+  }
+});
+
+// แจ้งเตือนสัญญายืมเงินที่เกินกำหนดส่งใช้ทุกวัน เวลา 06:00 น. (เวลาไทย) — แจ้งซ้ำทุกวันจนกว่าจะบันทึกการคืนเงินยืมหรือขอขยายเวลาใหม่
+exports.dailyLoanOverdueReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || !events.loanOverdue) return;
+
+  const today = bangkokDateStr();
+  const snap = await db.collection('reg-loan').where('repaid', '==', 'สัญญาค้างจ่ายเงินยืม').get();
+  const overdue = snap.docs.map((d) => d.data()).filter((l) => l.dueDate && l.dueDate < today);
+  if (!overdue.length) return;
+
+  const lines = overdue
+    .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))
+    .map((l, i) => `${i + 1}. ${l.loanNo} · ${l.borrower} · ครบกำหนด ${thDate(l.dueDate)} (${l.amount || '-'} บาท)`);
+  const text = `⚠️ สัญญายืมเงินเกินกำหนดส่งใช้ (${overdue.length} รายการ)\n\n${lines.join('\n')}`;
+  await sendLine(channelAccessToken, targetId, text);
 });
