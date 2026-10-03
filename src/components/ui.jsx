@@ -36,15 +36,17 @@ export function Modal({ title, onClose, children, wide = false, footer }) {
       <div
         role="dialog"
         aria-modal="true"
-        className={`flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}
+        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-slate-100" aria-label="ปิด"><X className="h-5 w-5" /></button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">{footer}</div>}
+        {/* สำคัญสำหรับมือถือ: ต้องมี min-h-0 + flex-1 ที่ส่วนเนื้อหาเท่านั้นที่เลื่อนได้ ส่วนหัว/ปุ่มด้านล่างต้องไม่ถูกดันหลุดจอ
+            (เดิมไม่มี min-h-0/flex-1 ตรงนี้ ทำให้เนื้อหาฟอร์มยาวๆ ดันปุ่ม "บันทึก" ที่ footer หลุดออกนอกจอมือถือ มองไม่เห็น ต้องเลื่อนทั้งหน้าซึ่งทำไม่ได้เพราะเป็น overlay) */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">{footer}</div>}
       </div>
     </div>
   );

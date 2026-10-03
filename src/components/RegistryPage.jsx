@@ -58,6 +58,8 @@ export default function RegistryPage({ cfg }) {
   const isIncoming = cfg.key === 'incoming';
   // ทะเบียนทั่วไปทุกทะเบียน (ไม่ใช่หนังสือรับ/หนังสือส่งที่มีกติกาออกเลขที่เฉพาะของตัวเองอยู่แล้ว) รองรับ "แทรกเลขที่ย้อนหลัง" แบบเดียวกับหนังสือส่ง
   const isGenericNumbered = !isOutgoing && !isIncoming;
+  // ทะเบียนบางรายการ (เช่น ทะเบียนคุมเล่มเช็ค/เล่มใบเสร็จ) เลขที่ภายใน ("ลำดับ") ไม่ใช่เลขเอกสารที่มีความหมายให้แทรกย้อนหลังได้ จึงปิดเฉพาะปุ่มแทรกเลขที่สำหรับทะเบียนเหล่านี้
+  const canInsertNumber = isGenericNumbered && !cfg.hideInsert;
   const hasUserSelect = cfg.fields.some((f) => f.type === 'select-users');
   const [genInsertMode, setGenInsertMode] = useState(false);
   const [genInsertBase, setGenInsertBase] = useState('');
@@ -85,7 +87,7 @@ export default function RegistryPage({ cfg }) {
 
   // คำนวณเลขแทรกลำดับถัดไปของทะเบียนทั่วไป (อ่านตัวนับปัจจุบันของเลขที่เดิมที่เลือก) เพื่อโชว์พรีวิวก่อนบันทึก
   useEffect(() => {
-    if (!isGenericNumbered || !genInsertMode || !genInsertBase) { setGenInsertPreview(null); return; }
+    if (!canInsertNumber || !genInsertMode || !genInsertBase) { setGenInsertPreview(null); return; }
     const parsed = parseRegNumber(genInsertBase);
     if (!parsed) { setGenInsertPreview(null); return; }
     let live = true;
@@ -93,7 +95,7 @@ export default function RegistryPage({ cfg }) {
       if (live) setGenInsertPreview((s.exists() ? s.data().last : 0) + 1);
     }).catch(() => { if (live) setGenInsertPreview(null); });
     return () => { live = false; };
-  }, [isGenericNumbered, genInsertMode, genInsertBase, cfg]);
+  }, [canInsertNumber, genInsertMode, genInsertBase, cfg]);
 
   // พรีวิวเลขรับ + วันที่/เวลารับ ที่จะออกให้อัตโนมัติ (เฉพาะตอนเพิ่มหนังสือรับใหม่) — ใช้ค่าจริงเดียวกันตอนบันทึก ไม่ให้ผู้ใช้แก้เอง
   useEffect(() => {
@@ -170,8 +172,8 @@ export default function RegistryPage({ cfg }) {
 
   // เลขที่ "หลัก" ในปีงบประมาณนี้ (ยังไม่เคยถูกแทรก ไม่มีจุดในเลขที่) ให้เลือกเป็นฐานสำหรับแทรกเลขที่ย้อนหลัง ใหม่สุดก่อน
   const genBaseCandidates = useMemo(
-    () => (isGenericNumbered ? (items || []).filter((x) => !String(x[cfg.numberField] || '').includes('.')).sort((a, b) => (b[cfg.dateField] || '').localeCompare(a[cfg.dateField] || '')) : []),
-    [items, isGenericNumbered, cfg],
+    () => (canInsertNumber ? (items || []).filter((x) => !String(x[cfg.numberField] || '').includes('.')).sort((a, b) => (b[cfg.dateField] || '').localeCompare(a[cfg.dateField] || '')) : []),
+    [items, canInsertNumber, cfg],
   );
 
   const openCreate = () => {
@@ -223,7 +225,7 @@ export default function RegistryPage({ cfg }) {
           ({ id, number } = await insertOutgoingNumbered({ fy: fyVal, baseSeq: Number(insertBase), data: { ...values, attachments: [] } }));
         } else if (isOutgoing) {
           ({ id, number } = await createOutgoingNumbered({ fy: fyVal, data: { ...values, attachments: [] } }));
-        } else if (isGenericNumbered && genInsertMode) {
+        } else if (canInsertNumber && genInsertMode) {
           if (!genInsertBase) { setErrors({ ...e, insertBase: `กรุณาเลือก${cfg.numberLabel}เดิมที่จะแทรก` }); setSaving(false); return; }
           ({ id, number } = await insertRegNumbered({
             collectionName: cfg.key, numberField: cfg.numberField, baseNumber: genInsertBase,
@@ -233,6 +235,7 @@ export default function RegistryPage({ cfg }) {
           ({ id, number } = await createNumbered({
             collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField],
             data: { ...values, fy: fyVal, attachments: [] },
+            prefixOverride: cfg.numberPrefix, digitsOverride: cfg.numberDigits,
           }));
         }
         await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
@@ -415,26 +418,30 @@ export default function RegistryPage({ cfg }) {
             {!form.id && isGenericNumbered && (
               <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800 sm:col-span-2">
                 <p>{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>
-                {genInsertMode && <p className="mt-1">เลขที่จะเป็นเลขแทรกของเลขที่เดิมที่เลือกไว้ เช่น 001.1/2569 (ลำดับแทรกจริงจะคำนวณตอนบันทึก)</p>}
-                <label className="mt-2 flex items-center gap-2 font-normal text-brand-900">
-                  <input type="checkbox" className="h-4 w-4" checked={genInsertMode} disabled={!genBaseCandidates.length && !genInsertMode}
-                    onChange={(e) => { setGenInsertMode(e.target.checked); setGenInsertBase(''); }} />
-                  แทรกเลขที่ย้อนหลัง (สำหรับรายการที่ลงวันที่ย้อนหลังและเลขที่นั้นถูกใช้ไปแล้ว)
-                </label>
-                {!genBaseCandidates.length && !genInsertMode && <p className="mt-1 text-xs text-brand-600">ยังไม่มี{cfg.numberLabel}ในปีงบประมาณ {fy} ให้แทรก</p>}
-                {genInsertMode && (
-                  <select className="input mt-2" value={genInsertBase} onChange={(e) => setGenInsertBase(e.target.value)} aria-label={`เลือก${cfg.numberLabel}เดิมที่จะแทรก`}>
-                    <option value="">-- เลือก{cfg.numberLabel}เดิมที่จะแทรก --</option>
-                    {genBaseCandidates.map((b) => (
-                      <option key={b.id} value={b[cfg.numberField]}>{b[cfg.numberField]} · {fmtDate(b[cfg.dateField])}</option>
-                    ))}
-                  </select>
+                {canInsertNumber && genInsertMode && <p className="mt-1">เลขที่จะเป็นเลขแทรกของเลขที่เดิมที่เลือกไว้ เช่น 001.1/2569 (ลำดับแทรกจริงจะคำนวณตอนบันทึก)</p>}
+                {canInsertNumber && (
+                  <>
+                    <label className="mt-2 flex items-center gap-2 font-normal text-brand-900">
+                      <input type="checkbox" className="h-4 w-4" checked={genInsertMode} disabled={!genBaseCandidates.length && !genInsertMode}
+                        onChange={(e) => { setGenInsertMode(e.target.checked); setGenInsertBase(''); }} />
+                      แทรกเลขที่ย้อนหลัง (สำหรับรายการที่ลงวันที่ย้อนหลังและเลขที่นั้นถูกใช้ไปแล้ว)
+                    </label>
+                    {!genBaseCandidates.length && !genInsertMode && <p className="mt-1 text-xs text-brand-600">ยังไม่มี{cfg.numberLabel}ในปีงบประมาณ {fy} ให้แทรก</p>}
+                    {genInsertMode && (
+                      <select className="input mt-2" value={genInsertBase} onChange={(e) => setGenInsertBase(e.target.value)} aria-label={`เลือก${cfg.numberLabel}เดิมที่จะแทรก`}>
+                        <option value="">-- เลือก{cfg.numberLabel}เดิมที่จะแทรก --</option>
+                        {genBaseCandidates.map((b) => (
+                          <option key={b.id} value={b[cfg.numberField]}>{b[cfg.numberField]} · {fmtDate(b[cfg.dateField])}</option>
+                        ))}
+                      </select>
+                    )}
+                    {genInsertMode && genInsertBase && (() => {
+                      const p = parseRegNumber(genInsertBase);
+                      return p ? <p className="mt-2 font-semibold">{cfg.numberLabel}ที่จะได้: {p.prefix}{p.base}.{genInsertPreview ?? '...'}/{p.year}</p> : null;
+                    })()}
+                    {errors.insertBase && <p className="mt-1 text-sm text-red-600">{errors.insertBase}</p>}
+                  </>
                 )}
-                {genInsertMode && genInsertBase && (() => {
-                  const p = parseRegNumber(genInsertBase);
-                  return p ? <p className="mt-2 font-semibold">{cfg.numberLabel}ที่จะได้: {p.prefix}{p.base}.{genInsertPreview ?? '...'}/{p.year}</p> : null;
-                })()}
-                {errors.insertBase && <p className="mt-1 text-sm text-red-600">{errors.insertBase}</p>}
               </div>
             )}
             {!form.id && isIncoming && (

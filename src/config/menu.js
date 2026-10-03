@@ -3,6 +3,7 @@ import {
   Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, BarChart3, CalendarClock,
   BookOpenCheck, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
+  Undo2, Award,
 } from 'lucide-react';
 
 // ready = พร้อมใช้งานแล้ว, module = ชื่อสิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
@@ -99,9 +100,11 @@ export const REGISTRY_LINKS = [
   { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', path: '/reg-procurement', icon: ShoppingCart },
   { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', path: '/reg-contract-no', icon: FileSignature },
   { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', path: '/reg-loan', icon: HandCoins },
-  { key: 'reg-cheque', label: 'ทะเบียนคุมการใช้เช็ค', path: '/reg-cheque', icon: Landmark },
-  { key: 'reg-receipt', label: 'ทะเบียนใบเสร็จรับเงิน', path: '/reg-receipt', icon: Receipt },
+  { key: 'reg-loan-repay', label: 'ทะเบียนคืนเงินยืม', path: '/reg-loan-repay', icon: Undo2 },
+  { key: 'reg-cheque', label: 'ทะเบียนคุมการจ่ายเบิกจ่ายเล่มเช็ค', path: '/reg-cheque', icon: Landmark },
+  { key: 'reg-receipt', label: 'ทะเบียนคุมใบเสร็จรับเงิน', path: '/reg-receipt', icon: Receipt },
   { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/reg-deeka', icon: FileStack },
+  { key: 'reg-certificate', label: 'ทะเบียนคุมเลขที่เกียรติบัตร', path: '/reg-certificate', icon: Award },
 ];
 
 // รายละเอียดโมดูลที่กำลังพัฒนา (แสดงในหน้า "เร็วๆ นี้")

@@ -126,6 +126,10 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
     }
+    match /reg-loan-repay/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
     match /reg-cheque/{id} {
       allow read: if isActive();
       allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
@@ -137,6 +141,10 @@ service cloud.firestore {
     match /reg-deeka/{id} {
       allow read: if isActive();
       allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+    }
+    match /reg-certificate/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
     }
 
     // ปฏิทินมอบหมายงาน (ประชุม/อบรม/หน่วยปฐมพยาบาล/อื่นๆ) — ทุกคนดูได้ แก้ไข/สร้าง/ลบเฉพาะผู้ดูแล/ธุรการ/ผู้อำนวยการ

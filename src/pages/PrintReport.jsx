@@ -33,9 +33,11 @@ export default function PrintReport() {
   }, [rows]);
 
   if (!cfg) return <div className="p-8">ไม่พบทะเบียนนี้</div>;
-  const cols = cfg.reportColumns || cfg.fields.filter((f) => f.list).map((f) => f.key);
+  const layout = cfg.reportLayout;
+  const cols = layout ? layout.flatMap((e) => e.keys || [e.key]) : (cfg.reportColumns || cfg.fields.filter((f) => f.list).map((f) => f.key));
   const labels = cols.map((k) => cfg.fields.find((f) => f.key === k)?.label || k);
   const color = `#${cfg.reportColor || '4FA8E0'}`;
+  const labelOf = (k) => cfg.fields.find((f) => f.key === k)?.label || k;
 
   return (
     <div className="mx-auto max-w-[1100px] bg-white p-6 print:p-0">
@@ -57,11 +59,33 @@ export default function PrintReport() {
       ) : (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr>
-              {labels.map((l) => (
-                <th key={l} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{l}</th>
-              ))}
-            </tr>
+            {/* cfg.reportLayout (ถ้ามี): หัวตาราง 2 แถว มีหัวข้อกลุ่มคร่อมคอลัมน์ย่อย ตามแบบฟอร์มตัวอย่าง (เช่น "รับ" คร่อม "จำนวน(เล่ม)"/"เล่มที่/เลขที่") */}
+            {layout ? (
+              <>
+                <tr>
+                  {layout.map((entry) =>
+                    entry.group ? (
+                      <th key={entry.group} colSpan={entry.keys.length} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: `#${entry.color}` }}>{entry.group}</th>
+                    ) : (
+                      <th key={entry.key} rowSpan={2} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{labelOf(entry.key)}</th>
+                    ),
+                  )}
+                </tr>
+                <tr>
+                  {layout.filter((entry) => entry.group).flatMap((entry) =>
+                    entry.keys.map((k) => (
+                      <th key={k} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{labelOf(k)}</th>
+                    )),
+                  )}
+                </tr>
+              </>
+            ) : (
+              <tr>
+                {labels.map((l) => (
+                  <th key={l} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{l}</th>
+                ))}
+              </tr>
+            )}
           </thead>
           <tbody>
             {rows.length === 0 ? (

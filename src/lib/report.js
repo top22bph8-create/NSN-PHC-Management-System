@@ -12,10 +12,14 @@ export function cellText(cfg, key, row) {
 }
 
 // สร้างและดาวน์โหลดรายงาน Excel รูปแบบทะเบียนราชการ (แถบชื่อเรื่องสี + หัวตารางสี + เส้นขอบ)
+// cfg.reportLayout (ถ้ามี): หัวตาราง 2 ชั้นแบบมีหัวข้อกลุ่มคร่อมคอลัมน์ย่อย เช่น "รับ" คร่อม "จำนวน(เล่ม)"/"เล่มที่" ตามแบบฟอร์มตัวอย่าง
+// แต่ละสมาชิกของ reportLayout เป็น {key} (คอลัมน์เดี่ยว คร่อม 2 แถวหัวตาราง) หรือ {group, color, keys} (หัวข้อกลุ่ม คร่อมคอลัมน์ย่อยตาม keys)
 export async function exportRegistryExcel(cfg, rows, fy) {
-  const cols = cfg.reportColumns || cfg.fields.filter((f) => f.list).map((f) => f.key);
+  const layout = cfg.reportLayout;
+  const cols = layout ? layout.flatMap((e) => e.keys || [e.key]) : (cfg.reportColumns || cfg.fields.filter((f) => f.list).map((f) => f.key));
   const labels = cols.map((k) => cfg.fields.find((f) => f.key === k)?.label || k);
   const color = cfg.reportColor || '4FA8E0';
+  const borderAll = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(cfg.noun.slice(0, 31), { pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 } });
@@ -36,13 +40,49 @@ export async function exportRegistryExcel(cfg, rows, fy) {
   subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${color}` } };
   ws.getRow(2).height = 18;
 
-  const headerRow = ws.addRow(labels);
-  headerRow.eachCell((c) => {
-    c.font = { bold: true };
-    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4FC' } };
-    c.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-  });
+  if (layout) {
+    let colIdx = 1;
+    layout.forEach((entry) => {
+      if (entry.group) {
+        const span = entry.keys.length;
+        ws.mergeCells(3, colIdx, 3, colIdx + span - 1);
+        const gc = ws.getCell(3, colIdx);
+        gc.value = entry.group;
+        gc.font = { bold: true };
+        gc.alignment = { horizontal: 'center', vertical: 'middle' };
+        gc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${entry.color || 'E8F4FC'}` } };
+        gc.border = borderAll;
+        entry.keys.forEach((k, j) => {
+          const c = ws.getCell(4, colIdx + j);
+          c.value = cfg.fields.find((f) => f.key === k)?.label || k;
+          c.font = { bold: true };
+          c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4FC' } };
+          c.border = borderAll;
+        });
+        colIdx += span;
+      } else {
+        ws.mergeCells(3, colIdx, 4, colIdx);
+        const c = ws.getCell(3, colIdx);
+        c.value = cfg.fields.find((f) => f.key === entry.key)?.label || entry.key;
+        c.font = { bold: true };
+        c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4FC' } };
+        c.border = borderAll;
+        colIdx += 1;
+      }
+    });
+    ws.getRow(3).height = 20;
+    ws.getRow(4).height = 20;
+  } else {
+    const headerRow = ws.addRow(labels);
+    headerRow.eachCell((c) => {
+      c.font = { bold: true };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4FC' } };
+      c.border = borderAll;
+    });
+  }
 
   rows.forEach((r) => {
     const row = ws.addRow(cols.map((k) => cellText(cfg, k, r)));

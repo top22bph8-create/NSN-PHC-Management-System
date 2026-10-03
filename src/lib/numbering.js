@@ -12,18 +12,22 @@ export const formatNumber = (n, digits, year, prefix = '') =>
   `${prefix}${String(n).padStart(digits, '0')}/${year}`;
 
 // สร้างเอกสารพร้อมเลขทะเบียนอัตโนมัติ (นับต่อเนื่องภายในปี ขึ้นปีใหม่เริ่ม 001 ใหม่ ข้อมูลปีเก่ายังอยู่)
-export async function createNumbered({ collectionName, numberField, dateStr, data }) {
+// prefixOverride/digitsOverride: ให้ทะเบียนบางรายการกำหนดรูปแบบเลขที่ตายตัวเฉพาะของตัวเอง
+// (เช่น ทะเบียนสัญญาเงินยืมใช้คำนำหน้า "B" + เลข 2 หลัก ("B01/2569"), ทะเบียนเกียรติบัตรใช้เลขไม่เติมศูนย์ ("1/2569"))
+// โดยไม่ขึ้นกับค่าตั้งค่ากลางของระบบ (settings/numbering) ที่ใช้ร่วมกับทะเบียนอื่นๆ ส่วนใหญ่
+export async function createNumbered({ collectionName, numberField, dateStr, data, prefixOverride, digitsOverride }) {
   const cfg = await getNumbering();
   const y = Number(dateStr.slice(0, 4));
   const year = cfg.era === 'CE' ? y : y + 543;
-  const prefix = cfg.prefixes?.[collectionName] || '';
+  const prefix = prefixOverride ?? (cfg.prefixes?.[collectionName] || '');
+  const digits = digitsOverride ?? cfg.digits;
   const counterRef = doc(db, 'counters', `${collectionName}_${year}`);
   const newRef = doc(collection(db, collectionName));
   let number = '';
   await runTransaction(db, async (tx) => {
     const c = await tx.get(counterRef);
     const next = (c.exists() ? c.data().last : 0) + 1;
-    number = formatNumber(next, cfg.digits, year, prefix);
+    number = formatNumber(next, digits, year, prefix);
     tx.set(counterRef, { last: next, updatedAt: serverTimestamp() });
     tx.set(newRef, {
       ...data,
