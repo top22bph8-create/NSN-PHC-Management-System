@@ -18,14 +18,14 @@ service firebase.storage {
 
     match /docs/{module}/{id}/{file} {
       allow read: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit',
-                  'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-loan-repay', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate'];
+                  'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate'];
       allow create, update: if isActive()
                   && (
                     (module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit']
                       && role() in ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'])
                     || (module in ['reg-orders', 'reg-announce', 'reg-certificate']
                       && role() in ['super_admin', 'admin_clerk', 'director'])
-                    || (module in ['reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-loan-repay', 'reg-cheque', 'reg-receipt', 'reg-deeka']
+                    || (module in ['reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka']
                       && role() in ['super_admin', 'finance', 'director'])
                   )
                   && request.resource.size < 20 * 1024 * 1024;
@@ -35,7 +35,7 @@ service firebase.storage {
                       && role() in ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'])
                     || (module in ['reg-orders', 'reg-announce', 'reg-certificate']
                       && role() in ['super_admin', 'admin_clerk', 'director'])
-                    || (module in ['reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-loan-repay', 'reg-cheque', 'reg-receipt', 'reg-deeka']
+                    || (module in ['reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka']
                       && role() in ['super_admin', 'finance', 'director'])
                   );
     }

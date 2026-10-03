@@ -36,7 +36,6 @@ export const ACCESS = {
   'reg-procurement': { read: ALL, write: ['super_admin', 'finance', 'director'] },
   'reg-contract-no': { read: ALL, write: ['super_admin', 'finance', 'director'] },
   'reg-loan': { read: ALL, write: ['super_admin', 'finance', 'director'] },
-  'reg-loan-repay': { read: ALL, write: ['super_admin', 'finance', 'director'] },
   'reg-cheque': { read: ALL, write: ['super_admin', 'finance', 'director'] },
   'reg-receipt': { read: ALL, write: ['super_admin', 'finance', 'director'] },
   'reg-deeka': { read: ALL, write: ['super_admin', 'finance', 'director'] },

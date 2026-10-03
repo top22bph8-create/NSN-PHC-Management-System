@@ -2,9 +2,24 @@ import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Building2,
   Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, BarChart3, CalendarClock,
-  BookOpenCheck, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Undo2, Award,
+  Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
+  Award,
 } from 'lucide-react';
+
+// รายการทะเบียนในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — ย้ายมาแสดงเป็นลิงก์ตรงในกลุ่ม "ทะเบียนหลัก" ของเมนูซ้ายแล้วตามคำขอ
+// (กดแล้วเข้าทะเบียนนั้นได้ทันที ไม่ต้องผ่านหน้ารวมอีกต่อไป) ยังใช้ array นี้สำหรับหน้ารวมไอคอน/การ์ด (RegistriesHub.jsx) ที่กดเข้าได้จากแดชบอร์ดเช่นเดิม
+// เรียงฎีกาเบิกจ่ายไว้อันดับแรกตามคำขอ และตัด "ทะเบียนคืนเงินยืม" ออกแล้ว (ย้ายไปรวมอยู่ในทะเบียนสัญญายืมเงินแทน)
+export const REGISTRY_LINKS = [
+  { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/reg-deeka', icon: FileStack },
+  { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', path: '/reg-orders', icon: ScrollText },
+  { key: 'reg-announce', label: 'ทะเบียนประกาศ', path: '/reg-announce', icon: Megaphone },
+  { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', path: '/reg-procurement', icon: ShoppingCart },
+  { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', path: '/reg-contract-no', icon: FileSignature },
+  { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', path: '/reg-loan', icon: HandCoins },
+  { key: 'reg-cheque', label: 'ทะเบียนคุมการเบิกจ่ายเล่มเช็ค', path: '/reg-cheque', icon: Landmark },
+  { key: 'reg-receipt', label: 'ทะเบียนคุมใบเสร็จรับเงิน', path: '/reg-receipt', icon: Receipt },
+  { key: 'reg-certificate', label: 'ทะเบียนคุมเลขที่เกียรติบัตร', path: '/reg-certificate', icon: Award },
+];
 
 // ready = พร้อมใช้งานแล้ว, module = ชื่อสิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
 // icon ของหมวดหมู่ใช้แสดงหัวกลุ่มเมนูในแถบเมนูด้านซ้าย
@@ -19,6 +34,7 @@ export const MENU = [
     ],
   },
   {
+    // รวมทะเบียนประกอบฎีกาและทะเบียนควบคุมต่างๆ (REGISTRY_LINKS) ไว้ในกลุ่มเดียวกับทะเบียนหลักตามคำขอ — กดแล้วเข้าทะเบียนนั้นได้ทันที
     title: 'ทะเบียนหลัก',
     icon: ClipboardList,
     main: true,
@@ -27,17 +43,7 @@ export const MENU = [
       { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', emoji: '📤', path: '/outgoing', icon: Send, ready: true, module: 'outgoing' },
       { key: 'leave', label: 'ทะเบียนควบคุมวันลา', emoji: '🗓️', path: '/leave', icon: CalendarDays, ready: true, module: 'leave' },
       { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', path: '/vehicle', icon: Car, ready: true, module: 'vehicle' },
-    ],
-  },
-  {
-    // กลุ่มใหม่ตามคำขอ: รวมทะเบียนประกอบฎีกาและทะเบียนควบคุมต่างๆ ของงานธุรการ/การเงินไว้ในที่เดียว
-    // ย่อเหลือ "ลิงก์เดียว" ในเมนูซ้าย (ไม่กางหัวข้อย่อยทั้ง 8 รายการในเมนูให้รกไปหมด) แล้วกดเข้าไปดูเป็นหน้ารวม
-    // แบบการ์ดไอคอนกลางหน้าแทน (ดู src/pages/RegistriesHub.jsx + REGISTRY_LINKS ด้านล่าง)
-    title: 'ทะเบียนประกอบฎีกาและทะเบียนต่างๆ',
-    icon: BookOpenCheck,
-    main: true,
-    items: [
-      { key: 'registries', label: 'ดูทะเบียนทั้งหมด', path: '/registries', icon: BookOpenCheck, ready: true },
+      ...REGISTRY_LINKS.map((r) => ({ key: r.key, label: r.label, path: r.path, icon: r.icon, ready: true, module: r.key })),
     ],
   },
   {
@@ -90,21 +96,6 @@ export const MENU = [
       { key: 'personnel-users', label: 'กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก', emoji: '🔑', path: '/personnel', icon: Users, ready: true, module: 'personnel' },
     ],
   },
-];
-
-// รายการทะเบียนในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — แสดงเป็นการ์ดไอคอนกลางหน้าในหน้ารวม (src/pages/RegistriesHub.jsx)
-// ตัดเหลือ 8 รายการ (ตัด "ทะเบียนคุมเลขที่คำสั่ง" ออกแล้ว เพราะเป็นทะเบียนเดียวกับ "ทะเบียนคำสั่ง")
-export const REGISTRY_LINKS = [
-  { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', path: '/reg-orders', icon: ScrollText },
-  { key: 'reg-announce', label: 'ทะเบียนประกาศ', path: '/reg-announce', icon: Megaphone },
-  { key: 'reg-procurement', label: 'ทะเบียนคุมการสั่งซื้อสั่งจ้าง', path: '/reg-procurement', icon: ShoppingCart },
-  { key: 'reg-contract-no', label: 'ทะเบียนคุมเลขหนังสือสัญญา', path: '/reg-contract-no', icon: FileSignature },
-  { key: 'reg-loan', label: 'ทะเบียนคุมสัญญายืมเงิน', path: '/reg-loan', icon: HandCoins },
-  { key: 'reg-loan-repay', label: 'ทะเบียนคืนเงินยืม', path: '/reg-loan-repay', icon: Undo2 },
-  { key: 'reg-cheque', label: 'ทะเบียนคุมการจ่ายเบิกจ่ายเล่มเช็ค', path: '/reg-cheque', icon: Landmark },
-  { key: 'reg-receipt', label: 'ทะเบียนคุมใบเสร็จรับเงิน', path: '/reg-receipt', icon: Receipt },
-  { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/reg-deeka', icon: FileStack },
-  { key: 'reg-certificate', label: 'ทะเบียนคุมเลขที่เกียรติบัตร', path: '/reg-certificate', icon: Award },
 ];
 
 // รายละเอียดโมดูลที่กำลังพัฒนา (แสดงในหน้า "เร็วๆ นี้")

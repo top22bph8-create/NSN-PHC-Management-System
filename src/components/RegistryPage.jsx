@@ -65,6 +65,17 @@ export default function RegistryPage({ cfg }) {
   const [genInsertMode, setGenInsertMode] = useState(false);
   const [genInsertBase, setGenInsertBase] = useState('');
   const [genInsertPreview, setGenInsertPreview] = useState(null);
+  // ทะเบียนสัญญาเงินยืม: การคืนเงินยืมบันทึกผ่านปุ่มท้ายแถว/ในหน้ารายละเอียด ไม่ใช่ทะเบียนแยกอีกต่อไป (เดิมคือ reg-loan-repay)
+  const isLoan = cfg.key === 'reg-loan';
+  const [repayItem, setRepayItem] = useState(null); // รายการสัญญายืมเงินที่กำลังจะบันทึกการคืนเงิน
+  const [repayForm, setRepayForm] = useState({ date: todayStr(), dikaList: [''] });
+  const [repaySaving, setRepaySaving] = useState(false);
+  // ทะเบียนคุมคลัง (เล่มเช็ค/เล่มใบเสร็จ) — เพิ่มเข้าคลัง/เบิกออกจากคลังผ่านป๊อปอัพเฉพาะ คำนวณยอดคงเหลือให้อัตโนมัติ
+  const SL = cfg.stockLedger;
+  const isStockLedger = !!SL;
+  const [stockModal, setStockModal] = useState(null); // null | 'in' | 'out'
+  const [slForm, setSlForm] = useState({});
+  const [slSaving, setSlSaving] = useState(false);
 
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 3500); };
 
@@ -177,6 +188,15 @@ export default function RegistryPage({ cfg }) {
     [items, canInsertNumber, cfg],
   );
 
+  // ยอดคงเหลือในคลังปัจจุบัน (เฉพาะทะเบียนคุมคลัง) — รับเข้า 1 รายการ = 1 เล่มเสมอ, เบิกออกหักตามจำนวนที่กรอก
+  const stockBalance = useMemo(() => {
+    if (!isStockLedger || !items) return 0;
+    return items.reduce((b, it) => (it[cfg.statusField] === SL.inValue ? b + 1 : it[cfg.statusField] === SL.outValue ? b - Number(it[SL.qtyKey] || 0) : b), 0);
+  }, [items, isStockLedger, SL, cfg]);
+
+  // เงื่อนไขแสดงฟิลด์แบบมีตัวเลือก (showIf) เช่น ทะเบียนหนังสือสัญญา: เลือกบุคลากรแทนช่องพิมพ์ชื่อเองเมื่อเป็น "ลูกจ้างชั่วคราว"
+  const fieldVisible = (f, values) => !f.showIf || f.showIf(values);
+
   const openCreate = () => {
     setErrors({}); setInsertMode(false); setInsertBase(''); setGenInsertMode(false); setGenInsertBase(''); setJustCreated(null); setOtherOpen({}); setOtherActive({});
     setForm({ values: emptyForm(cfg) });
@@ -193,7 +213,11 @@ export default function RegistryPage({ cfg }) {
 
   const validate = (values) => {
     const e = {};
-    cfg.fields.forEach((f) => { if (!f.auto && f.required && !String(values[f.key] || '').trim()) e[f.key] = `กรุณากรอก${f.label}`; });
+    cfg.fields.forEach((f) => {
+      if (f.auto) return;
+      if (!fieldVisible(f, values)) return; // ฟิลด์ที่ซ่อนอยู่ (showIf ไม่ตรงเงื่อนไข) ไม่ต้องตรวจ required
+      if (f.required && !String(values[f.key] || '').trim()) e[f.key] = `กรุณากรอก${f.label}`;
+    });
     return e;
   };
 
@@ -204,6 +228,10 @@ export default function RegistryPage({ cfg }) {
     if (isIncoming && !form.id) {
       values.receiveDate = todayStr();
       values.receiveTime = nowTimeStr();
+    }
+    // ทะเบียนสัญญายืมเงิน: สถานะเริ่มต้นเสมอว่า "ค้างจ่าย" ตอนสร้างใหม่ (แก้ไขผ่านปุ่มคืนเงินยืมเท่านั้น ไม่ใช่ฟอร์มแก้ไขทั่วไป)
+    if (isLoan && !form.id) {
+      values.repaid = 'สัญญาค้างจ่ายเงินยืม';
     }
     const e = validate(values);
     setErrors(e);
@@ -277,6 +305,88 @@ export default function RegistryPage({ cfg }) {
     }
   };
 
+  // ===== ทะเบียนสัญญายืมเงิน: บันทึกการคืนเงินยืม (แทนทะเบียนคืนเงินยืมแยกเดิม) =====
+  const openRepay = (it) => { setRepayForm({ date: todayStr(), dikaList: [''] }); setRepayItem(it); };
+  const submitRepay = async () => {
+    if (!repayForm.date) { say({ type: 'error', text: 'กรุณาเลือกวันที่ส่งใช้เงินยืม' }); return; }
+    const dikaList = repayForm.dikaList.map((d) => d.trim()).filter(Boolean);
+    setRepaySaving(true);
+    try {
+      const after = { repaid: 'ส่งใช้เงินยืมเรียบร้อย', repayDate: repayForm.date, repayDika: dikaList.join(', ') };
+      await updateDoc(doc(db, cfg.key, repayItem.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: repayItem.id, label: repayItem[cfg.numberField], after });
+      say({ type: 'ok', text: 'บันทึกการคืนเงินยืมแล้ว' });
+      setRepayItem(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setRepaySaving(false);
+    }
+  };
+
+  // ===== ทะเบียนคุมคลัง (เล่มเช็ค/เล่มใบเสร็จ): เพิ่มเข้าคลัง / เบิกออกจากคลัง ผ่านป๊อปอัพเฉพาะ =====
+  const openStockIn = () => { setSlForm({ date: todayStr(), source: '', numFrom: '', numTo: '' }); setStockModal('in'); };
+  const openStockOut = () => { setSlForm({ date: todayStr(), qty: '', numFrom: '', numTo: '', requester: SL.defaultRequester || '', requesterPosition: SL.defaultRequesterPosition || '' }); setStockModal('out'); };
+
+  const submitStockIn = async () => {
+    if (!slForm.source || !String(slForm.numFrom).trim() || !String(slForm.numTo).trim()) { say({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบ' }); return; }
+    setSlSaving(true);
+    try {
+      const values = {
+        [cfg.dateField]: slForm.date,
+        [cfg.statusField]: SL.inValue,
+        [SL.sourceKey]: slForm.source,
+        [SL.numFromKey]: slForm.numFrom.trim(),
+        [SL.numToKey]: slForm.numTo.trim(),
+        [SL.qtyKey]: '1',
+        ...(SL.fixedAccountNoKey ? { [SL.fixedAccountNoKey]: SL.fixedAccountNo } : {}),
+        ...(SL.fixedAccountNameKey ? { [SL.fixedAccountNameKey]: SL.fixedAccountName } : {}),
+        balanceAfter: String(stockBalance + 1),
+        note: '',
+      };
+      const fyVal = fiscalYearBE(values[cfg.dateField]);
+      const { id, number } = await createNumbered({ collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField], data: { ...values, fy: fyVal, attachments: [] } });
+      await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
+      say({ type: 'ok', text: `บันทึกรับเล่มเข้าคลังแล้ว (คงเหลือ ${stockBalance + 1} ${SL.unitLabel})` });
+      setSlForm({ ...slForm, numFrom: '', numTo: '' });
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setSlSaving(false);
+    }
+  };
+
+  const submitStockOut = async () => {
+    const qty = Number(slForm.qty || 0);
+    if (!qty || !String(slForm.numFrom).trim() || !String(slForm.numTo).trim() || !String(slForm.requester || '').trim()) { say({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบ' }); return; }
+    setSlSaving(true);
+    try {
+      const newBalance = stockBalance - qty;
+      const values = {
+        [cfg.dateField]: slForm.date,
+        [cfg.statusField]: SL.outValue,
+        [SL.qtyKey]: String(qty),
+        [SL.numFromKey]: slForm.numFrom.trim(),
+        [SL.numToKey]: slForm.numTo.trim(),
+        [SL.requesterKey]: slForm.requester.trim(),
+        [SL.requesterPositionKey]: (slForm.requesterPosition || '').trim(),
+        ...(SL.fixedAccountNoKey ? { [SL.fixedAccountNoKey]: SL.fixedAccountNo } : {}),
+        ...(SL.fixedAccountNameKey ? { [SL.fixedAccountNameKey]: SL.fixedAccountName } : {}),
+        balanceAfter: String(newBalance),
+        note: '',
+      };
+      const fyVal = fiscalYearBE(values[cfg.dateField]);
+      const { id, number } = await createNumbered({ collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField], data: { ...values, fy: fyVal, attachments: [] } });
+      await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
+      say({ type: 'ok', text: `บันทึกเบิกออกจากคลังแล้ว (คงเหลือ ${newBalance} ${SL.unitLabel})` });
+      setSlForm({ ...slForm, numFrom: '', numTo: '', qty: '' });
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setSlSaving(false);
+    }
+  };
+
   const exportRows = () =>
     filtered.map((it) => {
       const r = {};
@@ -328,10 +438,23 @@ export default function RegistryPage({ cfg }) {
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={() => doExport('csv')}><Download className="h-4 w-4" /> CSV</button>
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doReportExcel} disabled={reporting} title="ออกรายงาน Excel รูปแบบทะเบียนราชการ">{reporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Excel</button>
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={openReportPdf} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> PDF</button>
-            {writable && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
+            {writable && isStockLedger && (
+              <>
+                <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockIn}><Plus className="h-4 w-4" /> เพิ่มเล่มเข้าคลัง</button>
+                <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockOut}><Plus className="h-4 w-4" /> เบิกออกจากคลัง</button>
+              </>
+            )}
+            {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
           </div>
         }
       />
+
+      {isStockLedger && items && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-brand-50 px-4 py-2.5 text-brand-900">
+          <span className="font-semibold">คงเหลือในคลังขณะนี้:</span>
+          <span className="text-xl font-bold">{stockBalance}</span> {SL.unitLabel}
+        </div>
+      )}
 
       <div className="card mb-4 grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative sm:col-span-2">
@@ -361,7 +484,11 @@ export default function RegistryPage({ cfg }) {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left">
                 <thead className="bg-slate-100 text-sm text-slate-600">
-                  <tr>{listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}<th className="px-3 py-2 text-center font-semibold">ไฟล์</th></tr>
+                  <tr>
+                    {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
+                    {isLoan && <th className="px-3 py-2 text-center font-semibold">การคืนเงินยืม</th>}
+                    <th className="px-3 py-2 text-center font-semibold">ไฟล์</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {filtered.map((it) => (
@@ -373,6 +500,15 @@ export default function RegistryPage({ cfg }) {
                             : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key])}</span>}
                         </td>
                       ))}
+                      {isLoan && (
+                        <td className="px-3 py-2 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                          {it.repaid === 'ส่งใช้เงินยืมเรียบร้อย' ? (
+                            <span className="text-xs text-emerald-700">คืนแล้ว {fmtDate(it.repayDate)}</span>
+                          ) : writable ? (
+                            <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openRepay(it)}><Plus className="h-3.5 w-3.5" /> คืนเงินยืม</button>
+                          ) : <span className="text-xs text-red-600">ค้างจ่าย</span>}
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-center text-slate-500">{(it.attachments || []).length || '-'}</td>
                     </tr>
                   ))}
@@ -500,7 +636,7 @@ export default function RegistryPage({ cfg }) {
                 {errors.sendNo && <p className="mt-1 text-sm text-red-600">{errors.sendNo}</p>}
               </div>
             )}
-            {cfg.fields.filter((f) => !f.auto).map((f) => (
+            {cfg.fields.filter((f) => !f.auto && fieldVisible(f, form.values)).map((f) => (
               <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
                 <label htmlFor={`f-${f.key}`} className="mb-1 block text-sm font-medium text-slate-600">{f.label}{f.required && <span className="text-red-600"> *</span>}</label>
                 {f.type === 'textarea' ? (
@@ -580,12 +716,15 @@ export default function RegistryPage({ cfg }) {
           footer={writable && (
             <>
               <button className="btn btn-outline text-red-600" onClick={() => setToDelete(viewItem)}><Trash2 className="h-4 w-4" /> ลบ</button>
+              {isLoan && viewItem.repaid !== 'ส่งใช้เงินยืมเรียบร้อย' && (
+                <button className="btn btn-outline text-red-700" onClick={() => openRepay(viewItem)}><Plus className="h-4 w-4" /> คืนเงินยืม</button>
+              )}
               <button className="btn btn-primary" onClick={() => openEdit(viewItem)}><Pencil className="h-4 w-4" /> แก้ไข</button>
             </>
           )}
         >
           <dl className="mb-5 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-            {cfg.fields.map((f) => (
+            {cfg.fields.filter((f) => fieldVisible(f, viewItem)).map((f) => (
               <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
                 <dt className="text-sm text-slate-500">{f.label}</dt>
                 <dd className="whitespace-pre-wrap font-medium">
@@ -595,6 +734,127 @@ export default function RegistryPage({ cfg }) {
             ))}
           </dl>
           <FileAttach cfg={cfg} id={viewItem.id} label={viewItem[cfg.numberField]} attachments={viewItem.attachments || []} canEdit={writable} onMessage={say} />
+        </Modal>
+      )}
+
+      {/* ทะเบียนสัญญายืมเงิน: ป๊อปอัพบันทึกการคืนเงินยืม */}
+      {repayItem && (
+        <Modal
+          title={`บันทึกการคืนเงินยืม — ${repayItem.loanNo}`}
+          onClose={() => !repaySaving && setRepayItem(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={repaySaving} onClick={() => setRepayItem(null)}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={repaySaving} onClick={submitRepay}>{repaySaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">วันที่ส่งใช้เงินยืม</label>
+              <ThaiDateInput value={repayForm.date} onChange={(v) => setRepayForm({ ...repayForm, date: v })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">เลขฎีกาส่งใช้เงินยืม</label>
+              {repayForm.dikaList.map((d, i) => (
+                <div key={i} className="mb-2 flex gap-2">
+                  <input className="input" placeholder="เลขฎีกา" value={d} onChange={(e) => {
+                    const list = [...repayForm.dikaList]; list[i] = e.target.value; setRepayForm({ ...repayForm, dikaList: list });
+                  }} />
+                  {repayForm.dikaList.length > 1 && (
+                    <button type="button" className="btn btn-outline !px-2" onClick={() => setRepayForm({ ...repayForm, dikaList: repayForm.dikaList.filter((_, j) => j !== i) })}>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="btn btn-outline !py-1.5 text-sm" onClick={() => setRepayForm({ ...repayForm, dikaList: [...repayForm.dikaList, ''] })}>
+                <Plus className="h-4 w-4" /> เพิ่มเลขฎีกา (ถ้ามีมากกว่า 1 ฎีกา)
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนคุมคลัง: ป๊อปอัพเพิ่มเล่มเข้าคลัง */}
+      {stockModal === 'in' && (
+        <Modal
+          title="เพิ่มเล่มเข้าคลัง"
+          onClose={() => !slSaving && setStockModal(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={slSaving} onClick={() => setStockModal(null)}>ปิด</button>
+              <button className="btn btn-green" disabled={slSaving} onClick={submitStockIn}>{slSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">วันที่</label>
+              <ThaiDateInput value={slForm.date} onChange={(v) => setSlForm({ ...slForm, date: v })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">ที่มา</label>
+              <select className="input" value={slForm.source} onChange={(e) => setSlForm({ ...slForm, source: e.target.value })}>
+                <option value="">-- เลือก --</option>
+                {SL?.sourceOptions.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">{SL?.numFromLabel}</label>
+                <input className="input" value={slForm.numFrom || ''} onChange={(e) => setSlForm({ ...slForm, numFrom: e.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">{SL?.numToLabel}</label>
+                <input className="input" value={slForm.numTo || ''} onChange={(e) => setSlForm({ ...slForm, numTo: e.target.value })} />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">การบันทึกครั้งนี้นับเป็น 1 {SL?.unitLabel} หากมีมากกว่า 1 {SL?.unitLabel} ให้กดบันทึกแล้วกรอกเล่มถัดไปเพิ่มได้เรื่อยๆ</p>
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนคุมคลัง: ป๊อปอัพเบิกออกจากคลัง */}
+      {stockModal === 'out' && (
+        <Modal
+          title="เบิกออกจากคลัง"
+          onClose={() => !slSaving && setStockModal(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={slSaving} onClick={() => setStockModal(null)}>ปิด</button>
+              <button className="btn btn-green" disabled={slSaving} onClick={submitStockOut}>{slSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">วันที่เบิก</label>
+              <ThaiDateInput value={slForm.date} onChange={(v) => setSlForm({ ...slForm, date: v })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">จำนวนเล่มที่ขอเบิก</label>
+              <input className="input" type="text" value={slForm.qty || ''} onChange={(e) => setSlForm({ ...slForm, qty: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">{SL?.numFromLabel}</label>
+                <input className="input" value={slForm.numFrom || ''} onChange={(e) => setSlForm({ ...slForm, numFrom: e.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">{SL?.numToLabel}</label>
+                <input className="input" value={slForm.numTo || ''} onChange={(e) => setSlForm({ ...slForm, numTo: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">ผู้เบิก</label>
+              <input className="input" value={slForm.requester || ''} onChange={(e) => setSlForm({ ...slForm, requester: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">ตำแหน่งผู้เบิก</label>
+              <input className="input" value={slForm.requesterPosition || ''} onChange={(e) => setSlForm({ ...slForm, requesterPosition: e.target.value })} />
+            </div>
+          </div>
         </Modal>
       )}
 
