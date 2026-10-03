@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Building2,
   Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
-  ClipboardList, MapPinned, BarChart3, CalendarClock,
+  ClipboardList, MapPinned, CalendarClock,
   Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
   Award,
 } from 'lucide-react';
@@ -54,7 +54,7 @@ export const MENU = [
       { key: 'duty', label: 'แผนเวรนอกเวลาประจำเดือน', emoji: '🌙', path: '/duty', icon: ClipboardList, ready: true, module: 'duty' },
       { key: 'homevisit', label: 'แผน/รายงานเยี่ยมบ้านเชิงรุกประจำเดือน', emoji: '🏠', path: '/homevisit', icon: MapPinned, ready: true, module: 'homevisit' },
       { key: 'assignments', label: 'ปฏิทินมอบหมายงาน', emoji: '🗂️', path: '/assignments', icon: CalendarClock, ready: true, module: 'assignments' },
-      { key: 'leave-reports', label: 'รายงาน/สถิติการลา', emoji: '📊', path: '/leave-reports', icon: BarChart3, ready: true, module: 'leave' },
+      // "รายงาน/สถิติการลา" ย้ายไปเป็นแท็บในหน้า "ทะเบียนควบคุมวันลา" (เมนูทะเบียนหลัก) แล้วตามคำขอ ไม่ต้องมีเมนูแยกอีก
     ],
   },
   {

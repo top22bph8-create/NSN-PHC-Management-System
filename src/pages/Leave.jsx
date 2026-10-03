@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, Printer, Trash2, User, Users, X, XCircle } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, Printer, Trash2, User, X, XCircle } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
@@ -12,8 +12,21 @@ import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import ThaiDateInput from '../components/ThaiDateInput';
+import LeaveReportsPanel from '../components/LeaveReportsPanel';
 
-// การ์ดโควตา/สถิติการลาของบุคคลใดบุคคลหนึ่ง (ใช้ทั้งของตัวเองด้านบน และในแดชบอร์ดรายบุคคล)
+// โทนสีพาสเทลอ่อนๆ ไล่ให้แต่ละคนในรายชื่อบุคลากร (ตามลำดับการ์ด) เพื่อความสวยงาม แยกแยะง่าย — วนซ้ำเมื่อคนเกินจำนวนสี
+const PERSON_PALETTE = [
+  { bg: 'bg-rose-50 ring-rose-100 hover:bg-rose-100/60', avatar: 'bg-rose-100 text-rose-700', name: 'text-rose-900' },
+  { bg: 'bg-amber-50 ring-amber-100 hover:bg-amber-100/60', avatar: 'bg-amber-100 text-amber-700', name: 'text-amber-900' },
+  { bg: 'bg-emerald-50 ring-emerald-100 hover:bg-emerald-100/60', avatar: 'bg-emerald-100 text-emerald-700', name: 'text-emerald-900' },
+  { bg: 'bg-sky-50 ring-sky-100 hover:bg-sky-100/60', avatar: 'bg-sky-100 text-sky-700', name: 'text-sky-900' },
+  { bg: 'bg-violet-50 ring-violet-100 hover:bg-violet-100/60', avatar: 'bg-violet-100 text-violet-700', name: 'text-violet-900' },
+  { bg: 'bg-fuchsia-50 ring-fuchsia-100 hover:bg-fuchsia-100/60', avatar: 'bg-fuchsia-100 text-fuchsia-700', name: 'text-fuchsia-900' },
+  { bg: 'bg-cyan-50 ring-cyan-100 hover:bg-cyan-100/60', avatar: 'bg-cyan-100 text-cyan-700', name: 'text-cyan-900' },
+  { bg: 'bg-lime-50 ring-lime-100 hover:bg-lime-100/60', avatar: 'bg-lime-100 text-lime-700', name: 'text-lime-900' },
+];
+
+// การ์ดโควตา/สถิติการลาของบุคคลใดบุคคลหนึ่ง (ใช้ในแดชบอร์ดรายบุคคล)
 function QuotaGrid({ quota, used, pending }) {
   if (!quota) return null;
   return (
@@ -44,10 +57,10 @@ function MiniQuota({ quota, used }) {
         const left = Math.max(0, q - u);
         const pct = q ? Math.min(100, (u / q) * 100) : 0;
         return (
-          <div key={type} className="rounded-lg bg-slate-50 px-2 py-1.5">
+          <div key={type} className="rounded-lg bg-white/70 px-2 py-1.5">
             <div className="truncate text-[11px] text-slate-500" title={type}>{type}</div>
-            <div className="text-sm font-bold text-brand-800">{left} <span className="text-[11px] font-normal text-slate-400">/{q}</span></div>
-            <div className="mt-0.5 h-1 overflow-hidden rounded bg-brand-100"><div className="h-1 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
+            <div className="text-sm font-bold text-slate-700">{left} <span className="text-[11px] font-normal text-slate-400">/{q}</span></div>
+            <div className="mt-0.5 h-1 overflow-hidden rounded bg-white"><div className="h-1 rounded bg-brand-400" style={{ width: `${pct}%` }} /></div>
           </div>
         );
       })}
@@ -233,6 +246,7 @@ function DecideModal({ leave, decision, onClose, say, by }) {
   );
 }
 
+// แดชบอร์ดรายบุคคล — แสดงเมื่อคลิกเข้าไปในชื่อจากรายชื่อบุคลากร: โควตา/ประวัติการลา + ปุ่มยื่นใบลา (เฉพาะเจ้าของชื่อ หรือผู้มีสิทธิ์ยื่นแทน)
 function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, people, onBack, say }) {
   const [form, setForm] = useState(false);
   const mine = useMemo(() => rows.filter((l) => l.userEmail === person.email), [rows, person.email]);
@@ -275,17 +289,48 @@ function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, pe
   );
 }
 
+// รายชื่อบุคลากรเป็นแถบสีพาสเทล — หน้าแรกของทะเบียนควบคุมวันลา คลิกชื่อใครก็เข้าไปดูประวัติ/ยื่นใบลาของคนนั้นได้ (PersonDashboard ด้านบน)
+function PeopleList({ people, rows, quota, canFileForOthers, profileEmail, onPick, onQuickForm }) {
+  if (people === null) return <Spinner />;
+  if (people.length === 0) return <EmptyState title="ยังไม่มีบุคลากร" />;
+  return (
+    <div className="space-y-3">
+      {people.map((p, i) => {
+        const mineP = rows.filter((l) => l.userEmail === p.email);
+        const { used } = usage(mineP);
+        const canFile = p.email === profileEmail || canFileForOthers;
+        const pal = PERSON_PALETTE[i % PERSON_PALETTE.length];
+        return (
+          <div key={p.email} className={`rounded-2xl p-3 ring-1 transition sm:p-4 ${pal.bg}`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onPick(p)}>
+                <div className={`flex h-11 w-11 flex-none items-center justify-center rounded-full ${pal.avatar}`}><User className="h-5 w-5" /></div>
+                <div className="min-w-0">
+                  <div className={`truncate text-base font-bold ${pal.name}`}>{p.name || p.email}</div>
+                  <div className="truncate text-sm text-slate-500">{p.position || '-'}</div>
+                </div>
+              </button>
+              {canFile && <button className="btn btn-primary !py-1.5 shrink-0" onClick={() => onQuickForm(p)}><Plus className="h-4 w-4" /> ยื่นใบลา</button>}
+            </div>
+            <div className="mt-3"><MiniQuota quota={quota} used={used} /></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Leave() {
   const { profile } = useAuth();
   const { fy } = useFiscalYear();
   const viewAll = can(profile.role, 'leave', 'viewAll');
   const canApprove = can(profile.role, 'leave', 'approve');
   const canFileForOthers = ['super_admin', 'admin_clerk'].includes(profile.role);
-  const [tab, setTab] = useState('mine');
+  // หน้าแรก (default) ของทะเบียนคือรายชื่อบุคลากรเลยตามคำขอ — ตัดแท็บ "ใบลาของฉัน" และไม่จำกัดแท็บรายชื่อบุคลากรไว้เฉพาะ Super Admin อีกต่อไป
+  const [tab, setTab] = useState('people');
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [quota, setQuota] = useState(null);
-  const [form, setForm] = useState(false);
   const [decide, setDecide] = useState(null);
   const [toast, setToast] = useState(null);
   const [people, setPeople] = useState(null);
@@ -297,12 +342,13 @@ export default function Leave() {
     setRows(null); setError('');
     const base = [where('fy', '==', fy)];
     if (!viewAll) base.push(where('userEmail', '==', profile.email));
+    // เรียงตามวันที่ลาจากน้อยไปมาก (เก่าสุดก่อน) ให้อ่านเป็นทะเบียนไล่ตามลำดับเวลาตามคำขอ
     return onSnapshot(query(collection(db, 'leaves'), ...base),
-      (s) => setRows(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.start || '').localeCompare(a.start || ''))),
+      (s) => setRows(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.start || '').localeCompare(b.start || ''))),
       (e) => setError(e.message));
   }, [fy, viewAll, profile.email]);
 
-  // รายชื่อบุคลากรทั้งหมด: ใช้ทั้งแท็บ "รายบุคคล" (เฉพาะผู้มีสิทธิ์ดูรายการลาทุกคน) และตัวเลือก "มอบหมายงานให้" ในฟอร์มยื่นใบลา (ทุกคน) เรียงตามลำดับตำแหน่งที่กำหนด
+  // รายชื่อบุคลากรทั้งหมด: ใช้ทั้งหน้ารายชื่อบุคลากร (ทุกคนเห็นได้แล้ว) และตัวเลือก "มอบหมายงานให้" ในฟอร์มยื่นใบลา เรียงตามลำดับตำแหน่งที่กำหนด
   useEffect(() => {
     return onSnapshot(collection(db, 'users'),
       (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending').sort((a, b) => {
@@ -311,118 +357,92 @@ export default function Leave() {
       })),
       () => setPeople([]));
   }, []);
-  const [quickForm, setQuickForm] = useState(null); // ยื่นใบลาแบบเร็วจากท้ายแถวในลิสต์รายบุคคล
+  const [quickForm, setQuickForm] = useState(null); // ยื่นใบลาแบบเร็วจากท้ายแถวในรายชื่อบุคลากร
   const [showCancel, setShowCancel] = useState(false);
   const isSuperAdmin = profile.role === 'super_admin';
 
-  const mine = useMemo(() => (rows || []).filter((l) => l.userEmail === profile.email), [rows, profile.email]);
-  const { used, pending } = useMemo(() => usage(mine), [mine]);
-  const list = tab === 'mine' ? mine : tab === 'wait' ? (rows || []).filter((l) => l.status === 'รอพิจารณา') : rows || [];
+  const list = tab === 'wait' ? (rows || []).filter((l) => l.status === 'รอพิจารณา') : rows || [];
   const waitCount = (rows || []).filter((l) => l.status === 'รอพิจารณา').length;
-
-  const cancel = async (l) => {
-    try {
-      await updateDoc(doc(db, 'leaves', l.id), { status: 'ยกเลิก' });
-      await writeAudit({ action: 'update', module: 'leave', docId: l.id, label: `${l.name} ${l.type}`, before: { status: l.status }, after: { status: 'ยกเลิก' } });
-      say({ type: 'ok', text: 'ยกเลิกใบลาแล้ว' });
-    } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); }
-  };
 
   const exportAll = () => exportXlsx(
     list.map((l) => ({ ชื่อ: l.name, ตำแหน่ง: l.position, ประเภท: l.type, ตั้งแต่: fmtDate(l.start), ถึง: fmtDate(l.end), จำนวนวัน: l.days, เหตุผล: l.reason, สถานะ: l.status, ผู้พิจารณา: l.decidedBy || '', หมายเหตุ: l.decisionNote || '' })),
     'วันลา', `วันลา-ปีงบ${fy}`,
   );
 
-  const tabs = [['mine', 'ใบลาของฉัน'], ...(viewAll ? [['all', 'ทั้งหมด'], ['wait', `รอพิจารณา${waitCount ? ` (${waitCount})` : ''}`], ['people', 'รายบุคคล']] : [])];
+  const goTab = (k) => { setTab(k); setPerson(null); };
 
-  if (tab === 'people' && viewAll) {
-    return (
-      <div className="mx-auto max-w-6xl p-4 lg:p-6">
-        <PageHeader icon={Users} emoji="🗓️" title="วันลารายบุคคล" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`} />
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {tabs.map(([k, l]) => <button key={k} onClick={() => { setTab(k); setPerson(null); }} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
-        </div>
-        {person ? (
-          <PersonDashboard person={person} rows={rows || []} quota={quota} fy={fy} canFileForOthers={canFileForOthers} isSelf={person.email === profile.email} people={people} onBack={() => setPerson(null)} say={say} />
-        ) : people === null ? <Spinner /> : people.length === 0 ? <EmptyState title="ยังไม่มีบุคลากร" /> : (
-          <div className="space-y-3">
-            {people.map((p) => {
-              const mineP = (rows || []).filter((l) => l.userEmail === p.email);
-              const { used } = usage(mineP);
-              const canFile = p.email === profile.email || canFileForOthers;
-              return (
-                <div key={p.email} className="card p-3 sm:p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setPerson(p)}>
-                      <div className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-brand-100 text-brand-700"><User className="h-5 w-5" /></div>
-                      <div className="min-w-0">
-                        <div className="truncate text-base font-bold text-slate-800">{p.name || p.email}</div>
-                        <div className="truncate text-sm text-slate-500">{p.position || '-'}</div>
-                      </div>
-                    </button>
-                    {canFile && <button className="btn btn-primary !py-1.5 shrink-0" onClick={() => setQuickForm(p)}><Plus className="h-4 w-4" /> ยื่นใบลา</button>}
-                  </div>
-                  <div className="mt-3"><MiniQuota quota={quota} used={used} /></div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {quickForm && quota && (
-          <LeaveForm profile={quickForm} quota={quota} mine={(rows || []).filter((l) => l.userEmail === quickForm.email)} pageFy={fy} people={people} onClose={() => setQuickForm(null)} say={say} />
-        )}
-        <Toast toast={toast} onClose={() => setToast(null)} />
-      </div>
-    );
-  }
+  // แท็บ: รายชื่อบุคลากร (หน้าแรก) + ทั้งหมด/รอพิจารณา (เฉพาะผู้มีสิทธิ์ดูรายการลาทุกคน) + รายงาน/สถิติการลา (ย้ายมารวมในทะเบียนนี้ตามคำขอ)
+  const tabs = [
+    ['people', 'รายชื่อบุคลากร'],
+    ...(viewAll ? [['all', 'ทั้งหมด'], ['wait', `รอพิจารณา${waitCount ? ` (${waitCount})` : ''}`]] : []),
+    ['reports', 'รายงาน/สถิติการลา'],
+  ];
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <PageHeader icon={CalendarDays} emoji="🗓️" title="ระบบควบคุมวันลา" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`}
-        actions={<>
-          <button className="btn btn-outline" onClick={() => setShowCancel(true)}><XCircle className="h-5 w-5" /> ยกเลิกวันลา</button>
-          <button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>
-        </>} />
+        actions={<button className="btn btn-outline" onClick={() => setShowCancel(true)}><XCircle className="h-5 w-5" /> ยกเลิกวันลา</button>} />
 
-      <QuotaGrid quota={quota} used={used} pending={pending} />
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
-        {viewAll && <button className="btn btn-outline ml-auto !py-1.5" onClick={exportAll} disabled={!list.length}><Download className="h-4 w-4" /> ส่งออก Excel</button>}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {tabs.map(([k, l]) => <button key={k} onClick={() => goTab(k)} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
+        {tab !== 'people' && tab !== 'reports' && viewAll && <button className="btn btn-outline ml-auto !py-1.5" onClick={exportAll} disabled={!list.length}><Download className="h-4 w-4" /> ส่งออก Excel</button>}
       </div>
 
-      <div className="card overflow-x-auto">
-        {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : list.length === 0 ? <EmptyState title="ไม่มีใบลา" /> : (
-          <table className="w-full min-w-[820px] text-left">
-            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ผู้ลา</th><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">ช่วงวันที่</th><th className="px-3 py-2">วัน</th><th className="px-3 py-2">เหตุผล</th><th className="px-3 py-2">สถานะ</th><th className="px-3 py-2" /></tr></thead>
-            <tbody>
-              {list.map((l) => (
-                <tr key={l.id} className="border-t border-slate-100 align-top">
-                  <td className="px-3 py-2"><div className="font-medium">{l.name}</div><div className="text-xs text-slate-500">{l.position}</div></td>
-                  <td className="px-3 py-2">{l.type}</td>
-                  <td className="px-3 py-2 text-sm">{fmtDate(l.start)} - {fmtDate(l.end)}</td>
-                  <td className="px-3 py-2">{l.days}</td>
-                  <td className="max-w-[220px] px-3 py-2 text-sm text-slate-600">{l.reason}{l.decisionNote && <div className="text-xs text-brand-700">ผู้พิจารณา: {l.decisionNote}</div>}</td>
-                  <td className="px-3 py-2"><Badge className={LEAVE_STATUS_COLORS[l.status]}>{l.status}</Badge></td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    <span className="flex flex-wrap gap-1">
-                      <button className="btn btn-outline !px-2 !py-1 text-sm" title="พิมพ์ใบลา (PDF)" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-leave/${l.id}`, '_blank')}><Printer className="h-4 w-4" /></button>
-                      {l.status === 'รอพิจารณา' && canApprove && (
-                        <>
-                          <button className="btn btn-primary !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'อนุมัติ' })}><Check className="h-4 w-4" /> อนุมัติ</button>
-                          <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'ไม่อนุมัติ' })}><X className="h-4 w-4" /></button>
-                        </>
-                      )}
-                      {l.status === 'รอพิจารณา' && l.userEmail === profile.email && !canApprove && <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => cancel(l)}>ยกเลิก</button>}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-      {form && quota && <LeaveForm profile={profile} quota={quota} mine={mine} pageFy={fy} people={people} onClose={() => setForm(false)} say={say} />}
+      {tab === 'people' && (
+        person ? (
+          <PersonDashboard person={person} rows={rows || []} quota={quota} fy={fy} canFileForOthers={canFileForOthers} isSelf={person.email === profile.email} people={people} onBack={() => setPerson(null)} say={say} />
+        ) : (
+          <PeopleList people={people} rows={rows || []} quota={quota} canFileForOthers={canFileForOthers} profileEmail={profile.email} onPick={setPerson} onQuickForm={setQuickForm} />
+        )
+      )}
+
+      {(tab === 'all' || tab === 'wait') && (
+        <div className="card overflow-x-auto">
+          {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : list.length === 0 ? <EmptyState title="ไม่มีใบลา" /> : (
+            <table className="w-full min-w-[820px] text-left">
+              <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ผู้ลา</th><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">ช่วงวันที่</th><th className="px-3 py-2">วัน</th><th className="px-3 py-2">เหตุผล</th><th className="px-3 py-2">สถานะ</th><th className="px-3 py-2" /></tr></thead>
+              <tbody>
+                {list.map((l) => (
+                  <tr key={l.id} className="border-t border-slate-100 align-top">
+                    <td className="px-3 py-2"><div className="font-medium">{l.name}</div><div className="text-xs text-slate-500">{l.position}</div></td>
+                    <td className="px-3 py-2">{l.type}</td>
+                    <td className="px-3 py-2 text-sm">{fmtDate(l.start)} - {fmtDate(l.end)}</td>
+                    <td className="px-3 py-2">{l.days}</td>
+                    <td className="max-w-[220px] px-3 py-2 text-sm text-slate-600">{l.reason}{l.decisionNote && <div className="text-xs text-brand-700">ผู้พิจารณา: {l.decisionNote}</div>}</td>
+                    <td className="px-3 py-2"><Badge className={LEAVE_STATUS_COLORS[l.status]}>{l.status}</Badge></td>
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <span className="flex flex-wrap gap-1">
+                        <button className="btn btn-outline !px-2 !py-1 text-sm" title="พิมพ์ใบลา (PDF)" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-leave/${l.id}`, '_blank')}><Printer className="h-4 w-4" /></button>
+                        {l.status === 'รอพิจารณา' && canApprove && (
+                          <>
+                            <button className="btn btn-primary !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'อนุมัติ' })}><Check className="h-4 w-4" /> อนุมัติ</button>
+                            <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => setDecide({ l, d: 'ไม่อนุมัติ' })}><X className="h-4 w-4" /></button>
+                          </>
+                        )}
+                        {l.status === 'รอพิจารณา' && l.userEmail === profile.email && !canApprove && (
+                          <button className="btn btn-outline !px-2 !py-1 text-sm" onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, 'leaves', l.id), { status: 'ยกเลิก' });
+                              await writeAudit({ action: 'update', module: 'leave', docId: l.id, label: `${l.name} ${l.type}`, before: { status: l.status }, after: { status: 'ยกเลิก' } });
+                              say({ type: 'ok', text: 'ยกเลิกใบลาแล้ว' });
+                            } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); }
+                          }}>ยกเลิก</button>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'reports' && <LeaveReportsPanel />}
+
+      {quickForm && quota && (
+        <LeaveForm profile={quickForm} quota={quota} mine={(rows || []).filter((l) => l.userEmail === quickForm.email)} pageFy={fy} people={people} onClose={() => setQuickForm(null)} say={say} />
+      )}
       {decide && <DecideModal leave={decide.l} decision={decide.d} by={profile.name || profile.email} onClose={() => setDecide(null)} say={say} />}
       {showCancel && <CancelPickerModal rows={rows || []} profile={profile} isSuperAdmin={isSuperAdmin} onClose={() => setShowCancel(false)} say={say} />}
       <Toast toast={toast} onClose={() => setToast(null)} />

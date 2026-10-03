@@ -17,7 +17,6 @@ import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
 import Personnel from './pages/Personnel';
 import Leave from './pages/Leave';
-import LeaveReports from './pages/LeaveReports';
 import Assignments from './pages/Assignments';
 import RegistriesHub from './pages/RegistriesHub';
 import Backup from './pages/Backup';
@@ -124,7 +123,8 @@ function Shell() {
           ))}
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
           <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />
-          <Route path="leave-reports" element={<Guard module="leave"><LeaveReports /></Guard>} />
+          {/* รายงาน/สถิติการลา ย้ายไปเป็นแท็บในหน้าทะเบียนควบคุมวันลา (Leave.jsx) แล้วตามคำขอ — ลิงก์เก่ายังเปิดได้ เด้งไปหน้าทะเบียนวันลาแทน */}
+          <Route path="leave-reports" element={<Navigate to="/leave" replace />} />
           <Route path="assignments" element={<Guard module="assignments"><Assignments /></Guard>} />
           <Route path="registries" element={<RegistriesHub />} />
           <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
