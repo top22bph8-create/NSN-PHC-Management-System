@@ -30,7 +30,7 @@ const emptyForm = (cfg) => {
 // หน้าทะเบียนแบบกำหนดด้วย config: เพิ่ม แก้ไข ค้นหา ดูรายละเอียด แนบไฟล์ ลบ Export
 export default function RegistryPage({ cfg }) {
   const { profile } = useAuth();
-  const { fy } = useFiscalYear();
+  const { fy, options: fyOptions } = useFiscalYear();
   const writable = canWrite(profile.role, cfg.key);
   const [params, setParams] = useSearchParams();
 
@@ -190,12 +190,14 @@ export default function RegistryPage({ cfg }) {
   );
 
   // ทะเบียนคุมคลังแบบรายเล่ม: แต่ละเล่มคือ 1 เอกสาร แยกเป็นเล่มที่ยังอยู่ในคลัง (คงคลัง) และเล่มที่เบิกใช้ไปแล้ว เรียงตามเลขที่เล่ม
+  // เรียงตามตัวเลขจริงที่อยู่หน้าสุดของเลขที่เล่ม (ไม่ใช่เรียงตามตัวอักษร) เพื่อให้ 1, 2, ... 10 เรียงถูกต้อง แม้เลขที่ไม่เติมศูนย์ข้างหน้า (เช่น "บร.1/2569", "บร.10/2569")
+  const bookSeq = (numStr) => { const m = String(numStr || '').match(/(\d+)/); return m ? Number(m[1]) : 0; };
   const inStockBooks = useMemo(
-    () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.inValue).sort((a, b) => String(a[cfg.numberField]).localeCompare(String(b[cfg.numberField]))) : []),
+    () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.inValue).sort((a, b) => bookSeq(a[cfg.numberField]) - bookSeq(b[cfg.numberField])) : []),
     [items, isStockLedger, SL, cfg],
   );
   const outBooks = useMemo(
-    () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.outValue).sort((a, b) => String(a[cfg.numberField]).localeCompare(String(b[cfg.numberField]))) : []),
+    () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.outValue).sort((a, b) => bookSeq(a[cfg.numberField]) - bookSeq(b[cfg.numberField])) : []),
     [items, isStockLedger, SL, cfg],
   );
 
@@ -361,13 +363,18 @@ export default function RegistryPage({ cfg }) {
   };
 
   // ===== ทะเบียนคุมคลังแบบรายเล่ม (เล่มเช็ค/เล่มใบเสร็จ): เพิ่มเล่มเข้าคลัง → สร้างเอกสารใหม่ 1 เล่ม / เบิกออก → อัปเดตเอกสารเล่มเดิม (คลิกที่เล่มในแดชบอร์ด) =====
-  const openStockIn = () => { setSlForm({ date: todayStr(), source: '', numFrom: SL.defaultNumFrom || '', numTo: SL.defaultNumTo || '' }); setStockModal('in'); };
+  const openStockIn = () => {
+    const extra = {}; (SL.extraInFields || []).forEach((f) => { extra[f.key] = ''; });
+    setSlForm({ date: todayStr(), source: '', numFrom: SL.defaultNumFrom || '', numTo: SL.defaultNumTo || '', fy: String(fy), ...extra });
+    setStockModal('in');
+  };
   const openWithdraw = (it) => { setSlForm({ date: todayStr(), requester: SL.defaultRequester || '', requesterPosition: SL.defaultRequesterPosition || '' }); setWithdrawItem(it); setStockModal('out'); };
 
   const submitStockIn = async () => {
     if (!slForm.source || !String(slForm.numFrom).trim() || !String(slForm.numTo).trim()) { say({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบ' }); return; }
     setSlSaving(true);
     try {
+      const extra = {}; (SL.extraInFields || []).forEach((f) => { extra[f.key] = String(slForm[f.key] || '').trim(); });
       const values = {
         [cfg.dateField]: slForm.date,
         [cfg.statusField]: SL.inValue,
@@ -376,17 +383,21 @@ export default function RegistryPage({ cfg }) {
         [SL.numToKey]: slForm.numTo.trim(),
         ...(SL.fixedAccountNoKey ? { [SL.fixedAccountNoKey]: SL.fixedAccountNo } : {}),
         ...(SL.fixedAccountNameKey ? { [SL.fixedAccountNameKey]: SL.fixedAccountName } : {}),
+        ...extra,
         note: '',
       };
-      const fyVal = fiscalYearBE(values[cfg.dateField]);
+      // ถ้าเลือกปีงบประมาณของเล่มเองได้ (fySelectable) ใช้ปีงบที่เลือกเป็นตัวกำหนดทั้งเลขที่เล่ม (ลำดับ/ปีงบ) และปีงบของรายการ (เพื่อให้เล่มไปโชว์ในทะเบียนของปีงบนั้น) แทนการคำนวณจากวันที่รับเข้าอัตโนมัติ
+      const fyVal = SL.fySelectable ? Number(slForm.fy) : fiscalYearBE(values[cfg.dateField]);
+      const numberingDateStr = SL.fySelectable ? `${fyVal - 543}-01-01` : values[cfg.dateField];
       const { id, number } = await createNumbered({
-        collectionName: cfg.key, numberField: cfg.numberField, dateStr: values[cfg.dateField],
+        collectionName: cfg.key, numberField: cfg.numberField, dateStr: numberingDateStr,
         data: { ...values, fy: fyVal, attachments: [] },
         prefixOverride: cfg.numberPrefix, digitsOverride: cfg.numberDigits,
       });
       await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
-      say({ type: 'ok', text: `บันทึกรับเล่มที่ ${number} เข้าคลังแล้ว` });
-      setSlForm({ date: slForm.date, source: slForm.source, numFrom: SL.defaultNumFrom || '', numTo: SL.defaultNumTo || '' });
+      say({ type: 'ok', text: `บันทึกรับเล่มที่ ${number} เข้าคลังแล้ว` + (fyVal !== fy ? ` (อยู่ในปีงบประมาณ ${fyVal})` : '') });
+      const extraReset = {}; (SL.extraInFields || []).forEach((f) => { extraReset[f.key] = ''; });
+      setSlForm({ ...slForm, numFrom: SL.defaultNumFrom || '', numTo: SL.defaultNumTo || '', ...extraReset });
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
     } finally {
@@ -902,6 +913,15 @@ export default function RegistryPage({ cfg }) {
           }
         >
           <div className="grid gap-4">
+            {SL?.fySelectable && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">ปีงบประมาณของเล่ม</label>
+                <select className="input" value={slForm.fy} onChange={(e) => setSlForm({ ...slForm, fy: e.target.value })}>
+                  {(fyOptions || [fy]).map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">เลขที่เล่มจะออกตามปีงบนี้ (เช่น 1/{slForm.fy}) และเล่มนี้จะอยู่ในทะเบียนของปีงบที่เลือก</p>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">วันที่</label>
               <ThaiDateInput value={slForm.date} onChange={(v) => setSlForm({ ...slForm, date: v })} />
@@ -923,6 +943,12 @@ export default function RegistryPage({ cfg }) {
                 <input className="input" value={slForm.numTo || ''} onChange={(e) => setSlForm({ ...slForm, numTo: e.target.value })} />
               </div>
             </div>
+            {(SL?.extraInFields || []).map((f) => (
+              <div key={f.key}>
+                <label className="mb-1 block text-sm font-medium text-slate-600">{f.label}</label>
+                <input className="input" value={slForm[f.key] || ''} onChange={(e) => setSlForm({ ...slForm, [f.key]: e.target.value })} />
+              </div>
+            ))}
             <p className="text-xs text-slate-500">การบันทึกครั้งนี้นับเป็น 1 {SL?.unitLabel} ออกเลขที่เล่มให้อัตโนมัติตามลำดับ หากมีมากกว่า 1 {SL?.unitLabel} ให้กดบันทึกแล้วกรอกเล่มถัดไปเพิ่มได้เรื่อยๆ</p>
           </div>
         </Modal>

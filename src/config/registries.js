@@ -322,6 +322,8 @@ export const REGISTRIES = {
       statusKey: 'bookStatus', inValue: 'คงคลัง', outValue: 'เบิกใช้แล้ว',
       sourceKey: 'sourceType', sourceOptions: ['ยอดรับมาจากปีงบก่อน', 'รับจากธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร สาขาธาตุนาเวง'],
       numFromKey: 'chequeFrom', numToKey: 'chequeTo', numFromLabel: 'เลขที่เช็ค ตั้งแต่', numToLabel: 'เลขที่เช็ค ถึง',
+      // ให้เลือกปีงบประมาณของเล่มได้เองตอนเพิ่มเข้าคลัง (ไม่ยึดตามวันที่ที่กรอกอัตโนมัติ) เผื่อรับเล่มช่วงคาบเกี่ยวปีงบ — เลขที่เล่มจะออกเป็น "ลำดับ/ปีงบที่เลือก" และเล่มนั้นจะไปอยู่ในทะเบียนของปีงบที่เลือกด้วย
+      fySelectable: true,
       dateOutKey: 'dateOut',
       requesterKey: 'requester', requesterPositionKey: 'requesterPosition',
       defaultRequester: 'นางสาวพิไลวรรณ กุลมินทร์', defaultRequesterPosition: 'นักวิชาการสาธารณสุขชำนาญการ',
@@ -352,8 +354,9 @@ export const REGISTRIES = {
       { key: 'accountNo' }, { key: 'accountName' }, { key: 'bookStatus' }, { key: 'dateOut' }, { key: 'requester' },
     ],
   },
-  // แก้ไขฟังก์ชันให้เหมือนทะเบียนคุมเล่มเช็คด้านบนทั้งหมด (คุมคลังแบบรายเล่ม + แดชบอร์ดคลิกเล่มเพื่อเบิก) ตามคำขอ — ต่างกันแค่ไม่มีเลขที่บัญชี/ชื่อบัญชีตายตัว (ใบเสร็จไม่มีเลขบัญชี)
+  // แก้ไขฟังก์ชันให้เหมือนทะเบียนคุมเล่มเช็คด้านบนทั้งหมด (คุมคลังแบบรายเล่ม + แดชบอร์ดคลิกเล่มเพื่อเบิก + เลือกปีงบได้ตอนเพิ่มเข้าคลัง) ตามคำขอ — ต่างกันแค่ไม่มีเลขที่บัญชี/ชื่อบัญชีตายตัว (ใบเสร็จไม่มีเลขบัญชี)
   // defaultNumFrom/defaultNumTo: ค่าตั้งต้นของช่วงเลขที่ใบเสร็จต่อเล่มเป็น 01-100 (ขนาดเล่มมาตรฐานทั่วไป) แก้ไขเป็นช่วงอื่นได้ตอนกรอก
+  // เลขที่เล่มใช้คำนำหน้า "บร." ไม่เติมศูนย์ (numberDigits: 1) ตามที่แจ้ง -> รูปแบบ "บร.1/2569", "บร.2/2569", ...
   'reg-receipt': {
     key: 'reg-receipt',
     path: '/reg-receipt',
@@ -362,7 +365,8 @@ export const REGISTRIES = {
     noun: 'เล่มใบเสร็จ',
     numberField: 'bookNo',
     numberLabel: 'เล่มที่',
-    numberDigits: 2,
+    numberPrefix: 'บร.',
+    numberDigits: 1,
     hideInsert: true,
     dateField: 'dateIn',
     statusField: 'bookStatus',
@@ -372,20 +376,25 @@ export const REGISTRIES = {
     },
     stockLedger: {
       statusKey: 'bookStatus', inValue: 'คงคลัง', outValue: 'เบิกใช้แล้ว',
-      sourceKey: 'sourceType', sourceOptions: ['ยอดรับมาจากปีงบก่อน', 'ซื้อเล่มใบเสร็จใหม่'],
+      sourceKey: 'sourceType', sourceOptions: ['ยอดยกมาจากปีงบประมาณก่อน', 'รับจาก อบจ.สกลนคร'],
       numFromKey: 'receiptFrom', numToKey: 'receiptTo', numFromLabel: 'เลขที่ใบเสร็จ ตั้งแต่', numToLabel: 'เลขที่ใบเสร็จ ถึง',
       defaultNumFrom: '01', defaultNumTo: '100',
+      // ให้เลือกปีงบประมาณของเล่มได้เองตอนเพิ่มเข้าคลัง เหมือนทะเบียนเล่มเช็ค
+      fySelectable: true,
       dateOutKey: 'dateOut',
       requesterKey: 'requester', requesterPositionKey: 'requesterPosition',
       defaultRequester: 'นางสาวพิไลวรรณ กุลมินทร์', defaultRequesterPosition: 'นักวิชาการสาธารณสุขชำนาญการ',
       unitLabel: 'เล่ม',
+      // ช่องเพิ่มเติมเฉพาะตอนรับเข้าคลัง (ไม่มีในทะเบียนเล่มเช็ค) — เลขทะเบียนใบเสร็จที่ อบจ.สกลนคร ออกให้เล่มนั้นๆ
+      extraInFields: [{ key: 'paoRegNo', label: 'เลขทะเบียนใบเสร็จจาก อบจ. เล่มที่' }],
     },
     fields: [
       { key: 'bookNo', label: 'เล่มที่', type: 'text', auto: true, list: true, search: true },
       { key: 'dateIn', label: 'วันที่รับเข้าคลัง', type: 'date', required: true, list: true },
-      { key: 'sourceType', label: 'ที่มา', type: 'select', options: ['ยอดรับมาจากปีงบก่อน', 'ซื้อเล่มใบเสร็จใหม่'], list: true },
+      { key: 'sourceType', label: 'ที่มา', type: 'select', options: ['ยอดยกมาจากปีงบประมาณก่อน', 'รับจาก อบจ.สกลนคร'], list: true },
       { key: 'receiptFrom', label: 'เลขที่ใบเสร็จ ตั้งแต่', type: 'text', required: true, list: true, search: true },
       { key: 'receiptTo', label: 'เลขที่ใบเสร็จ ถึง', type: 'text', required: true, list: true, search: true },
+      { key: 'paoRegNo', label: 'เลขทะเบียนใบเสร็จจาก อบจ. เล่มที่', type: 'text', auto: true, list: true, search: true },
       { key: 'bookStatus', label: 'สถานะเล่ม', type: 'select', auto: true, options: ['คงคลัง', 'เบิกใช้แล้ว'], default: 'คงคลัง', list: true },
       { key: 'dateOut', label: 'วันที่เบิกออกใช้', type: 'date', auto: true, list: true },
       { key: 'requester', label: 'ผู้เบิกใบเสร็จ', type: 'text', auto: true, list: true },
@@ -394,11 +403,11 @@ export const REGISTRIES = {
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'FFFF00',
-    reportColumns: ['bookNo', 'dateIn', 'sourceType', 'receiptFrom', 'receiptTo', 'bookStatus', 'dateOut', 'requester'],
+    reportColumns: ['bookNo', 'dateIn', 'sourceType', 'receiptFrom', 'receiptTo', 'paoRegNo', 'bookStatus', 'dateOut', 'requester'],
     reportLayout: [
       { key: 'bookNo' }, { key: 'dateIn' }, { key: 'sourceType' },
       { group: 'เลขที่ใบเสร็จ', color: '00FFFF', keys: ['receiptFrom', 'receiptTo'] },
-      { key: 'bookStatus' }, { key: 'dateOut' }, { key: 'requester' },
+      { key: 'paoRegNo' }, { key: 'bookStatus' }, { key: 'dateOut' }, { key: 'requester' },
     ],
   },
   'reg-deeka': {
