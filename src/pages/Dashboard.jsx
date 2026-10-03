@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight,
+  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight, BookOpenCheck,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,8 @@ const CARDS = [
   { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', emoji: '📤', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ', icon: Send, path: '/outgoing', module: 'outgoing', tone: 'from-brand-500 to-brand-800' },
   { key: 'leave', label: 'ทะเบียนควบคุมวันลา', emoji: '🗓️', desc: 'ยื่นใบลา อนุมัติ ตรวจสอบวันลาคงเหลือ', icon: CalendarDays, path: '/leave', module: 'leave', tone: 'from-cyan-500 to-brand-700' },
   { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', desc: 'บันทึกการใช้รถ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle', tone: 'from-indigo-500 to-brand-800' },
+  // ทางเข้าหน้ารวม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" (คำสั่ง/ประกาศ/สัญญายืมเงิน/ฎีกาเบิกจ่าย ฯลฯ) — เปิดได้ทุกบทบาท ไม่มีช่อง module จึงไม่ต้องตรวจสิทธิ์
+  { key: 'registries', label: 'ทะเบียนประกอบฎีกาและทะเบียนต่างๆ', emoji: '📚', desc: 'คำสั่ง ประกาศ สัญญายืมเงิน ฎีกาเบิกจ่าย และอีก 6 ทะเบียน', icon: BookOpenCheck, path: '/registries', module: null, tone: 'from-mint-400 to-mint-600' },
 ];
 
 const ACTION = { create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', login: 'เข้าสู่ระบบ', export: 'ส่งออก', settings: 'ตั้งค่า' };
@@ -140,9 +142,9 @@ export default function Dashboard() {
             )}
 
             <h2 className="mb-2 text-lg font-semibold">เมนูหลัก</h2>
-            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {CARDS.map((c) => {
-                const allowed = canRead(profile.role, c.module);
+                const allowed = c.module ? canRead(profile.role, c.module) : true;
                 const stats = m && allowed
                   ? (c.key === 'incoming' ? { total: m.inTotal, month: m.inMonth } : c.key === 'outgoing' ? { total: m.outTotal, month: m.outMonth } : null)
                   : null;
