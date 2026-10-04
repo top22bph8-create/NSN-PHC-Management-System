@@ -250,8 +250,9 @@ export const REGISTRIES = {
       { key: 'contractNo', label: 'เลขที่สัญญา', type: 'text', auto: true, list: true, search: true },
       { key: 'contractDate', label: 'วันที่', type: 'date', required: true, list: true },
       // เพิ่มตามคำขอ: เลือกประเภทคู่สัญญาจากช้อยก่อน แล้วค่อยกรอก/เลือกชื่อ — ถ้าเป็น "ลูกจ้างชั่วคราว" ให้เปลี่ยนเป็นช้อยเลือกจากทำเนียบบุคลากรแทนช่องพิมพ์ชื่อเอง (เพื่อใช้ในรายงานได้)
-      { key: 'partyType', label: 'ประเภทคู่สัญญา', type: 'select', options: ['ร้าน', 'บริษัท', 'หจก.', 'บุคคล', 'ลูกจ้างชั่วคราว', 'ลูกจ้างจ้างเหมาบริการ'], required: true, list: true },
-      { key: 'partyName', label: 'ชื่อคู่สัญญา (ร้าน/บริษัท/หจก./บุคคล/ลูกจ้างจ้างเหมาบริการ)', type: 'text', list: true, search: true, showIf: (v) => v.partyType !== 'ลูกจ้างชั่วคราว' },
+      // เพิ่ม "สหกรณ์" และ "อื่นๆ" ตามที่แจ้ง — ทั้งสองแบบใช้ช่องชื่อคู่สัญญาด้านล่างเหมือนประเภทอื่นๆ (ไม่ใช่ลูกจ้างชั่วคราว) จึงกรอกชื่อได้ทันทีเมื่อเลือก "อื่นๆ"
+      { key: 'partyType', label: 'ประเภทคู่สัญญา', type: 'select', options: ['ร้าน', 'บริษัท', 'หจก.', 'สหกรณ์', 'บุคคล', 'ลูกจ้างชั่วคราว', 'ลูกจ้างจ้างเหมาบริการ', 'อื่นๆ'], required: true, list: true },
+      { key: 'partyName', label: 'ชื่อคู่สัญญา (ร้าน/บริษัท/หจก./สหกรณ์/บุคคล/ลูกจ้างจ้างเหมาบริการ/อื่นๆ ระบุชื่อ)', type: 'text', list: true, search: true, showIf: (v) => v.partyType !== 'ลูกจ้างชั่วคราว' },
       { key: 'partyStaff', label: 'เลือกบุคลากร (ลูกจ้างชั่วคราว)', type: 'select-users', list: true, search: true, showIf: (v) => v.partyType === 'ลูกจ้างชั่วคราว' },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },

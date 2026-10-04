@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { fiscalYearBE } from './thai';
 
 export const DEFAULT_NUMBERING = { digits: 3, era: 'BE', prefixes: {} };
 
@@ -11,14 +12,16 @@ export async function getNumbering() {
 export const formatNumber = (n, digits, year, prefix = '') =>
   `${prefix}${String(n).padStart(digits, '0')}/${year}`;
 
-// สร้างเอกสารพร้อมเลขทะเบียนอัตโนมัติ (นับต่อเนื่องภายในปี ขึ้นปีใหม่เริ่ม 001 ใหม่ ข้อมูลปีเก่ายังอยู่)
+// สร้างเอกสารพร้อมเลขทะเบียนอัตโนมัติ (นับต่อเนื่องภายในปีงบประมาณ ขึ้นปีงบใหม่เริ่ม 001 ใหม่ ข้อมูลปีเก่ายังอยู่)
+// ใช้ปีงบประมาณจริง (1 ต.ค. - 30 ก.ย., เดือน ต.ค.-ธ.ค. นับเป็นปีงบถัดไป) ผ่าน fiscalYearBE() เดียวกับที่ใช้กรองรายการทั้งระบบ
+// ไม่ใช่ปี พ.ศ./ค.ศ. ตามปฏิทินตรงๆ — แก้ไขจุดนี้เพื่อให้เอกสารที่ลงวันที่ ต.ค.-ธ.ค. นับเลขที่ต่อเนื่องในปีงบที่ถูกต้อง ไม่ไปปนกับปีงบก่อนหน้า
 // prefixOverride/digitsOverride: ให้ทะเบียนบางรายการกำหนดรูปแบบเลขที่ตายตัวเฉพาะของตัวเอง
 // (เช่น ทะเบียนสัญญาเงินยืมใช้คำนำหน้า "B" + เลข 2 หลัก ("B01/2569"), ทะเบียนเกียรติบัตรใช้เลขไม่เติมศูนย์ ("1/2569"))
 // โดยไม่ขึ้นกับค่าตั้งค่ากลางของระบบ (settings/numbering) ที่ใช้ร่วมกับทะเบียนอื่นๆ ส่วนใหญ่
 export async function createNumbered({ collectionName, numberField, dateStr, data, prefixOverride, digitsOverride }) {
   const cfg = await getNumbering();
-  const y = Number(dateStr.slice(0, 4));
-  const year = cfg.era === 'CE' ? y : y + 543;
+  const fyBE = fiscalYearBE(dateStr);
+  const year = cfg.era === 'CE' ? fyBE - 543 : fyBE;
   const prefix = prefixOverride ?? (cfg.prefixes?.[collectionName] || '');
   const digits = digitsOverride ?? cfg.digits;
   const counterRef = doc(db, 'counters', `${collectionName}_${year}`);
