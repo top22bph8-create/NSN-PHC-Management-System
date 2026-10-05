@@ -325,7 +325,8 @@ export default function Leave() {
   const { fy } = useFiscalYear();
   const viewAll = can(profile.role, 'leave', 'viewAll');
   const canApprove = can(profile.role, 'leave', 'approve');
-  const canFileForOthers = ['super_admin', 'admin_clerk'].includes(profile.role);
+  // รวมบทบาทเหลือ Super Admin/ผู้ใช้งาน แล้ว — "ผู้ใช้งาน" ทุกคนยื่นใบลาแทนเพื่อนร่วมงานได้เท่ากันหมด (ไม่แยกเฉพาะงานธุรการอีกต่อไป)
+  const canFileForOthers = can(profile.role, 'leave', 'write');
   // หน้าแรก (default) ของทะเบียนคือรายชื่อบุคลากรเลยตามคำขอ — ตัดแท็บ "ใบลาของฉัน" และไม่จำกัดแท็บรายชื่อบุคลากรไว้เฉพาะ Super Admin อีกต่อไป
   const [tab, setTab] = useState('people');
   const [rows, setRows] = useState(null);

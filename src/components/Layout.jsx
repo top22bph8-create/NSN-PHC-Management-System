@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { MENU } from '../config/menu';
 import { ORG_SHORT, SYSTEM_NAME_EN } from '../config/brand';
-import { ROLES, canRead } from '../lib/roles';
+import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { usernameOf } from '../lib/accounts';
 import Logo from './Logo';
 
@@ -66,7 +66,7 @@ export default function Layout() {
       </div>
       <div className="border-t border-white/10 bg-black/10 p-3 text-sm">
         <div className="truncate font-medium text-white">{profile.name || profile.email}</div>
-        <div className="truncate text-brand-300">{ROLES[profile.role]} · {usernameOf(profile.email)}</div>
+        <div className="truncate text-brand-300">{ROLES[normalizeRole(profile.role)]} · {usernameOf(profile.email)}</div>
         <div className="mt-2 flex items-center gap-4">
           <NavLink to="/account" onClick={() => setOpen(false)} className="flex items-center gap-1 text-brand-300 hover:text-white hover:underline"><KeyRound className="h-4 w-4" /> รหัสผ่าน</NavLink>
           <button onClick={logout} className="flex items-center gap-1 text-brand-200 hover:text-red-300"><LogOut className="h-4 w-4" /> ออกจากระบบ</button>

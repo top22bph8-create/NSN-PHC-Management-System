@@ -13,8 +13,15 @@ service cloud.firestore {
     function isActive() {
       return signedIn() && exists(userPath()) && get(userPath()).data.active == true;
     }
+    // รวมบทบาทเหลือ 2 แบบ: 'super_admin' กับ 'staff' (ผู้ใช้งาน) ตามที่แจ้ง — ต้องตรงกับ normalizeRole() ใน src/lib/roles.js
+    // บัญชีเก่าที่ยังมีค่า role ละเอียด (director/admin_clerk/finance/ฯลฯ) ค้างอยู่ก่อนรวมบทบาท ให้ถือเป็น 'staff' เสมอ
+    // โดยอัตโนมัติ (ไม่ต้องไล่แก้ค่าที่บันทึกไว้เดิมทีละคน) ยกเว้น 'super_admin'/'pending' คงค่าเดิมไว้ตรงๆ
+    function normRole() {
+      let r = get(userPath()).data.role;
+      return r == 'super_admin' || r == 'pending' ? r : 'staff';
+    }
     function hasRole(list) {
-      return isActive() && get(userPath()).data.role in list;
+      return isActive() && normRole() in list;
     }
 
     // ผู้ใช้งานและสิทธิ์ (ทำเนียบบุคลากร)
@@ -42,16 +49,15 @@ service cloud.firestore {
 
     // ใบลา
     match /leaves/{id} {
+      // ดูใบลาของทุกคนได้เฉพาะ Super Admin (viewAll) ส่วนคนทั่วไปดูได้แค่ของตัวเอง
       allow read: if isActive() && (resource.data.userEmail == request.auth.token.email
-                                    || hasRole(['super_admin', 'director', 'admin_clerk']));
-      // ยื่นใบลาของตัวเอง สถานะต้องเป็น "รอพิจารณา" (ธุรการ/แอดมินยื่นแทนได้)
-      allow create: if isActive() && request.resource.data.status == 'รอพิจารณา'
-                    && (request.resource.data.userEmail == request.auth.token.email
-                        || hasRole(['super_admin', 'admin_clerk']));
-      // Super Admin แก้/ยกเลิกแทนใครก็ได้ทุกกรณี · ผู้อำนวยการพิจารณาได้เฉพาะอนุมัติ/ไม่อนุมัติ (ยกเลิกแทนคนอื่นไม่ได้)
+                                    || hasRole(['super_admin']));
+      // ยื่นใบลา สถานะต้องเป็น "รอพิจารณา" (ผู้ใช้งานที่ active ทุกคนยื่นแทนเพื่อนร่วมงานได้เท่ากันหมดตามที่แจ้ง)
+      allow create: if isActive() && request.resource.data.status == 'รอพิจารณา';
+      // Super Admin แก้/ยกเลิก/พิจารณาแทนใครก็ได้ทุกกรณี (การอนุมัติทางเว็บจำกัดเฉพาะ Super Admin เท่านั้นตามที่แจ้ง
+      // ส่วนปุ่มอนุมัติในไลน์กลุ่มยังใช้ Admin SDK ของ Cloud Function แยกต่างหาก ไม่ผ่านกฎนี้ ไม่กระทบ)
       // ส่วนเจ้าของใบลาเองยกเลิกได้เฉพาะใบของตัวเองที่ยังรอพิจารณา
       allow update: if hasRole(['super_admin'])
-                    || (hasRole(['director']) && request.resource.data.status in ['อนุมัติ', 'ไม่อนุมัติ'])
                     || (isActive() && resource.data.userEmail == request.auth.token.email
                         && resource.data.status == 'รอพิจารณา'
                         && request.resource.data.status == 'ยกเลิก');
@@ -86,73 +92,73 @@ service cloud.firestore {
     }
 
     // ทะเบียนควบคุมยานพาหนะ
+    // รวมบทบาทเหลือ 2 แบบแล้ว (Super Admin/ผู้ใช้งาน) — ผู้ใช้งานที่ active ทุกคนแก้ไขทะเบียนต่างๆ ด้านล่างได้เท่ากันหมด
+    // ไม่แยกตามแผนกอีกต่อไปตามที่แจ้ง (hasRole(['super_admin','staff']) เทียบเท่า isActive() พอดี ใช้ isActive() ตรงๆ)
     match /vehicle/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+      allow create, update, delete: if isActive();
     }
 
     // แผนปฏิบัติงานเวรนอกเวลาประจำเดือน
     match /duty/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+      allow create, update, delete: if isActive();
     }
 
     // แผน/รายงานการเยี่ยมบ้านเชิงรุกในชุมชนประจำเดือน
     match /homevisit/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med']);
+      allow create, update, delete: if isActive();
     }
 
-    // ทะเบียนประกอบฎีกาและทะเบียนต่างๆ — กลุ่มคำสั่ง/ประกาศ (ธุรการดูแล)
+    // ทะเบียนประกอบฎีกาและทะเบียนต่างๆ
     match /reg-orders/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-announce/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+      allow create, update, delete: if isActive();
     }
-
-    // ทะเบียนประกอบฎีกาและทะเบียนต่างๆ — กลุ่มการเงิน/พัสดุ/สัญญา (งานการเงินดูแล)
     match /reg-procurement/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-contract-no/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-loan/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-cheque/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-receipt/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-deeka/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'finance', 'director']);
+      allow create, update, delete: if isActive();
     }
     match /reg-certificate/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+      allow create, update, delete: if isActive();
     }
 
-    // ปฏิทินมอบหมายงาน (ประชุม/อบรม/หน่วยปฐมพยาบาล/อื่นๆ) — ทุกคนดูได้ แก้ไข/สร้าง/ลบเฉพาะผู้ดูแล/ธุรการ/ผู้อำนวยการ
+    // ปฏิทินมอบหมายงาน (ประชุม/อบรม/หน่วยปฐมพยาบาล/อื่นๆ) — ทุกคนดูและแก้ไข/สร้าง/ลบได้เท่ากันหมด
     // (แจ้งเตือนเข้าไลน์กลุ่มอัตโนมัติทุกวัน 06:00 น. ผ่าน Cloud Function dailyAssignmentReminder — ดู README หัวข้อ "ปฏิทินมอบหมายงาน")
     match /assignments/{id} {
       allow read: if isActive();
-      allow create, update, delete: if hasRole(['super_admin', 'admin_clerk', 'director']);
+      allow create, update, delete: if isActive();
     }
 
-    // Audit Log: เพิ่มได้อย่างเดียว แก้ไข/ลบไม่ได้
+    // Audit Log: เพิ่มได้อย่างเดียว แก้ไข/ลบไม่ได้ อ่านได้เฉพาะ Super Admin
     match /auditLogs/{id} {
-      allow read: if hasRole(['super_admin', 'director']);
+      allow read: if hasRole(['super_admin']);
       allow create: if isActive() && request.resource.data.userEmail == request.auth.token.email;
       allow update, delete: if false;
     }

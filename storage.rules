@@ -12,32 +12,17 @@ service firebase.storage {
         && firestore.exists(userPath())
         && firestore.get(userPath()).data.active == true;
     }
-    function role() {
-      return firestore.get(userPath()).data.role;
-    }
-
+    // รวมบทบาทเหลือ 2 แบบแล้ว (Super Admin/ผู้ใช้งาน) ต้องตรงกับ src/lib/roles.js — ผู้ใช้งานที่ active ทุกคน
+    // แนบ/ลบไฟล์ได้เท่ากันหมดทุกทะเบียนด้านล่าง ไม่แยกตามแผนกอีกต่อไปตามที่แจ้ง จึงไม่ต้องเช็ค role() แยกโมดูลอีก
     match /docs/{module}/{id}/{file} {
       allow read: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit',
                   'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate'];
       allow create, update: if isActive()
-                  && (
-                    (module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit']
-                      && role() in ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'])
-                    || (module in ['reg-orders', 'reg-announce', 'reg-certificate']
-                      && role() in ['super_admin', 'admin_clerk', 'director'])
-                    || (module in ['reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka']
-                      && role() in ['super_admin', 'finance', 'director'])
-                  )
+                  && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit',
+                      'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate']
                   && request.resource.size < 20 * 1024 * 1024;
-      allow delete: if isActive()
-                  && (
-                    (module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit']
-                      && role() in ['super_admin', 'admin_clerk', 'director', 'disease_control', 'family_med'])
-                    || (module in ['reg-orders', 'reg-announce', 'reg-certificate']
-                      && role() in ['super_admin', 'admin_clerk', 'director'])
-                    || (module in ['reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka']
-                      && role() in ['super_admin', 'finance', 'director'])
-                  );
+      allow delete: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit',
+                  'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate'];
     }
   }
 }

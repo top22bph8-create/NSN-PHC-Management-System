@@ -27,37 +27,23 @@ export default function Backup() {
 
   const days = last?.lastBackupAt ? Math.floor((Date.now() - last.lastBackupAt.toDate().getTime()) / 86400000) : null;
 
+  // กดครั้งเดียว ดาวน์โหลดไฟล์ทันที — เดิมเปิดแท็บเปล่าสำรองไว้ก่อนเผื่อเบราว์เซอร์บล็อกการดาวน์โหลดอัตโนมัติ
+  // (กันปัญหา Safari รุ่นเก่า) แต่ทำให้ดูเหมือนต้องกด 2 ขั้นตอน (มีแท็บเปล่าโผล่มากวนใจ) ตามที่แจ้ง — ตัดแท็บเปล่าออก
+  // เบราว์เซอร์ปัจจุบัน (Chrome/Edge/Safari รุ่นใหม่) ดาวน์โหลดไฟล์ blob แบบนี้ได้โดยตรงอยู่แล้วแม้มีการรอข้อมูลคั่นกลาง
   const download = async () => {
     setBusy(true);
-    // สร้างแท็บเปล่าไว้ตั้งแต่ตอนกด (ยังอยู่ในจังหวะที่เบราว์เซอร์นับว่าเป็นการกระทำของผู้ใช้)
-    // เผื่อเบราว์เซอร์บางตัว (เช่น Safari) บล็อกการดาวน์โหลด/เปิดแท็บอัตโนมัติหลังรอข้อมูลจาก Firestore เสร็จ (มีช่วง await คั่นกลาง)
-    const preOpened = window.open('', '_blank');
     try {
       const b = await buildBackup();
       const blob = new Blob([JSON.stringify(b)], { type: 'application/json' });
       const d = new Date();
       const fileName = `NSN-PHC-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
       const url = URL.createObjectURL(blob);
-      let downloaded = false;
-      try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        downloaded = true;
-      } catch { downloaded = false; }
-      if (preOpened && !preOpened.closed) {
-        if (downloaded) {
-          // ดาวน์โหลดสำเร็จผ่านทางลัดด้านบนแล้ว ไม่ต้องใช้แท็บที่เปิดไว้ ปิดทิ้ง
-          preOpened.close();
-        } else {
-          // ทางลัดดาวน์โหลดอัตโนมัติถูกบล็อก ให้ผู้ใช้กดลิงก์ในแท็บที่เปิดไว้แทน
-          preOpened.document.title = 'ไฟล์สำรองข้อมูล NSN-PHC';
-          preOpened.document.body.innerHTML = `<p style="font-family:sans-serif">กดลิงก์นี้เพื่อดาวน์โหลดไฟล์สำรองข้อมูล: <a href="${url}" download="${fileName}">${fileName}</a></p>`;
-        }
-      }
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       const c = countOf(b);
       await markBackupDone(profile.email, c);
@@ -66,7 +52,6 @@ export default function Backup() {
       loadLast();
       say({ type: 'ok', text: 'ดาวน์โหลดไฟล์สำรองข้อมูลแล้ว' });
     } catch (e) {
-      if (preOpened && !preOpened.closed) preOpened.close();
       say({ type: 'error', text: 'สำรองข้อมูลไม่สำเร็จ: ' + (e.code || e.message) });
     } finally { setBusy(false); }
   };

@@ -34,8 +34,7 @@ function AssignmentForm({ item, people, profile, onClose, say }) {
   const setDate = (k) => (v) => setF((p) => ({ ...p, [k]: v }));
   const toggle = (email) => setAssignees((s) => { const n = new Set(s); n.has(email) ? n.delete(email) : n.add(email); return n; });
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async () => {
     const type = f.typeSel === ASSIGNMENT_TYPE_OTHER ? f.typeOther.trim() : f.typeSel;
     if (!type) return say({ type: 'error', text: 'กรุณาระบุประเภทงาน' });
     if (!f.title.trim()) return say({ type: 'error', text: 'กรุณากรอกเรื่อง/รายละเอียดงาน' });
@@ -63,8 +62,9 @@ function AssignmentForm({ item, people, profile, onClose, say }) {
   };
 
   return (
-    <Modal title={item ? 'แก้ไขการมอบหมายงาน' : 'เพิ่มการมอบหมายงาน'} wide onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
+    <Modal title={item ? 'แก้ไขการมอบหมายงาน' : 'เพิ่มการมอบหมายงาน'} wide onClose={onClose}
+      footer={<button className="btn btn-primary w-full" onClick={submit} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>}>
+      <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-3">
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ad">วันที่ปฏิบัติงาน</label><ThaiDateInput id="ad" required value={f.date} onChange={setDate('date')} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="at">เวลา (ไม่บังคับ)</label><input id="at" placeholder="เช่น 08.30 น." className="input" value={f.time} onChange={set('time')} /></div>
@@ -91,8 +91,7 @@ function AssignmentForm({ item, people, profile, onClose, say }) {
         </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="anote">หมายเหตุ (ไม่บังคับ)</label><input id="anote" className="input" value={f.note} onChange={set('note')} /></div>
         <p className="text-xs text-slate-500">ระบบจะแจ้งเตือนเข้าไลน์กลุ่มอัตโนมัติเวลา 06:00 น. ของวันที่ปฏิบัติงาน (ต้องเปิดใช้งานแจ้งเตือนไลน์และติ๊กหัวข้อ "ปฏิทินมอบหมายงาน" ที่หน้าตั้งค่าระบบไว้ก่อน)</p>
-        <button className="btn btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
-      </form>
+      </div>
     </Modal>
   );
 }

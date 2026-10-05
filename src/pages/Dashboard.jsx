@@ -7,7 +7,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
-import { ROLES, canRead } from '../lib/roles';
+import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { addDays, fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
 import { ErrorState, Spinner } from '../components/ui';
@@ -118,7 +118,7 @@ export default function Dashboard() {
         <h1 className="mt-1 text-lg font-bold leading-snug sm:text-xl">{SYSTEM_NAME_TH}</h1>
         <div className="text-sm text-brand-50">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
         <div className="mt-1 text-brand-50">
-          {profile.email === 'top22bph8@gmail.com' || profile.role === 'director' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[profile.role]}`}
+          {profile.email === 'top22bph8@gmail.com' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[normalizeRole(profile.role)]}`}
         </div>
         <div className="mt-1 text-sm text-brand-100">ปีงบประมาณ {fy}</div>
         </div>

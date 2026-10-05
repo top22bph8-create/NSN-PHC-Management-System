@@ -3,7 +3,7 @@ import {
   Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock,
   Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award,
+  Award, KeyRound,
 } from 'lucide-react';
 
 // รายการทะเบียนในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — ย้ายมาแสดงเป็นลิงก์ตรงในกลุ่ม "ทะเบียนหลัก" ของเมนูซ้ายแล้วตามคำขอ
@@ -93,7 +93,7 @@ export const MENU = [
       { key: 'settings', label: 'ตั้งค่าระบบ', emoji: '⚙️', path: '/settings', icon: Settings, ready: true, module: 'settings' },
       { key: 'backup', label: 'สำรอง/กู้คืนข้อมูล', emoji: '💾', path: '/backup', icon: DatabaseBackup, ready: true, module: 'backup' },
       { key: 'audit', label: 'Audit Log', emoji: '🕵️', path: '/audit', icon: History, ready: true, module: 'audit' },
-      { key: 'personnel-users', label: 'กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก', emoji: '🔑', path: '/personnel', icon: Users, ready: true, module: 'personnel' },
+      { key: 'personnel-users', label: 'กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก', emoji: '🔑', path: '/users', icon: KeyRound, ready: true, module: 'users' },
     ],
   },
 ];

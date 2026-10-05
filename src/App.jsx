@@ -16,6 +16,7 @@ import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
 import Personnel from './pages/Personnel';
+import UserAccounts from './pages/UserAccounts';
 import Leave from './pages/Leave';
 import Assignments from './pages/Assignments';
 import RegistriesHub from './pages/RegistriesHub';
@@ -30,7 +31,7 @@ function Blocked({ problem, error }) {
   const text = pending
     ? 'คำขอสมัครใช้งานของคุณกำลังรอผู้ดูแลระบบอนุมัติ กรุณารอการอนุมัติแล้วเข้าสู่ระบบใหม่อีกครั้ง'
     : {
-        'no-profile': 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาแจ้งผู้ดูแลระบบให้เพิ่มอีเมลของท่านในเมนู "ทำเนียบบุคลากร"',
+        'no-profile': 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาแจ้งผู้ดูแลระบบให้เพิ่มอีเมลของท่านในเมนู "กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก"',
         inactive: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
         error: `โหลดข้อมูลสิทธิ์ไม่สำเร็จ (${error}) ตรวจสอบว่าได้เผยแพร่ Firestore Rules ล่าสุดแล้ว`,
       }[problem];
@@ -129,7 +130,7 @@ function Shell() {
           <Route path="registries" element={<RegistriesHub />} />
           <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
           <Route path="account" element={<Account />} />
-          <Route path="users" element={<Navigate to="/personnel" replace />} />
+          <Route path="users" element={<Guard module="users"><UserAccounts /></Guard>} />
           <Route path="settings" element={<Guard module="settings"><SettingsPage /></Guard>} />
           <Route path="audit" element={<Guard module="audit"><AuditLog /></Guard>} />
           <Route path="soon/:key" element={<ComingSoon />} />
