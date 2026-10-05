@@ -32,7 +32,7 @@ const printLeaveUrl = (id) => `${HOSTING_URL}/#/print-leave/${id}`;
 // ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
 // เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
 // ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
-const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true };
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -362,4 +362,36 @@ exports.dailyLoanOverdueReminder = onSchedule({ schedule: '0 6 * * *', timeZone:
     .map((l, i) => `${i + 1}. ${l.loanNo} · ${l.borrower} · ครบกำหนด ${thDate(l.dueDate)} (${l.amount || '-'} บาท)`);
   const text = `⚠️ สัญญายืมเงินเกินกำหนดส่งใช้ (${overdue.length} รายการ)\n\n${lines.join('\n')}`;
   await sendLine(channelAccessToken, targetId, text);
+});
+
+// คำอวยพรวันเกิดหลายๆ แบบ (สุ่มเลือกไม่ให้ซ้ำแบบเดิมทุกครั้ง) — ใช้กับ dailyBirthdayReminder ด้านล่าง
+const BIRTHDAY_GREETINGS = [
+  'ขอให้มีความสุขมากๆ สุขภาพแข็งแรง สมหวังในทุกสิ่งที่ตั้งใจไว้นะคะ/ครับ 🥳',
+  'ขอให้วันนี้เป็นวันพิเศษ เต็มไปด้วยความสุขและเสียงหัวเราะตลอดทั้งปีเลยนะคะ/ครับ 🎉',
+  'ขอให้สุขภาพแข็งแรง ร่ำรวยเงินทอง โชคดีตลอดปีนะคะ/ครับ 🌸✨',
+  'สุขสันต์วันเกิดนะคะ/ครับ ขอให้ทุกวันเป็นวันดีๆ เหมือนวันนี้ 💐',
+  'ขอให้เติบโตก้าวหน้าในหน้าที่การงาน และมีคนที่รักอยู่รอบตัวเสมอนะคะ/ครับ 🎁',
+];
+
+// แจ้งเตือนวันคล้ายวันเกิดบุคลากรทุกวัน เวลา 06:00 น. (เวลาไทย) — อ่านจากช่อง "birthday" (YYYY-MM-DD) ในทะเบียนบุคลากร
+// เทียบเฉพาะเดือน/วัน (ไม่สนปี) กับวันนี้ ส่งเฉพาะวันที่มีคนครบรอบวันเกิดจริงเท่านั้น พร้อมคำอวยพรและอิโมจิน่ารักๆ
+exports.dailyBirthdayReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || !events.birthday) return;
+
+  const today = bangkokDateStr();
+  const mmdd = today.slice(5); // "MM-DD" ไม่สนปีเกิด
+  const usersSnap = await db.collection('users').get();
+  const celebrants = usersSnap.docs
+    .map((d) => d.data())
+    .filter((u) => u.birthday && String(u.birthday).slice(5) === mmdd && u.role !== 'pending');
+  if (!celebrants.length) return;
+
+  const daySeed = Number(today.replace(/-/g, ''));
+  for (let i = 0; i < celebrants.length; i++) {
+    const u = celebrants[i];
+    const greeting = BIRTHDAY_GREETINGS[(daySeed + i) % BIRTHDAY_GREETINGS.length];
+    const text = `🎉🎂 วันนี้เป็นวันคล้ายวันเกิดของ "${u.name}"${u.position ? ` (${u.position})` : ''} 🎂🎉\n\n${greeting} 🌟🎈`;
+    await sendLine(channelAccessToken, targetId, text);
+  }
 });

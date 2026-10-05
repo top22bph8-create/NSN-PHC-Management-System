@@ -10,7 +10,7 @@ import { db } from '../firebase';
 // ระบบนี้จึงเปลี่ยนมาใช้ LINE Messaging API แทน (ต้องมี LINE Official Account ของตัวเอง + Channel Access Token
 // และต้องรู้ Target ID ของกลุ่ม/ผู้ใช้ปลายทางที่จะส่งเข้าไป) — ดูขั้นตอนเตรียมทั้งหมดใน README หัวข้อ "แจ้งเตือนไลน์"
 // เหตุผลที่ต้องมี Cloud Function คั่นกลาง: LINE Messaging API ไม่อนุญาตให้เว็บเบราว์เซอร์เรียกตรง (ติด CORS)
-export const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true };
+export const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true };
 
 export async function getLineMeta() {
   const s = await getDoc(doc(db, 'settings', 'lineNotifyMeta'));

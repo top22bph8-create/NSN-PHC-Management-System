@@ -188,6 +188,7 @@ export default function SettingsPage() {
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanBorrow} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanBorrow: e.target.checked } })} /> ยืมเงิน (ทะเบียนสัญญายืมเงิน)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanRepay} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanRepay: e.target.checked } })} /> ส่งใช้เงินยืม</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanOverdue} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanOverdue: e.target.checked } })} /> เงินยืมเกินกำหนดส่งใช้ (ทุกวัน 06:00 น.)</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.birthday} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, birthday: e.target.checked } })} /> 🎉 วันเกิดบุคลากร (ทุกวัน 06:00 น.)</label>
               </div>
             </div>
           </div>

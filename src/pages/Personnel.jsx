@@ -3,6 +3,7 @@ import { collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, setDoc
 import { httpsCallable } from 'firebase/functions';
 import { Eye, EyeOff, FileSpreadsheet, KeyRound, Loader2, Pencil, Search, ShieldAlert, Trash2, UserPlus, Users } from 'lucide-react';
 import { db, functions } from '../firebase';
+import { fmtDate } from '../lib/thai';
 import { useAuth } from '../context/AuthContext';
 import { ASSIGNABLE_ROLES, PENDING_LABEL, ROLES, canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
@@ -122,7 +123,7 @@ function ImportModal({ existing, onClose, say }) {
 }
 
 function AddModal({ existing, onClose, say }) {
-  const [f, setF] = useState({ username: '', password: '', name: '', position: '', role: 'staff' });
+  const [f, setF] = useState({ username: '', password: '', name: '', position: '', role: 'staff', birthday: '' });
   const [busy, setBusy] = useState(false);
   const submit = async (e) => {
     e.preventDefault();
@@ -133,7 +134,7 @@ function AddModal({ existing, onClose, say }) {
     setBusy(true);
     try {
       try { await createAuthAccount(email, f.password); } catch (err) { if (err.code !== 'auth/email-already-in-use') throw err; }
-      await setDoc(doc(db, 'users', email), { email, username, name: clean(f.name), position: clean(f.position), role: f.role, active: true, mustChangePassword: true, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'users', email), { email, username, name: clean(f.name), position: clean(f.position), role: f.role, birthday: f.birthday || '', active: true, mustChangePassword: true, createdAt: serverTimestamp() });
       await setDoc(doc(db, 'credentials', email), { username, password: f.password });
       await writeAudit({ action: 'create', module: 'personnel', docId: email, label: clean(f.name), after: { role: f.role } });
       say({ type: 'ok', text: 'เพิ่มบุคลากรแล้ว' });
@@ -152,6 +153,7 @@ function AddModal({ existing, onClose, say }) {
         </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="an">ชื่อ - สกุล</label><input id="an" required className="input" value={f.name} onChange={set('name')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ao">ตำแหน่ง</label><input id="ao" className="input" value={f.position} onChange={set('position')} /></div>
+        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="abd">วันเดือนปีเกิด</label><input id="abd" type="date" className="input" value={f.birthday} onChange={set('birthday')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ar">บทบาท</label>
           <select id="ar" className="input" value={f.role} onChange={set('role')}>{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <p className="text-xs text-slate-500">ต้องเปิด Enable create (sign-up) ใน Firebase Authentication ชั่วคราวระหว่างสร้างบัญชี</p>
@@ -197,7 +199,7 @@ function ResetModal({ user, onClose, say }) {
 // - เปลี่ยน Username: ต้องสร้างบัญชี Auth ใหม่ภายใต้อีเมลใหม่ (ย้ายข้อมูลไปเอกสารใหม่ ลบเอกสารเดิม) บัญชี Auth เดิมจะค้างอยู่แต่ใช้งานต่อไม่ได้แล้วเพราะไม่มีโปรไฟล์
 // - เปลี่ยน Password (username เดิม): ติดข้อจำกัดเดียวกับ "ตั้งรหัสเริ่มต้นใหม่" คือต้องลบบัญชี Auth เดิมที่ Firebase Console ก่อน (ระบบไม่มีสิทธิ์แก้รหัสผ่านคนอื่นโดยตรง)
 function EditProfileModal({ user, onClose, say, prefill }) {
-  const [f, setF] = useState({ name: user.name || '', position: user.position || '', username: prefill?.username || usernameOf(user.email), password: prefill?.password || '' });
+  const [f, setF] = useState({ name: user.name || '', position: user.position || '', birthday: user.birthday || '', username: prefill?.username || usernameOf(user.email), password: prefill?.password || '' });
   const [busy, setBusy] = useState(false);
   const [needDelete, setNeedDelete] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -209,6 +211,7 @@ function EditProfileModal({ user, onClose, say, prefill }) {
     if (!/^[a-z0-9._@-]+$/.test(newUsername)) return say({ type: 'error', text: 'ชื่อผู้ใช้ใช้ได้เฉพาะ a-z ตัวเลข . _ -' });
     const name = clean(f.name);
     const position = clean(f.position);
+    const birthday = f.birthday || '';
     const usernameChanged = newUsername !== usernameOf(user.email);
     setBusy(true);
     try {
@@ -221,7 +224,7 @@ function EditProfileModal({ user, onClose, say, prefill }) {
         }
         if (!pw) { say({ type: 'error', text: 'ไม่พบรหัสผ่านเดิมที่บันทึกไว้ กรุณากรอกรหัสผ่านใหม่สำหรับชื่อผู้ใช้นี้ด้วย' }); setBusy(false); return; }
         await createAuthAccount(newEmail, pw);
-        await setDoc(doc(db, 'users', newEmail), { ...user, email: newEmail, username: newUsername, name, position, updatedAt: serverTimestamp() });
+        await setDoc(doc(db, 'users', newEmail), { ...user, email: newEmail, username: newUsername, name, position, birthday, updatedAt: serverTimestamp() });
         await setDoc(doc(db, 'credentials', newEmail), { username: newUsername, password: pw });
         await deleteDoc(doc(db, 'users', user.email));
         await deleteDoc(doc(db, 'credentials', user.email)).catch(() => {});
@@ -230,7 +233,7 @@ function EditProfileModal({ user, onClose, say, prefill }) {
         onClose();
         return;
       }
-      await updateDoc(doc(db, 'users', user.email), { name, position });
+      await updateDoc(doc(db, 'users', user.email), { name, position, birthday });
       if (f.password.trim()) {
         try {
           await createAuthAccount(user.email, f.password.trim());
@@ -256,6 +259,7 @@ function EditProfileModal({ user, onClose, say, prefill }) {
       <form onSubmit={submit} className="space-y-3">
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="en">ชื่อ - สกุล</label><input id="en" required className="input" value={f.name} onChange={set('name')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="eo">ตำแหน่ง</label><input id="eo" className="input" value={f.position} onChange={set('position')} /></div>
+        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ebd">วันเดือนปีเกิด</label><input id="ebd" type="date" className="input" value={f.birthday} onChange={set('birthday')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="eu">ชื่อผู้ใช้ (Username)</label><input id="eu" required className="input" value={f.username} onChange={set('username')} /></div>
         <div>
           <label className="mb-1 block text-sm text-slate-600" htmlFor="ep">รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label>
@@ -445,7 +449,7 @@ export default function Personnel() {
       <div className="card overflow-x-auto">
         {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : shown.length === 0 ? <EmptyState title="ยังไม่มีบุคลากร" hint={writable ? 'กด "นำเข้า Excel" เพื่อเพิ่มรายชื่อทั้งหมดพร้อมกัน' : ''} /> : (
           <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">Username</th>{isSuperAdmin && <th className="px-3 py-2">รหัสผ่าน</th>}<th className="px-3 py-2">ชื่อ - สกุล</th><th className="px-3 py-2">ตำแหน่ง</th><th className="px-3 py-2">บทบาท</th><th className="px-3 py-2">สถานะ</th><th className="px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="px-3 py-2" />}</tr></thead>
+            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">Username</th>{isSuperAdmin && <th className="px-3 py-2">รหัสผ่าน</th>}<th className="px-3 py-2">ชื่อ - สกุล</th><th className="px-3 py-2">ตำแหน่ง</th><th className="px-3 py-2">วันเกิด</th><th className="px-3 py-2">บทบาท</th><th className="px-3 py-2">สถานะ</th><th className="px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="px-3 py-2" />}</tr></thead>
             <tbody>
               {shown.map((u) => {
                 const me = u.email === profile.email;
@@ -470,6 +474,7 @@ export default function Personnel() {
                     )}
                     <td className="px-3 py-2">{u.name || '-'}</td>
                     <td className="px-3 py-2 text-sm text-slate-600">{u.position || '-'}</td>
+                    <td className="px-3 py-2 text-sm text-slate-600">🎂 {u.birthday ? fmtDate(u.birthday) : '-'}</td>
                     <td className="px-3 py-2">
                       {writable ? (
                         <select className="input !w-auto !py-1" value={u.role} disabled={me} onChange={(e) => change(u, { role: e.target.value }, 'role')} aria-label={`บทบาทของ ${u.name}`}>
