@@ -64,3 +64,28 @@ export function fmtDateLong(s) {
   const [y, m, d] = s.split('-').map(Number);
   return `${d} ${thMonths[m - 1]} ${y + 543}`;
 }
+
+// คำนวณระยะเวลาจากวันที่ที่กำหนด (YYYY-MM-DD) ถึงวันนี้ เป็น "ปี เดือน วัน" — ใช้คำนวณอายุคนจากวันเกิด
+// และอายุราชการจากวันบรรจุเป็นข้าราชการ (ทำเนียบบุคลากร) คืนค่า null ถ้าไม่มีวันที่ หรือวันที่อยู่ในอนาคต
+export function calcDuration(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const start = new Date(y, m - 1, d);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  if (start > now) return null;
+  let years = now.getFullYear() - start.getFullYear();
+  let months = now.getMonth() - start.getMonth();
+  let days = now.getDate() - start.getDate();
+  if (days < 0) {
+    months -= 1;
+    days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  return { years, months, days };
+}
+
+export const fmtDuration = (dur) => (dur ? `${dur.years} ปี ${dur.months} เดือน ${dur.days} วัน` : '-');

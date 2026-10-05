@@ -16,7 +16,9 @@ const parseISO = (s) => {
 const daysInMonth = (y, m) => new Date(y, m, 0).getDate();
 const weekdays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
 
-export default function ThaiDateInput({ id, value, onChange, required, min, max, className = '', placeholder = 'เลือกวันที่' }) {
+// yearsBack/yearsForward: ช่วงปีให้เลือกในช้อย (ค่าเริ่มต้นเดิม -15/+5 ปีจากปีปัจจุบัน เหมาะกับวันลา/วันปฏิบัติงาน)
+// ใช้ค่ากว้างขึ้นสำหรับวันเกิด/วันบรรจุราชการที่ย้อนหลังไปได้หลายสิบปี (ดูตัวอย่างการใช้งานที่ Personnel.jsx)
+export default function ThaiDateInput({ id, value, onChange, required, min, max, className = '', placeholder = 'เลือกวันที่', yearsBack = 15, yearsForward = 5 }) {
   const [open, setOpen] = useState(false);
   const parsed = parseISO(value);
   const today = new Date();
@@ -62,7 +64,7 @@ export default function ThaiDateInput({ id, value, onChange, required, min, max,
   // แล้วค่อย +543 เฉพาะตอนแสดงผลเป็นป้ายกำกับเท่านั้น ไม่ใช่เก็บเป็นค่า พ.ศ. ไว้ในตัวเลือกเอง (เดิมพลาดบวกซ้ำ 2 ครั้งทำให้ปีเพี้ยน)
   const curCE = today.getFullYear();
   const yearOptions = [];
-  for (let y = curCE - 15; y <= curCE + 5; y++) yearOptions.push(y);
+  for (let y = curCE - yearsBack; y <= curCE + yearsForward; y++) yearOptions.push(y);
 
   return (
     <div className="relative" ref={wrapRef}>
