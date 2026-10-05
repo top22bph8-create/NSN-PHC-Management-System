@@ -483,8 +483,8 @@ export default function Personnel() {
       </div>
       <div className="card overflow-x-auto">
         {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : shown.length === 0 ? <EmptyState title="ยังไม่มีบุคลากร" hint={writable ? 'กด "นำเข้า Excel" เพื่อเพิ่มรายชื่อทั้งหมดพร้อมกัน' : ''} /> : (
-          <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">Username</th>{isSuperAdmin && <th className="px-3 py-2">รหัสผ่าน</th>}<th className="px-3 py-2">ชื่อ - สกุล</th><th className="px-3 py-2">ตำแหน่ง</th><th className="px-3 py-2">วันเกิด / อายุ</th><th className="px-3 py-2">วันมาปฏิบัติงาน</th><th className="px-3 py-2">วันบรรจุ / อายุราชการ</th><th className="px-3 py-2">บทบาท</th><th className="px-3 py-2">สถานะ</th><th className="px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="px-3 py-2" />}</tr></thead>
+          <table className="w-full min-w-[1360px] table-fixed text-left">
+            <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="w-28 px-3 py-2">Username</th>{isSuperAdmin && <th className="w-28 px-3 py-2">รหัสผ่าน</th>}<th className="w-44 px-3 py-2">ชื่อ - สกุล</th><th className="w-48 px-3 py-2">ตำแหน่ง</th><th className="w-36 px-3 py-2">วันเกิด / อายุ</th><th className="w-28 px-3 py-2">วันมาปฏิบัติงาน</th><th className="w-40 px-3 py-2">วันบรรจุ / อายุราชการ</th><th className="w-44 px-3 py-2">บทบาท</th><th className="w-28 px-3 py-2">สถานะ</th><th className="w-24 px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="w-24 px-3 py-2" />}</tr></thead>
             <tbody>
               {shown.map((u) => {
                 const me = u.email === profile.email;
@@ -507,8 +507,8 @@ export default function Personnel() {
                         ) : <span className="text-slate-400">-</span>}
                       </td>
                     )}
-                    <td className="px-3 py-2">{u.name || '-'}</td>
-                    <td className="px-3 py-2 text-sm text-slate-600">{u.position || '-'}</td>
+                    <td className="truncate px-3 py-2" title={u.name || ''}>{u.name || '-'}</td>
+                    <td className="truncate px-3 py-2 text-sm text-slate-600" title={u.position || ''}>{u.position || '-'}</td>
                     <td className="px-3 py-2 text-sm text-slate-600">
                       {u.birthday ? (<>🎂 {fmtDate(u.birthday)}<div className="text-xs text-slate-400">อายุ {fmtDuration(calcDuration(u.birthday))}</div></>) : '-'}
                     </td>
