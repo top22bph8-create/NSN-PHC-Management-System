@@ -6,10 +6,10 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
-import { LEAVE_STATUS_COLORS, LEAVE_TYPES, getQuota, posRank, usage, workingDays } from '../lib/leave';
+import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, evalRoundStats, getQuota, posRank, usage, workingDays } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
-import { Badge, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
+import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import ThaiDateInput from '../components/ThaiDateInput';
 import LeaveReportsPanel from '../components/LeaveReportsPanel';
@@ -26,20 +26,29 @@ const PERSON_PALETTE = [
   { bg: 'bg-lime-50 ring-lime-100 hover:bg-lime-100/60', avatar: 'bg-lime-100 text-lime-700', name: 'text-lime-900' },
 ];
 
-// การ์ดโควตา/สถิติการลาของบุคคลใดบุคคลหนึ่ง (ใช้ในแดชบอร์ดรายบุคคล)
-function QuotaGrid({ quota, used, pending }) {
+// การ์ดโควตา/สถิติการลาของบุคคลใดบุคคลหนึ่ง (ใช้ในแดชบอร์ดรายบุคคล) — การ์ด "ลาพักผ่อน" แสดงยอดสะสมยกมา (จากทำเนียบ
+// บุคลากร) รวมกับสิทธิ์ปีนี้คงเหลือให้เห็นเป็น "วันลาสะสม" ทั้งก้อนตามที่แจ้ง (ลาพักผ่อนที่ใช้ไม่หมดในแต่ละปีงบจะถูกยกไป
+// เป็นวันสะสมให้อัตโนมัติทุกต้นปีงบประมาณใหม่ — ดู Cloud Function "annualVacationCarryOver")
+function QuotaGrid({ quota, used, pending, vacationCarryOver }) {
   if (!quota) return null;
   return (
     <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Object.entries(quota).map(([type, q]) => {
         const u = used[type] || 0; const p = pending[type] || 0;
         const pct = q ? Math.min(100, ((u + p) / q) * 100) : 0;
+        const isVacation = type === 'ลาพักผ่อน';
+        const accrued = isVacation ? (Number(vacationCarryOver) || 0) : 0;
+        const remainThisYear = Math.max(0, q - u);
+        const total = remainThisYear + accrued;
         return (
           <div key={type} className="card p-3">
             <div className="text-sm text-slate-500">{type}</div>
-            <div className="text-2xl font-bold text-brand-800">{Math.max(0, q - u)} <span className="text-sm font-normal text-slate-500">/ {q} วัน คงเหลือ</span></div>
+            <div className="text-2xl font-bold text-brand-800">{total} <span className="text-sm font-normal text-slate-500">/ {q} วัน{isVacation ? '+สะสม' : ''} คงเหลือ</span></div>
             <div className="mt-1 h-2 overflow-hidden rounded bg-brand-100"><div className="h-2 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
-            <div className="mt-1 text-xs text-slate-500">ใช้แล้ว {u}{p ? ` · รออนุมัติ ${p}` : ''}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              ใช้แล้ว {u}{p ? ` · รออนุมัติ ${p}` : ''}
+              {isVacation && <span className="font-semibold text-brand-700"> · ยกยอดสะสม {accrued} วัน</span>}
+            </div>
           </div>
         );
       })}
@@ -47,19 +56,21 @@ function QuotaGrid({ quota, used, pending }) {
   );
 }
 
-// แถบโควตาแบบย่อ แสดงเฉพาะตัวเลขคงเหลือ/ใช้ไป ต่อประเภทลา (ใช้ในการ์ดรายบุคคล)
-function MiniQuota({ quota, used }) {
+// แถบโควตาแบบย่อ แสดงเฉพาะตัวเลขคงเหลือ/ใช้ไป ต่อประเภทลา (ใช้ในการ์ดรายบุคคล) — ลาพักผ่อนรวมยอดสะสมเข้าไปในตัวเลขด้วย
+function MiniQuota({ quota, used, vacationCarryOver }) {
   if (!quota) return null;
   return (
     <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
       {Object.entries(quota).map(([type, q]) => {
         const u = used[type] || 0;
-        const left = Math.max(0, q - u);
+        const isVacation = type === 'ลาพักผ่อน';
+        const accrued = isVacation ? (Number(vacationCarryOver) || 0) : 0;
+        const left = Math.max(0, q - u) + accrued;
         const pct = q ? Math.min(100, (u / q) * 100) : 0;
         return (
           <div key={type} className="rounded-lg bg-white/70 px-2 py-1.5">
             <div className="truncate text-[11px] text-slate-500" title={type}>{type}</div>
-            <div className="text-sm font-bold text-slate-700">{left} <span className="text-[11px] font-normal text-slate-400">/{q}</span></div>
+            <div className="text-sm font-bold text-slate-700">{left} <span className="text-[11px] font-normal text-slate-400">/{q}{accrued ? `+${accrued}สะสม` : ''}</span></div>
             <div className="mt-0.5 h-1 overflow-hidden rounded bg-white"><div className="h-1 rounded bg-brand-400" style={{ width: `${pct}%` }} /></div>
           </div>
         );
@@ -99,6 +110,14 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
   const alreadyNow = (usedNow[f.type] || 0) + (pendingNow[f.type] || 0);
   const overNow = qNow != null && alreadyNow + daysNow > qNow;
   const remainNow = qNow != null ? Math.max(0, qNow - alreadyNow) : null;
+
+  // เกณฑ์ประเมินผล (ลาป่วย+ลากิจ ไม่เกิน 9 ครั้ง/ประเภท และรวมกันไม่เกิน 23 วัน/รอบประเมิน 6 เดือน) — แจ้งเตือนเท่านั้น ไม่บล็อกการยื่น
+  const isEvalType = f.type === EVAL_ROUND_RULE.sickType || f.type === EVAL_ROUND_RULE.personalType;
+  const roundNow = evalRoundOf(f.start);
+  const evalNow = isEvalType ? evalRoundStats(mine.filter((l) => l.fy === fyNow), roundNow) : null;
+  const sickCountAfter = (evalNow?.sickCount || 0) + (f.type === EVAL_ROUND_RULE.sickType ? 1 : 0);
+  const personalCountAfter = (evalNow?.personalCount || 0) + (f.type === EVAL_ROUND_RULE.personalType ? 1 : 0);
+  const combinedDaysAfter = (evalNow?.combinedDays || 0) + daysNow;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -146,6 +165,14 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
           <div className={`rounded-lg px-3 py-2 text-sm ${overNow ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-brand-50 text-brand-800 ring-1 ring-brand-200'}`}>
             สิทธิ์{f.type}ตามระเบียบ {qNow} วัน/ปี · ใช้แล้ว/รออนุมัติ {alreadyNow} วัน · คงเหลือก่อนยื่นครั้งนี้ {remainNow} วัน
             {overNow && <div className="mt-0.5 font-semibold">⚠️ เกินสิทธิ์ตามระเบียบ {alreadyNow + daysNow - qNow} วัน — ระบบจะไม่ให้บันทึกใบลานี้ กรุณาปรับจำนวนวันหรือเลือกประเภทอื่น</div>}
+          </div>
+        )}
+        {isEvalType && (
+          <div className={`rounded-lg px-3 py-2 text-sm ${sickCountAfter > EVAL_ROUND_RULE.maxCountEach || personalCountAfter > EVAL_ROUND_RULE.maxCountEach || combinedDaysAfter > EVAL_ROUND_RULE.maxCombinedDays ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200' : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'}`}>
+            เกณฑ์ประเมินผล {EVAL_ROUND_LABEL[roundNow]}: ลาป่วย {sickCountAfter}/{EVAL_ROUND_RULE.maxCountEach} ครั้ง · ลากิจ {personalCountAfter}/{EVAL_ROUND_RULE.maxCountEach} ครั้ง · รวมวันลาป่วย+ลากิจ {combinedDaysAfter}/{EVAL_ROUND_RULE.maxCombinedDays} วัน (นับรวมใบนี้แล้ว)
+            {(sickCountAfter > EVAL_ROUND_RULE.maxCountEach || personalCountAfter > EVAL_ROUND_RULE.maxCountEach || combinedDaysAfter > EVAL_ROUND_RULE.maxCombinedDays) && (
+              <div className="mt-0.5 font-semibold">⚠️ เกินเกณฑ์ที่ใช้ประกอบการประเมินผลการปฏิบัติราชการในรอบนี้ (ยังยื่นใบลาได้ตามปกติ เพียงแจ้งเตือนไว้ประกอบการพิจารณา)</div>
+            )}
           </div>
         )}
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lr">เหตุผลการลา</label><textarea id="lr" required rows={2} className="input" value={f.reason} onChange={set('reason')} /></div>
@@ -265,7 +292,7 @@ function PersonDashboard({ person, rows, quota, fy, canFileForOthers, isSelf, pe
         </div>
         {canFile && <button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-5 w-5" /> ยื่นใบลา</button>}
       </div>
-      <QuotaGrid quota={quota} used={used} pending={pending} />
+      <QuotaGrid quota={quota} used={used} pending={pending} vacationCarryOver={person.vacationCarryOver} />
       <div className="card overflow-x-auto">
         {mine.length === 0 ? <EmptyState title="ยังไม่มีประวัติการลาในปีงบประมาณนี้" /> : (
           <table className="w-full min-w-[640px] text-left">
@@ -312,7 +339,7 @@ function PeopleList({ people, rows, quota, canFileForOthers, profileEmail, onPic
               </button>
               {canFile && <button className="btn btn-primary !py-1.5 shrink-0" onClick={() => onQuickForm(p)}><Plus className="h-4 w-4" /> ยื่นใบลา</button>}
             </div>
-            <div className="mt-3"><MiniQuota quota={quota} used={used} /></div>
+            <div className="mt-3"><MiniQuota quota={quota} used={used} vacationCarryOver={p.vacationCarryOver} /></div>
           </div>
         );
       })}
@@ -360,7 +387,22 @@ export default function Leave() {
   }, []);
   const [quickForm, setQuickForm] = useState(null); // ยื่นใบลาแบบเร็วจากท้ายแถวในรายชื่อบุคลากร
   const [showCancel, setShowCancel] = useState(false);
+  const [toDeleteRow, setToDeleteRow] = useState(null); // ลบแถวข้อมูลตรงๆ จากตาราง "ทั้งหมด" (Super Admin เท่านั้น)
+  const [deletingRow, setDeletingRow] = useState(false);
   const isSuperAdmin = profile.role === 'super_admin';
+
+  const doDeleteRow = async () => {
+    if (!toDeleteRow) return;
+    setDeletingRow(true);
+    try {
+      await deleteDoc(doc(db, 'leaves', toDeleteRow.id));
+      await writeAudit({ action: 'delete', module: 'leave', docId: toDeleteRow.id, label: `${toDeleteRow.name} ${toDeleteRow.type}`, before: { status: toDeleteRow.status } });
+      say({ type: 'ok', text: 'ลบแถวข้อมูลออกจากทะเบียนแล้ว' });
+      setToDeleteRow(null);
+    } catch (err) {
+      say({ type: 'error', text: 'ลบไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally { setDeletingRow(false); }
+  };
 
   const list = tab === 'wait' ? (rows || []).filter((l) => l.status === 'รอพิจารณา') : rows || [];
   const waitCount = (rows || []).filter((l) => l.status === 'รอพิจารณา').length;
@@ -429,6 +471,9 @@ export default function Leave() {
                             } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); }
                           }}>ยกเลิก</button>
                         )}
+                        {isSuperAdmin && (
+                          <button className="btn btn-outline !px-2 !py-1 text-sm text-red-600" title="ลบแถวนี้ออกจากทะเบียนถาวร" onClick={() => setToDeleteRow(l)}><Trash2 className="h-4 w-4" /></button>
+                        )}
                       </span>
                     </td>
                   </tr>
@@ -446,6 +491,12 @@ export default function Leave() {
       )}
       {decide && <DecideModal leave={decide.l} decision={decide.d} by={profile.name || profile.email} onClose={() => setDecide(null)} say={say} />}
       {showCancel && <CancelPickerModal rows={rows || []} profile={profile} isSuperAdmin={isSuperAdmin} onClose={() => setShowCancel(false)} say={say} />}
+      {toDeleteRow && (
+        <ConfirmDialog
+          message={`ลบแถวข้อมูล "${toDeleteRow.name} · ${toDeleteRow.type} · ${fmtDate(toDeleteRow.start)}-${fmtDate(toDeleteRow.end)}" ออกจากทะเบียนถาวรหรือไม่? (ลบแล้วกู้คืนไม่ได้)`}
+          busy={deletingRow} onConfirm={doDeleteRow} onCancel={() => setToDeleteRow(null)}
+        />
+      )}
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );

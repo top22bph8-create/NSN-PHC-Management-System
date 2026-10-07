@@ -77,21 +77,17 @@ async function sendLine(channelAccessToken, targetId, message) {
   await pushLine(channelAccessToken, targetId, [{ type: 'text', text: message }]);
 }
 
-// ประเภทลา/โควตาเริ่มต้นต่อปีงบประมาณ — ต้องตรงกับ src/lib/leave.js (LEAVE_TYPES, DEFAULT_QUOTA) เสมอ
-// คัดลอกมาไว้ที่นี่แยกต่างหาก เพราะไฟล์ฝั่ง Cloud Function (CommonJS + firebase-admin) นำเข้าไฟล์ ES module
-// ฝั่งเว็บ (firebase/firestore ฝั่งไคลเอนต์) มาใช้ตรงๆ ไม่ได้
-const LEAVE_TYPES = [
-  'ลาป่วย', 'ลากิจส่วนตัว', 'ลาพักผ่อน', 'ลาคลอดบุตร',
-  'ลาไปช่วยเหลือภริยาที่คลอดบุตร', 'ลาอุปสมบท/ประกอบพิธีฮัจย์', 'ลาไปศึกษา/ฝึกอบรม/ดูงาน', 'อื่น ๆ',
-];
+// โควตาเริ่มต้นต่อปีงบประมาณ — ต้องตรงกับ src/lib/leave.js (DEFAULT_QUOTA) เสมอ คัดลอกมาไว้ที่นี่แยกต่างหาก
+// เพราะไฟล์ฝั่ง Cloud Function (CommonJS + firebase-admin) นำเข้าไฟล์ ES module ฝั่งเว็บ (firebase/firestore
+// ฝั่งไคลเอนต์) มาใช้ตรงๆ ไม่ได้
 const DEFAULT_QUOTA = {
   'ลาป่วย': 60, 'ลากิจส่วนตัว': 45, 'ลาพักผ่อน': 10, 'ลาคลอดบุตร': 90,
   'ลาไปช่วยเหลือภริยาที่คลอดบุตร': 15, 'ลาอุปสมบท/ประกอบพิธีฮัจย์': 120,
 };
 
-// สรุป "สถิติการลา/วันคงเหลือ" ของคนยื่นใบลา ทุกประเภทการลาที่มีโควตากำหนดเพดานไว้ (เพื่อให้ผู้อำนวยการเห็นภาพรวม
-// ประกอบการพิจารณาอนุมัติ) — คำนวณจากใบลาทั้งหมดของคนนี้ในปีงบประมาณเดียวกัน (รวมใบที่เพิ่งยื่นใหม่ด้วย เพราะตอนที่
-// ฟังก์ชันนี้ทำงาน เอกสารใบลาใหม่ถูกบันทึกเข้า Firestore เรียบร้อยแล้ว) ส่วนลาพักผ่อนคิดรวมวันยกยอดสะสมจากทำเนียบบุคลากรด้วย
+// สรุป "สถิติการลา/วันคงเหลือ" ของคนยื่นใบลา เฉพาะประเภทการลาที่กำลังยื่นใบนี้เพียงประเภทเดียวตามที่แจ้ง (ไม่แสดงทุก
+// ประเภทเหมือนรอบก่อน) — คำนวณจากใบลาทั้งหมดของคนนี้ในปีงบประมาณเดียวกัน (รวมใบที่เพิ่งยื่นใหม่ด้วย เพราะตอนที่ฟังก์ชัน
+// นี้ทำงาน เอกสารใบลาใหม่ถูกบันทึกเข้า Firestore เรียบร้อยแล้ว) ส่วนลาพักผ่อนคิดรวมวันยกยอดสะสมจากทำเนียบบุคลากรด้วย
 async function buildLeaveStatsLines(l) {
   const [quotaSnap, personSnap, leavesSnap] = await Promise.all([
     db.doc('settings/leaveQuota').get(),
@@ -100,44 +96,33 @@ async function buildLeaveStatsLines(l) {
   ]);
   const quota = { ...DEFAULT_QUOTA, ...(quotaSnap.exists ? quotaSnap.data() : {}) };
   const person = personSnap.exists ? personSnap.data() : {};
-  const used = {};
-  const pending = {};
+  let used = 0;
+  let pending = 0;
   leavesSnap.docs.forEach((d) => {
     const x = d.data();
+    if (x.type !== l.type) return; // นับเฉพาะประเภทเดียวกับใบที่กำลังยื่นนี้
     const days = Number(x.days) || 0;
-    if (x.status === 'อนุมัติ') used[x.type] = (used[x.type] || 0) + days;
-    if (x.status === 'รอพิจารณา') pending[x.type] = (pending[x.type] || 0) + days;
+    if (x.status === 'อนุมัติ') used += days;
+    if (x.status === 'รอพิจารณา') pending += days;
   });
 
-  const lines = [];
-  const typesToShow = Array.from(new Set([...LEAVE_TYPES, l.type]));
-  typesToShow.forEach((type) => {
-    const u = used[type] || 0;
-    const p = pending[type] || 0;
-    if (type === 'ลาพักผ่อน') {
-      const accrued = Number(person.vacationCarryOver) || 0;
-      const q = quota[type] ?? 0;
-      const remain = Math.max(0, q - u);
-      lines.push(`🗓️ ลาพักผ่อน: ยกยอดสะสม ${accrued} + สิทธิ์ปีนี้คงเหลือ ${remain} วัน = รวม ${accrued + remain} วัน (ใช้แล้ว ${u} · รออนุมัติ ${p})`);
-      return;
-    }
-    const q = quota[type];
-    if (q == null) {
-      if (u + p === 0 && type !== l.type) return; // ประเภทไม่จำกัดสิทธิ์ที่ยังไม่เคยใช้ และไม่ใช่ใบที่กำลังยื่นนี้ ไม่ต้องแสดงให้รก
-      lines.push(`${type}: ใช้แล้ว ${u} วัน · รออนุมัติ ${p} วัน (ไม่จำกัดสิทธิ์)`);
-      return;
-    }
-    const remain = Math.max(0, q - u);
-    lines.push(`${type}: ใช้แล้ว ${u} · รออนุมัติ ${p} จากโควตา ${q} วัน → คงเหลือ ${remain} วัน`);
-  });
-  return lines;
+  if (l.type === 'ลาพักผ่อน') {
+    const accrued = Number(person.vacationCarryOver) || 0;
+    const q = quota[l.type] ?? 0;
+    const remain = Math.max(0, q - used);
+    return [`🗓️ ลาพักผ่อน: ยกยอดสะสม ${accrued} + สิทธิ์ปีนี้คงเหลือ ${remain} วัน = รวม ${accrued + remain} วัน (ใช้แล้ว ${used} · รออนุมัติ ${pending})`];
+  }
+  const q = quota[l.type];
+  if (q == null) return [`${l.type}: ใช้แล้ว ${used} วัน · รออนุมัติ ${pending} วัน (ไม่จำกัดสิทธิ์)`];
+  const remain = Math.max(0, q - used);
+  return [`${l.type}: ใช้แล้ว ${used} · รออนุมัติ ${pending} จากโควตา ${q} วัน → คงเหลือ ${remain} วัน`];
 }
 
 // สร้างข้อความแบบ Flex พร้อมปุ่ม "อนุมัติ" / "ไม่อนุมัติ" สำหรับใบลาที่เพิ่งยื่นใหม่
-// statsLines = สถิติการลา/วันคงเหลือทุกประเภทของคนนี้ (จาก buildLeaveStatsLines) แสดงประกอบการพิจารณา
+// statsLines = สถิติการลา/วันคงเหลือเฉพาะประเภทที่กำลังยื่นของคนนี้ (จาก buildLeaveStatsLines) แสดงประกอบการพิจารณา
 function buildLeaveApprovalFlex(id, l, statsLines = []) {
   const summary = `📋 มีการยื่นใบลาใหม่\nชื่อ: ${l.name}\nตำแหน่ง: ${l.position || '-'}\nประเภท: ${l.type}\nวันที่: ${l.start} ถึง ${l.end} (${l.days} วัน)\nเหตุผล: ${l.reason || '-'}`;
-  const statsText = statsLines.length ? `\n\n📊 สถิติการลา/วันคงเหลือของ ${l.name} ปีงบนี้\n${statsLines.join('\n')}` : '';
+  const statsText = statsLines.length ? `\n\n📊 สถิติ/วันคงเหลือ "${l.type}" ของ ${l.name}\n${statsLines.join('\n')}` : '';
   return {
     type: 'flex',
     altText: `${summary}${statsText}\n\nสถานะ: รอพิจารณา`,
@@ -157,7 +142,7 @@ function buildLeaveApprovalFlex(id, l, statsLines = []) {
           { type: 'text', text: 'สถานะ: รอพิจารณา', wrap: true, size: 'sm', weight: 'bold', color: '#b45309' },
           ...(statsLines.length ? [
             { type: 'separator', margin: 'sm' },
-            { type: 'text', text: `📊 สถิติการลา/วันคงเหลือของ ${l.name} ปีงบนี้`, weight: 'bold', size: 'xs', wrap: true, margin: 'sm', color: '#0f766e' },
+            { type: 'text', text: `📊 สถิติ/วันคงเหลือ "${l.type}" ของ ${l.name}`, weight: 'bold', size: 'xs', wrap: true, margin: 'sm', color: '#0f766e' },
             ...statsLines.map((t) => ({ type: 'text', text: t, wrap: true, size: 'xs', color: '#475569' })),
           ] : []),
         ],
@@ -460,4 +445,40 @@ exports.dailyBirthdayReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 'A
     const text = `🎉🎂 วันนี้เป็นวันคล้ายวันเกิดของ "${u.name}"${u.position ? ` (${u.position})` : ''} 🎂🎉\n\n${greeting} 🌟🎈`;
     await sendLine(channelAccessToken, targetId, text);
   }
+});
+
+// ยกยอดวันลาพักผ่อน (10 วัน/ปีงบ) ที่ใช้ไม่หมดในปีงบประมาณ ไปเป็น "วันลาสะสม" ของแต่ละคนโดยอัตโนมัติตามที่แจ้ง — รันปีละ
+// ครั้งเดียวตอนต้นปีงบประมาณใหม่ (1 ต.ค. เวลา 01:00 น. เวลาไทย) คำนวณจากปีงบที่เพิ่งปิดไป (30 ก.ย.) ของแต่ละคน:
+// วันลาพักผ่อนคงเหลือ = โควตาลาพักผ่อนของปีนั้น (ตั้งค่าได้ที่ "ตั้งค่าระบบ") - วันที่ใช้ไปแล้ว(อนุมัติ) แล้วนำส่วนที่เหลือ
+// ไปบวกเพิ่มเข้าช่อง "ยกยอดลาพักผ่อนสะสม" ในทำเนียบบุคลากร (ยอดเดิมไม่ถูกล้าง สะสมพอกพูนไปเรื่อยๆ ทุกปี ไม่ได้กำหนดเพดาน
+// สูงสุดไว้ — ถ้าต้องการจำกัดเพดานสะสมสูงสุดตามระเบียบจริง แจ้งมาได้ จะเพิ่มเงื่อนไขให้) ดูยอดสะสมปัจจุบันของแต่ละคนได้ที่
+// หน้า "ทำเนียบบุคลากร" หรือการ์ด "ลาพักผ่อน" ในหน้า "ระบบควบคุมวันลา" (แสดงยอดสะสม + สิทธิ์ปีนี้คงเหลือ = รวม)
+exports.annualVacationCarryOver = onSchedule({ schedule: '0 1 1 10 *', timeZone: 'Asia/Bangkok' }, async () => {
+  const [y] = bangkokDateStr().split('-').map(Number); // ปี ค.ศ. ของวันที่รัน (1 ต.ค.)
+  const endedFy = y + 543; // ปีงบประมาณที่เพิ่งปิดไปเมื่อวานนี้ (30 ก.ย.)
+
+  const [quotaSnap, usersSnap, leavesSnap] = await Promise.all([
+    db.doc('settings/leaveQuota').get(),
+    db.collection('users').get(),
+    db.collection('leaves').where('fy', '==', endedFy).where('type', '==', 'ลาพักผ่อน').where('status', '==', 'อนุมัติ').get(),
+  ]);
+  const vacQuota = Number((quotaSnap.exists && quotaSnap.data()['ลาพักผ่อน']) ?? DEFAULT_QUOTA['ลาพักผ่อน']) || 0;
+  const usedByEmail = {};
+  leavesSnap.docs.forEach((d) => {
+    const x = d.data();
+    usedByEmail[x.userEmail] = (usedByEmail[x.userEmail] || 0) + (Number(x.days) || 0);
+  });
+
+  const updates = [];
+  usersSnap.docs.forEach((d) => {
+    const u = d.data();
+    if (u.role === 'pending') return;
+    const used = usedByEmail[u.email] || 0;
+    const unused = Math.max(0, vacQuota - used);
+    if (unused <= 0) return;
+    const newCarry = (Number(u.vacationCarryOver) || 0) + unused;
+    updates.push(d.ref.update({ vacationCarryOver: newCarry }));
+  });
+  await Promise.all(updates);
+  console.log(`annualVacationCarryOver: ยกยอดลาพักผ่อนปีงบ ${endedFy} ให้ ${updates.length} คน`);
 });

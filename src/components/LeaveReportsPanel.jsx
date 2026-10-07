@@ -5,9 +5,9 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
-import { LEAVE_STATUS_COLORS, LEAVE_TYPES, getQuota, matrixForAll, sortPeople, statsForPerson } from '../lib/leave';
+import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, evalRoundStats, getQuota, matrixForAll, sortPeople, statsForPerson } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
-import { fmtDate } from '../lib/thai';
+import { fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Spinner } from './ui';
 
 const printUrl = (kind, fy, personEmail) => {
@@ -27,6 +27,8 @@ export default function LeaveReportsPanel() {
   const [quota, setQuota] = useState(null);
   const [people, setPeople] = useState(null);
   const [personEmail, setPersonEmail] = useState(profile.email);
+  const [matrixMode, setMatrixMode] = useState('days'); // สลับมุมมองตาราง "สถิติการลารวม": จำนวนวัน/จำนวนครั้ง/วันที่ลาล่าสุด
+  const [evalRound, setEvalRound] = useState(evalRoundOf(todayStr())); // เกณฑ์ประเมินผล: เริ่มที่รอบปัจจุบันตามวันนี้
 
   useEffect(() => { getQuota().then(setQuota).catch(() => setQuota({})); }, []);
   useEffect(() => {
@@ -48,10 +50,17 @@ export default function LeaveReportsPanel() {
   const stats = useMemo(() => (quota ? statsForPerson(personRows, quota) : []), [personRows, quota]);
   const matrix = useMemo(() => (people && rows ? matrixForAll(people, rows) : { types: LEAVE_TYPES, rows: [] }), [people, rows]);
 
+  // เกณฑ์ประเมินผล (ลาป่วย+ลากิจ) ต่อรอบ: viewAll เห็นทุกคน ส่วนคนทั่วไปเห็นเฉพาะของตัวเอง (rows ถูกจำกัดด้วย email ไว้แล้วตั้งแต่ query)
+  const evalPeople = useMemo(() => {
+    const list = viewAll ? sortPeople(people || []) : [profile];
+    return list.map((p) => ({ ...p, stats: evalRoundStats((rows || []).filter((l) => l.userEmail === p.email), evalRound) }));
+  }, [viewAll, people, rows, evalRound, profile]);
+
   const tabs = [
     ['personal', 'ทะเบียนคุมการลา (รายบุคคล)'],
     ['statsPersonal', 'สถิติการลา (รายบุคคล)'],
     ...(viewAll ? [['combined', 'ทะเบียนรวมการลา (ทุกคน)'], ['statsAll', 'สถิติการลารวม (ทุกคน)']] : []),
+    ['evalRound', 'เกณฑ์ประเมินผล (ลาป่วย+ลากิจ)'],
   ];
 
   const needsPerson = tab === 'personal' || tab === 'statsPersonal';
@@ -71,6 +80,18 @@ export default function LeaveReportsPanel() {
   const exportStatsAll = () => exportXlsx(
     matrix.rows.map((r) => ({ ชื่อ: r.name, ตำแหน่ง: r.position, ...Object.fromEntries(matrix.types.map((t) => [t, r.byType[t] || 0])), รวมทั้งหมด: r.total })),
     'สถิติการลารวม', `สถิติการลารวม-ปีงบ${fy}`,
+  );
+  const exportEvalRound = () => exportXlsx(
+    evalPeople.map((p) => ({
+      ชื่อ: p.name || p.email, ตำแหน่ง: p.position || '',
+      [`ลาป่วย (ครั้ง, เกณฑ์ ${EVAL_ROUND_RULE.maxCountEach})`]: p.stats.sickCount,
+      [`ลาป่วย (วัน)`]: p.stats.sickDays,
+      [`ลากิจ (ครั้ง, เกณฑ์ ${EVAL_ROUND_RULE.maxCountEach})`]: p.stats.personalCount,
+      [`ลากิจ (วัน)`]: p.stats.personalDays,
+      [`รวมลาป่วย+ลากิจ (วัน, เกณฑ์ ${EVAL_ROUND_RULE.maxCombinedDays})`]: p.stats.combinedDays,
+      สถานะ: (p.stats.sickOver || p.stats.personalOver || p.stats.combinedOver) ? 'เกินเกณฑ์' : 'ปกติ',
+    })),
+    'เกณฑ์ประเมินผล', `เกณฑ์ประเมินผล-รอบที่${evalRound}-ปีงบ${fy}`,
   );
 
   return (
@@ -113,8 +134,23 @@ export default function LeaveReportsPanel() {
         )}
         {tab === 'statsAll' && (
           <>
+            <div className="mr-auto flex gap-1 rounded-full bg-slate-100 p-1 text-sm">
+              {[['days', 'จำนวนวัน'], ['count', 'จำนวนครั้ง'], ['lastDate', 'วันลาล่าสุด']].map(([k, l]) => (
+                <button key={k} onClick={() => setMatrixMode(k)} className={`rounded-full px-3 py-1 ${matrixMode === k ? 'bg-white font-semibold text-brand-700 shadow-sm' : 'text-slate-500'}`}>{l}</button>
+              ))}
+            </div>
             <button className="btn btn-outline !py-1.5" onClick={exportStatsAll} disabled={!matrix.rows.length}><Download className="h-4 w-4" /> ส่งออก Excel</button>
             <button className="btn btn-primary !py-1.5" onClick={() => window.open(printUrl('statsAll', fy), '_blank')}><Printer className="h-4 w-4" /> พิมพ์ PDF</button>
+          </>
+        )}
+        {tab === 'evalRound' && (
+          <>
+            <div className="mr-auto flex gap-1 rounded-full bg-slate-100 p-1 text-sm">
+              {[1, 2].map((r) => (
+                <button key={r} onClick={() => setEvalRound(r)} className={`rounded-full px-3 py-1 ${evalRound === r ? 'bg-white font-semibold text-brand-700 shadow-sm' : 'text-slate-500'}`}>{EVAL_ROUND_LABEL[r]}</button>
+              ))}
+            </div>
+            <button className="btn btn-outline !py-1.5" onClick={exportEvalRound} disabled={!evalPeople.length}><Download className="h-4 w-4" /> ส่งออก Excel</button>
           </>
         )}
       </div>
@@ -162,8 +198,8 @@ export default function LeaveReportsPanel() {
             )}
             {tab === 'statsPersonal' && (
               stats.length === 0 ? <EmptyState title="ยังไม่มีข้อมูลการลาในปีงบประมาณนี้" /> : (
-                <table className="w-full min-w-[640px] text-left">
-                  <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">โควตา/ปี</th><th className="px-3 py-2">ใช้แล้ว</th><th className="px-3 py-2">รออนุมัติ</th><th className="px-3 py-2">คงเหลือ</th><th className="px-3 py-2">จำนวนครั้ง</th></tr></thead>
+                <table className="w-full min-w-[760px] text-left">
+                  <thead className="bg-brand-50 text-sm text-slate-600"><tr><th className="px-3 py-2">ประเภท</th><th className="px-3 py-2">โควตา/ปี</th><th className="px-3 py-2">ใช้แล้ว</th><th className="px-3 py-2">รออนุมัติ</th><th className="px-3 py-2">คงเหลือ</th><th className="px-3 py-2">จำนวนครั้ง</th><th className="px-3 py-2">วันลาล่าสุด</th></tr></thead>
                   <tbody>
                     {stats.map((s) => (
                       <tr key={s.type} className="border-t border-slate-100">
@@ -173,6 +209,7 @@ export default function LeaveReportsPanel() {
                         <td className="px-3 py-2">{s.pending}</td>
                         <td className="px-3 py-2">{s.remaining ?? '-'}</td>
                         <td className="px-3 py-2">{s.count}</td>
+                        <td className="px-3 py-2 text-sm">{s.lastDate ? fmtDate(s.lastDate) : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -186,17 +223,53 @@ export default function LeaveReportsPanel() {
                     <tr>
                       <th className="px-3 py-2">ชื่อ-ตำแหน่ง</th>
                       {matrix.types.map((t) => <th key={t} className="px-3 py-2 text-center">{t}</th>)}
-                      <th className="px-3 py-2 text-center">รวม</th>
+                      {matrixMode === 'days' && <th className="px-3 py-2 text-center">รวม</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {matrix.rows.map((r) => (
                       <tr key={r.email} className="border-t border-slate-100">
                         <td className="px-3 py-2"><div className="font-medium">{r.name}</div><div className="text-xs text-slate-500">{r.position}</div></td>
-                        {matrix.types.map((t) => <td key={t} className="px-3 py-2 text-center">{r.byType[t] || '-'}</td>)}
-                        <td className="px-3 py-2 text-center font-semibold">{r.total || '-'}</td>
+                        {matrix.types.map((t) => (
+                          <td key={t} className="px-3 py-2 text-center">
+                            {matrixMode === 'days' && (r.byType[t] || '-')}
+                            {matrixMode === 'count' && (r.countByType[t] || '-')}
+                            {matrixMode === 'lastDate' && (r.lastDateByType[t] ? fmtDate(r.lastDateByType[t]) : '-')}
+                          </td>
+                        ))}
+                        {matrixMode === 'days' && <td className="px-3 py-2 text-center font-semibold">{r.total || '-'}</td>}
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              )
+            )}
+            {tab === 'evalRound' && (
+              evalPeople.length === 0 ? <EmptyState title="ไม่มีข้อมูล" /> : (
+                <table className="w-full min-w-[760px] text-left">
+                  <thead className="bg-brand-50 text-sm text-slate-600">
+                    <tr>
+                      {viewAll && <th className="px-3 py-2">ชื่อ-ตำแหน่ง</th>}
+                      <th className="px-3 py-2 text-center">ลาป่วย (ครั้ง/วัน)</th>
+                      <th className="px-3 py-2 text-center">ลากิจ (ครั้ง/วัน)</th>
+                      <th className="px-3 py-2 text-center">รวมลาป่วย+ลากิจ (วัน)</th>
+                      <th className="px-3 py-2 text-center">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {evalPeople.map((p) => {
+                      const s = p.stats;
+                      const over = s.sickOver || s.personalOver || s.combinedOver;
+                      return (
+                        <tr key={p.email} className="border-t border-slate-100">
+                          {viewAll && <td className="px-3 py-2"><div className="font-medium">{p.name || p.email}</div><div className="text-xs text-slate-500">{p.position}</div></td>}
+                          <td className={`px-3 py-2 text-center ${s.sickOver ? 'font-semibold text-red-600' : ''}`}>{s.sickCount}/{EVAL_ROUND_RULE.maxCountEach} · {s.sickDays} วัน</td>
+                          <td className={`px-3 py-2 text-center ${s.personalOver ? 'font-semibold text-red-600' : ''}`}>{s.personalCount}/{EVAL_ROUND_RULE.maxCountEach} · {s.personalDays} วัน</td>
+                          <td className={`px-3 py-2 text-center ${s.combinedOver ? 'font-semibold text-red-600' : ''}`}>{s.combinedDays}/{EVAL_ROUND_RULE.maxCombinedDays}</td>
+                          <td className="px-3 py-2 text-center"><Badge className={over ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}>{over ? 'เกินเกณฑ์' : 'ปกติ'}</Badge></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )

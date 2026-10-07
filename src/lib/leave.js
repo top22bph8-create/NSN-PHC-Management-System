@@ -38,6 +38,51 @@ export async function getQuota() {
   return { ...DEFAULT_QUOTA, ...(s.exists() ? s.data() : {}) };
 }
 
+// รอบประเมินผลการปฏิบัติราชการ: แบ่งปีงบประมาณเป็น 2 รอบ รอบละ 6 เดือน — รอบที่ 1 = 1 ต.ค. - 31 มี.ค., รอบที่ 2 = 1 เม.ย. - 30 ก.ย.
+// ทั้งสองรอบอยู่ในปีงบประมาณเดียวกันเสมอตาม fiscalYearBE (รอบ 1 เริ่มเดือน ต.ค. ซึ่งเป็นเดือนแรกของปีงบใหม่แล้ว) จึงกรองจาก
+// รายการวันลาที่ query มาด้วยปีงบเดียวกันได้เลย ไม่ต้อง query แยก
+export function evalRoundOf(dateStr) {
+  const m = Number(String(dateStr || '').slice(5, 7));
+  return (m >= 10 || m <= 3) ? 1 : 2;
+}
+export const EVAL_ROUND_LABEL = {
+  1: 'รอบที่ 1 (1 ต.ค. - 31 มี.ค.)',
+  2: 'รอบที่ 2 (1 เม.ย. - 30 ก.ย.)',
+};
+
+// เกณฑ์การลาที่หน่วยงานกำหนดใช้ประกอบการประเมินผลการปฏิบัติราชการ ต่อรอบประเมิน (6 เดือน) ตามที่แจ้ง:
+// ลาป่วยไม่เกิน 9 ครั้ง, ลากิจส่วนตัวไม่เกิน 9 ครั้ง และลาป่วย+ลากิจรวมกันต้องไม่เกิน 23 วันทำการ/รอบ
+// (เป็นเกณฑ์ประกอบการประเมิน ไม่ใช่สิทธิ์วันลาตามระเบียบ จึงไม่บล็อกการยื่นใบลาเหมือนโควตาประจำปี — แจ้งเตือนให้ทราบเท่านั้น)
+export const EVAL_ROUND_RULE = { sickType: 'ลาป่วย', personalType: 'ลากิจส่วนตัว', maxCountEach: 9, maxCombinedDays: 23 };
+
+// วันที่ลาล่าสุดของแต่ละประเภท (ไม่นับใบที่ยกเลิก) จากรายการใบลาที่ส่งเข้ามา — ใช้ดู "วันลาล่าสุด" ของแต่ละคนแต่ละประเภท
+export function lastDatesByType(leaves) {
+  const out = {};
+  (leaves || []).forEach((l) => {
+    if (l.status === 'ยกเลิก') return;
+    if (!out[l.type] || l.start > out[l.type]) out[l.type] = l.start;
+  });
+  return out;
+}
+
+// สรุปจำนวนครั้ง/วันลาป่วย+ลากิจ ของคนคนหนึ่งในรอบประเมินที่ระบุ (นับเฉพาะใบที่อนุมัติแล้ว) พร้อมธงเกินเกณฑ์หรือไม่
+export function evalRoundStats(leaves, round) {
+  const inRound = (leaves || []).filter((l) => l.status === 'อนุมัติ' && evalRoundOf(l.start) === round);
+  const sickLeaves = inRound.filter((l) => l.type === EVAL_ROUND_RULE.sickType);
+  const personalLeaves = inRound.filter((l) => l.type === EVAL_ROUND_RULE.personalType);
+  const sickCount = sickLeaves.length;
+  const personalCount = personalLeaves.length;
+  const sickDays = sickLeaves.reduce((s, l) => s + (Number(l.days) || 0), 0);
+  const personalDays = personalLeaves.reduce((s, l) => s + (Number(l.days) || 0), 0);
+  const combinedDays = sickDays + personalDays;
+  return {
+    sickCount, personalCount, sickDays, personalDays, combinedDays,
+    sickOver: sickCount > EVAL_ROUND_RULE.maxCountEach,
+    personalOver: personalCount > EVAL_ROUND_RULE.maxCountEach,
+    combinedOver: combinedDays > EVAL_ROUND_RULE.maxCombinedDays,
+  };
+}
+
 // ลำดับตำแหน่งที่ใช้จัดเรียงรายชื่อบุคลากร (ใช้ร่วมกันทั้งหน้าวันลารายบุคคลและหน้ารายงาน)
 export const POSITION_ORDER = [
   'นักวิชาการสาธารณสุขชำนาญการพิเศษ',
@@ -64,6 +109,7 @@ export function statsForPerson(leaves, quota) {
   const { used, pending } = usage(leaves);
   const count = {};
   (leaves || []).forEach((l) => { if (l.status === 'อนุมัติ') count[l.type] = (count[l.type] || 0) + 1; });
+  const last = lastDatesByType(leaves);
   const types = Array.from(new Set([...LEAVE_TYPES, ...Object.keys(used), ...Object.keys(pending)]));
   return types
     .filter((t) => (used[t] || 0) + (pending[t] || 0) > 0 || quota?.[t] != null)
@@ -71,7 +117,7 @@ export function statsForPerson(leaves, quota) {
       const q = quota?.[type];
       const u = used[type] || 0;
       const p = pending[type] || 0;
-      return { type, quota: q ?? null, used: u, pending: p, remaining: q != null ? Math.max(0, q - u) : null, count: count[type] || 0 };
+      return { type, quota: q ?? null, used: u, pending: p, remaining: q != null ? Math.max(0, q - u) : null, count: count[type] || 0, lastDate: last[type] || null };
     });
 }
 
@@ -81,10 +127,13 @@ export function matrixForAll(people, leaves) {
   const approved = (leaves || []).filter((l) => l.status === 'อนุมัติ');
   const rows = sortPeople(people).map((p) => {
     const mine = approved.filter((l) => l.userEmail === p.email);
+    const allMine = (leaves || []).filter((l) => l.userEmail === p.email); // รวมทุกสถานะ (ยกเว้นยกเลิก) ใช้หาวันลาล่าสุด
     const byType = {};
+    const countByType = {};
     let total = 0;
-    mine.forEach((l) => { const d = Number(l.days) || 0; byType[l.type] = (byType[l.type] || 0) + d; total += d; });
-    return { email: p.email, name: p.name || p.email, position: p.position || '', byType, total };
+    mine.forEach((l) => { const d = Number(l.days) || 0; byType[l.type] = (byType[l.type] || 0) + d; countByType[l.type] = (countByType[l.type] || 0) + 1; total += d; });
+    const lastDateByType = lastDatesByType(allMine);
+    return { email: p.email, name: p.name || p.email, position: p.position || '', byType, countByType, lastDateByType, total };
   });
   return { types, rows };
 }
