@@ -4,9 +4,10 @@
 // เพิ่มข้อมูลที่ควรมีสำหรับฐานข้อมูลบุคคลากรราชการ: ประเภทบุคลากร, เลขบัตรประชาชน, เบอร์โทรศัพท์, วุฒิการศึกษา
 import { useEffect, useMemo, useState } from 'react';
 import { doc, collection, onSnapshot, updateDoc } from 'firebase/firestore';
-import { Loader2, Pencil, Search, Users } from 'lucide-react';
+import { FileSpreadsheet, Loader2, Pencil, Printer, Search, Users } from 'lucide-react';
 import { db } from '../firebase';
 import { fmtDate, calcDuration, fmtDuration } from '../lib/thai';
+import { exportXlsx } from '../lib/exportFile';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { useAuth } from '../context/AuthContext';
 import { canWrite } from '../lib/roles';
@@ -108,9 +109,37 @@ export default function Personnel() {
   );
   const shown = useMemo(() => (rows || []).filter((r) => !q.trim() || `${r.name} ${r.position} ${r.personnelType || ''} ${r.phone || ''}`.toLowerCase().includes(q.trim().toLowerCase())), [rows, q]);
 
+  // ออกรายงานประวัติบุคลากรทั้งหมดเป็น Excel — ใช้ชุดข้อมูลเดียวกับตารางในหน้านี้ (ไม่กรองตามคำค้นหา เอาทุกคน)
+  const doExportExcel = () => {
+    if (!rows?.length) return say({ type: 'error', text: 'ไม่มีข้อมูลบุคลากรให้ออกรายงาน' });
+    const data = rows.map((u) => ({
+      'ชื่อ - สกุล': u.name || usernameOf(u.email),
+      'ตำแหน่ง': u.position || '',
+      'ประเภทบุคลากร': u.personnelType || '',
+      'เลขบัตรประชาชน': u.idCard || '',
+      'เบอร์โทรศัพท์': u.phone || '',
+      'วุฒิการศึกษา': u.education || '',
+      'วันเดือนปีเกิด': u.birthday ? fmtDate(u.birthday) : '',
+      'อายุ': u.birthday ? fmtDuration(calcDuration(u.birthday)) : '',
+      'วันมาปฏิบัติงาน': u.startWorkDate ? fmtDate(u.startWorkDate) : '',
+      'วันบรรจุเป็นข้าราชการ': u.civilServiceDate ? fmtDate(u.civilServiceDate) : '',
+      'อายุราชการ': u.civilServiceDate ? fmtDuration(calcDuration(u.civilServiceDate)) : '',
+      'ยกยอดลาพักผ่อนสะสม(วัน)': u.vacationCarryOver || 0,
+    }));
+    exportXlsx(data, 'ทำเนียบบุคลากร', `ทำเนียบบุคลากร_${new Date().toISOString().slice(0, 10)}`);
+    writeAudit({ action: 'export', module: 'personnel', label: `รายงานประวัติบุคลากร (Excel) ${rows.length} รายการ` }).catch(() => {});
+  };
+  const openPrintPersonnel = () => window.open(`${window.location.origin}${window.location.pathname}#/print-personnel`, '_blank');
+
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
-      <PageHeader icon={Users} emoji="👥" title="ทำเนียบบุคลากร" subtitle="ฐานข้อมูลบุคคลากรข้าราชการและลูกจ้างหน่วยงาน (จัดการ Username/บทบาท/บัญชีผู้ใช้ ที่เมนู “กำหนดผู้ใช้งาน”)" />
+      <PageHeader icon={Users} emoji="👥" title="ทำเนียบบุคลากร" subtitle="ฐานข้อมูลบุคคลากรข้าราชการและลูกจ้างหน่วยงาน (จัดการ Username/บทบาท/บัญชีผู้ใช้ ที่เมนู “กำหนดผู้ใช้งาน”)"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doExportExcel} title="ออกรายงานประวัติบุคลากรเป็น Excel"><FileSpreadsheet className="h-4 w-4" /> Excel</button>
+            <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={openPrintPersonnel} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> PDF</button>
+          </div>
+        } />
       <div className="relative mb-3 max-w-md">
         <Search className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-brand-400" />
         <input className="input !pl-10" placeholder="ค้นหาชื่อ ตำแหน่ง ประเภทบุคลากร หรือเบอร์โทร" value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหาบุคลากร" />

@@ -12,6 +12,7 @@ import Signup from './pages/Signup';
 import PrintReport from './pages/PrintReport';
 import PrintLeave from './pages/PrintLeave';
 import PrintLeaveReport from './pages/PrintLeaveReport';
+import PrintPersonnel from './pages/PrintPersonnel';
 import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
@@ -63,6 +64,18 @@ function PrintGate() {
       <PrintReport />
     </FiscalYearProvider>
   );
+}
+
+// เกตหน้าพิมพ์รายงานประวัติบุคลากร: ต้องล็อกอินและมีสิทธิ์อ่านโมดูลทำเนียบบุคลากรก่อนจึงเห็นรายงาน
+function PrintPersonnelGate() {
+  const { loading, user, profile, problem, error } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Login />;
+  if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (!canRead(profile.role, 'personnel')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์เข้าถึงรายงานนี้</div>;
+  }
+  return <PrintPersonnel />;
 }
 
 // เกตหน้าพิมพ์ใบลา: ต้องล็อกอินและมีสิทธิ์อ่านโมดูลวันลาก่อนจึงเห็นแบบฟอร์ม
@@ -148,6 +161,7 @@ export default function App() {
         <Routes>
           <Route path="/signup" element={<Signup />} />
           <Route path="/print/:key" element={<PrintGate />} />
+          <Route path="/print-personnel" element={<PrintPersonnelGate />} />
           <Route path="/print-leave/:id" element={<PrintLeaveGate />} />
           <Route path="/print-leave-report/:kind" element={<PrintLeaveReportGate />} />
           <Route path="/*" element={<Shell />} />

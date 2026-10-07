@@ -435,8 +435,8 @@ export default function PrintLeave() {
 
   return (
     <div
-      className="mx-auto max-w-[800px] bg-white p-8 text-[16px] leading-6 text-slate-800 print:max-w-none print:p-0"
-      style={{ fontFamily: FONT_STACK }}
+      className="mx-auto max-w-[800px] bg-white p-8 text-slate-800 print:max-w-none print:p-0"
+      style={{ fontFamily: FONT_STACK, fontSize: '16pt', lineHeight: 1.5 }}
     >
       <PrintFonts />
       <div className="mb-3 flex justify-end gap-2 print:hidden">
