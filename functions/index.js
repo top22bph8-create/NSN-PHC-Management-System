@@ -77,12 +77,70 @@ async function sendLine(channelAccessToken, targetId, message) {
   await pushLine(channelAccessToken, targetId, [{ type: 'text', text: message }]);
 }
 
+// ประเภทลา/โควตาเริ่มต้นต่อปีงบประมาณ — ต้องตรงกับ src/lib/leave.js (LEAVE_TYPES, DEFAULT_QUOTA) เสมอ
+// คัดลอกมาไว้ที่นี่แยกต่างหาก เพราะไฟล์ฝั่ง Cloud Function (CommonJS + firebase-admin) นำเข้าไฟล์ ES module
+// ฝั่งเว็บ (firebase/firestore ฝั่งไคลเอนต์) มาใช้ตรงๆ ไม่ได้
+const LEAVE_TYPES = [
+  'ลาป่วย', 'ลากิจส่วนตัว', 'ลาพักผ่อน', 'ลาคลอดบุตร',
+  'ลาไปช่วยเหลือภริยาที่คลอดบุตร', 'ลาอุปสมบท/ประกอบพิธีฮัจย์', 'ลาไปศึกษา/ฝึกอบรม/ดูงาน', 'อื่น ๆ',
+];
+const DEFAULT_QUOTA = {
+  'ลาป่วย': 60, 'ลากิจส่วนตัว': 45, 'ลาพักผ่อน': 10, 'ลาคลอดบุตร': 90,
+  'ลาไปช่วยเหลือภริยาที่คลอดบุตร': 15, 'ลาอุปสมบท/ประกอบพิธีฮัจย์': 120,
+};
+
+// สรุป "สถิติการลา/วันคงเหลือ" ของคนยื่นใบลา ทุกประเภทการลาที่มีโควตากำหนดเพดานไว้ (เพื่อให้ผู้อำนวยการเห็นภาพรวม
+// ประกอบการพิจารณาอนุมัติ) — คำนวณจากใบลาทั้งหมดของคนนี้ในปีงบประมาณเดียวกัน (รวมใบที่เพิ่งยื่นใหม่ด้วย เพราะตอนที่
+// ฟังก์ชันนี้ทำงาน เอกสารใบลาใหม่ถูกบันทึกเข้า Firestore เรียบร้อยแล้ว) ส่วนลาพักผ่อนคิดรวมวันยกยอดสะสมจากทำเนียบบุคลากรด้วย
+async function buildLeaveStatsLines(l) {
+  const [quotaSnap, personSnap, leavesSnap] = await Promise.all([
+    db.doc('settings/leaveQuota').get(),
+    db.doc(`users/${l.userEmail}`).get(),
+    db.collection('leaves').where('fy', '==', l.fy).where('userEmail', '==', l.userEmail).get(),
+  ]);
+  const quota = { ...DEFAULT_QUOTA, ...(quotaSnap.exists ? quotaSnap.data() : {}) };
+  const person = personSnap.exists ? personSnap.data() : {};
+  const used = {};
+  const pending = {};
+  leavesSnap.docs.forEach((d) => {
+    const x = d.data();
+    const days = Number(x.days) || 0;
+    if (x.status === 'อนุมัติ') used[x.type] = (used[x.type] || 0) + days;
+    if (x.status === 'รอพิจารณา') pending[x.type] = (pending[x.type] || 0) + days;
+  });
+
+  const lines = [];
+  const typesToShow = Array.from(new Set([...LEAVE_TYPES, l.type]));
+  typesToShow.forEach((type) => {
+    const u = used[type] || 0;
+    const p = pending[type] || 0;
+    if (type === 'ลาพักผ่อน') {
+      const accrued = Number(person.vacationCarryOver) || 0;
+      const q = quota[type] ?? 0;
+      const remain = Math.max(0, q - u);
+      lines.push(`🗓️ ลาพักผ่อน: ยกยอดสะสม ${accrued} + สิทธิ์ปีนี้คงเหลือ ${remain} วัน = รวม ${accrued + remain} วัน (ใช้แล้ว ${u} · รออนุมัติ ${p})`);
+      return;
+    }
+    const q = quota[type];
+    if (q == null) {
+      if (u + p === 0 && type !== l.type) return; // ประเภทไม่จำกัดสิทธิ์ที่ยังไม่เคยใช้ และไม่ใช่ใบที่กำลังยื่นนี้ ไม่ต้องแสดงให้รก
+      lines.push(`${type}: ใช้แล้ว ${u} วัน · รออนุมัติ ${p} วัน (ไม่จำกัดสิทธิ์)`);
+      return;
+    }
+    const remain = Math.max(0, q - u);
+    lines.push(`${type}: ใช้แล้ว ${u} · รออนุมัติ ${p} จากโควตา ${q} วัน → คงเหลือ ${remain} วัน`);
+  });
+  return lines;
+}
+
 // สร้างข้อความแบบ Flex พร้อมปุ่ม "อนุมัติ" / "ไม่อนุมัติ" สำหรับใบลาที่เพิ่งยื่นใหม่
-function buildLeaveApprovalFlex(id, l) {
+// statsLines = สถิติการลา/วันคงเหลือทุกประเภทของคนนี้ (จาก buildLeaveStatsLines) แสดงประกอบการพิจารณา
+function buildLeaveApprovalFlex(id, l, statsLines = []) {
   const summary = `📋 มีการยื่นใบลาใหม่\nชื่อ: ${l.name}\nตำแหน่ง: ${l.position || '-'}\nประเภท: ${l.type}\nวันที่: ${l.start} ถึง ${l.end} (${l.days} วัน)\nเหตุผล: ${l.reason || '-'}`;
+  const statsText = statsLines.length ? `\n\n📊 สถิติการลา/วันคงเหลือของ ${l.name} ปีงบนี้\n${statsLines.join('\n')}` : '';
   return {
     type: 'flex',
-    altText: `${summary}\nสถานะ: รอพิจารณา`,
+    altText: `${summary}${statsText}\n\nสถานะ: รอพิจารณา`,
     contents: {
       type: 'bubble',
       body: {
@@ -97,6 +155,11 @@ function buildLeaveApprovalFlex(id, l) {
           { type: 'text', text: `วันที่: ${l.start} ถึง ${l.end} (${l.days} วัน)`, wrap: true, size: 'sm' },
           { type: 'text', text: `เหตุผล: ${l.reason || '-'}`, wrap: true, size: 'sm' },
           { type: 'text', text: 'สถานะ: รอพิจารณา', wrap: true, size: 'sm', weight: 'bold', color: '#b45309' },
+          ...(statsLines.length ? [
+            { type: 'separator', margin: 'sm' },
+            { type: 'text', text: `📊 สถิติการลา/วันคงเหลือของ ${l.name} ปีงบนี้`, weight: 'bold', size: 'xs', wrap: true, margin: 'sm', color: '#0f766e' },
+            ...statsLines.map((t) => ({ type: 'text', text: t, wrap: true, size: 'xs', color: '#475569' })),
+          ] : []),
         ],
       },
       footer: {
@@ -211,7 +274,10 @@ exports.onLeaveCreated = onDocumentCreated('leaves/{id}', async (event) => {
   const l = event.data.data();
   const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
   if (!channelAccessToken || !targetId || !enabled || !events.submit) return;
-  await pushLine(channelAccessToken, targetId, [buildLeaveApprovalFlex(id, l)]);
+  // แนบสถิติการลา/วันคงเหลือทุกประเภทของคนยื่นไปด้วย เพื่อให้ผู้อำนวยการเห็นข้อมูลประกอบการพิจารณาอนุมัติทันทีในไลน์
+  // (พลาดไม่เป็นไร ถ้าดึงสถิติไม่สำเร็จก็ยังส่งการ์ดอนุมัติ/ไม่อนุมัติตามปกติ เพียงแต่ไม่มีส่วนสถิติแนบ)
+  const statsLines = await buildLeaveStatsLines(l).catch((e) => { console.error('buildLeaveStatsLines error:', e); return []; });
+  await pushLine(channelAccessToken, targetId, [buildLeaveApprovalFlex(id, l, statsLines)]);
 });
 
 // เมื่อสถานะใบลาเปลี่ยน (อนุมัติ / ไม่อนุมัติ / ยกเลิก) — ไม่ว่าจะเปลี่ยนจากในเว็บหรือกดปุ่มในไลน์ก็ตาม
