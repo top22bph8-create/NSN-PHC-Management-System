@@ -38,15 +38,32 @@ const DIRECTOR_POSITION = 'ผู้อำนวยการโรงพยา�
 // เส้นประสำหรับให้กรอกด้วยลายมือ
 const Blank = ({ w = 'w-40' }) => <span className={`inline-block border-b border-dotted border-slate-500 align-bottom ${w}`}>&nbsp;</span>;
 
-// แปลง Firestore Timestamp (หรือค่าที่แปลงเป็นวันที่ได้) เป็นวันที่ไทยแบบยาว เช่น "18 มิถุนายน 2569"
-function tsToThaiLong(ts) {
+// ย่อหน้าเนื้อหาแบบต่อเนื่องเป็นก้อนเดียว (ไม่สับเป็นหลายย่อหน้าเหมือนเดิม) ตามรูปแบบหนังสือราชการจริง
+// ย่อหน้าแรกเว้นระยะ 1.25 ซม. (2 Tab ตามระเบียบงานสารบรรณ) แทนการเคาะวรรค &nbsp; 4 ครั้งแบบเดิม
+// ช่วยลดระยะขอบระหว่างย่อหน้าที่เคยเสียไปโดยไม่จำเป็น ทำให้พอดีกับ A4 แผ่นเดียวง่ายขึ้นด้วย
+function Body({ children }) {
+  return (
+    <p className="mt-0.5 text-justify leading-6" style={{ textIndent: '1.25cm' }}>
+      {children}
+    </p>
+  );
+}
+
+// แปลง Firestore Timestamp (หรือค่าที่แปลงเป็นวันที่ได้) เป็นเลขวันที่ ISO (YYYY-MM-DD) ตามเวลาเครื่อง ใช้เทียบวันที่แบบง่าย
+function tsToDateStr(ts) {
   if (!ts) return '';
   const d = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
   if (Number.isNaN(d.getTime())) return '';
   const y = String(d.getFullYear());
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return fmtDateLong(`${y}-${m}-${day}`);
+  return `${y}-${m}-${day}`;
+}
+
+// แปลง Firestore Timestamp (หรือค่าที่แปลงเป็นวันที่ได้) เป็นวันที่ไทยแบบยาว เช่น "18 มิถุนายน 2569"
+function tsToThaiLong(ts) {
+  const iso = tsToDateStr(ts);
+  return iso ? fmtDateLong(iso) : '';
 }
 
 // ช่องสี่เหลี่ยม ติ๊กเครื่องหมายถูกอัตโนมัติตามประเภทที่ตรงกับใบลานี้
@@ -225,26 +242,9 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
       <Head title="แบบใบลาป่วย ลาคลอดบุตร ลากิจส่วนตัว" dateText={dateText} />
       <p>เรื่อง&nbsp;&nbsp;ขอลา{l.type.replace('ลา', '')}</p>
       <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-0.5 leading-6">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
-      </p>
-      <p className="leading-6">สังกัด {ORG_LONG}</p>
-      <div className="mt-0.5 flex gap-2 leading-6">
-        <span>ขอลา</span>
-        <span className="flex flex-col gap-0.5">
-          <span><CheckBox checked={isType('ลาป่วย')} /> ป่วย</span>
-          <span><CheckBox checked={isType('ลากิจส่วนตัว')} /> กิจส่วนตัว</span>
-          <span><CheckBox checked={isType('ลาคลอดบุตร')} /> คลอดบุตร</span>
-        </span>
-      </div>
-      <p className="mt-0.5 leading-6">
-        ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึง {fmtDateLong(l.end)} มีกำหนดลาครั้งนี้ {l.days} วัน
-      </p>
-      <p className="leading-6">
-        ข้าพเจ้าได้ลา <CheckBox checked={isType('ลาป่วย')} />ป่วย <CheckBox checked={isType('ลากิจส่วนตัว')} />กิจส่วนตัว <CheckBox checked={isType('ลาคลอดบุตร')} />คลอดบุตร ครั้งสุดท้ายตั้งแต่วันที่ {lastSame ? fmtDateLong(lastSame) : <Blank />}
-      </p>
-      <p className="leading-6">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <p className="leading-6">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
+      <Body>
+        ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG} ขอลา <CheckBox checked={isType('ลาป่วย')} />ป่วย <CheckBox checked={isType('ลากิจส่วนตัว')} />กิจส่วนตัว <CheckBox checked={isType('ลาคลอดบุตร')} />คลอดบุตร ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึง {fmtDateLong(l.end)} มีกำหนดลาครั้งนี้ {l.days} วัน ข้าพเจ้าได้ลา <CheckBox checked={isType('ลาป่วย')} />ป่วย <CheckBox checked={isType('ลากิจส่วนตัว')} />กิจส่วนตัว <CheckBox checked={isType('ลาคลอดบุตร')} />คลอดบุตร ครั้งสุดท้ายตั้งแต่วันที่ {lastSame ? fmtDateLong(lastSame) : <Blank />} ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />} หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}
+      </Body>
       <div className="mt-2 text-center text-sm leading-[1.15]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
@@ -273,15 +273,9 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
       <Head title="แบบใบลาพักผ่อน" dateText={dateText} />
       <p>เรื่อง&nbsp;&nbsp;ขอลาพักผ่อน</p>
       <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-0.5 leading-6">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
-      </p>
-      <p className="leading-6">
-        สังกัด {ORG_DEPT} มีวันลาพักผ่อนสะสม {quotaAccrued} วันทำการ มีสิทธิลาพักผ่อนประจำปีนี้อีก {quotaRemain} วันทำการ รวมเป็น {quotaTotal} วันทำการ ประสงค์ขออนุญาตลาพักผ่อน
-      </p>
-      <p className="leading-6">
-        ระหว่างวันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} รวม {l.days} วันทำการ ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่โทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-56" />}
-      </p>
+      <Body>
+        ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_DEPT} มีวันลาพักผ่อนสะสม {quotaAccrued} วันทำการ มีสิทธิลาพักผ่อนประจำปีนี้อีก {quotaRemain} วันทำการ รวมเป็น {quotaTotal} วันทำการ ประสงค์ขออนุญาตลาพักผ่อนระหว่างวันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} รวม {l.days} วันทำการ ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่โทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-56" />}
+      </Body>
       <div className="mt-2 text-center text-sm leading-[1.15]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
@@ -310,16 +304,9 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
       <Head title={l.type.includes('ฮัจย์') ? 'แบบใบลาอุปสมบท/ประกอบพิธีฮัจย์' : 'แบบใบลาอุปสมบท'} dateText={dateText} />
       <p>เรื่อง&nbsp;&nbsp;ขอลาอุปสมบท/ประกอบพิธีฮัจย์</p>
       <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-0.5 leading-6">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
-      </p>
-      <p className="leading-6">เกิดวันที่ <Blank /> เข้ารับราชการเมื่อวันที่ <Blank /></p>
-      <p className="leading-6">ข้าพเจ้า <Blank w="w-24" /> เคยอุปสมบท/ประกอบพิธีฮัจย์มาก่อน</p>
-      <p className="leading-6">บัดนี้มีศรัทธาจะอุปสมบท/ประกอบพิธีฮัจย์ ณ <Blank w="w-96" /></p>
-      <p className="leading-6">
-        จึงขออนุญาตลาตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
-      </p>
-      <p className="leading-6">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
+      <Body>
+        ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG} เกิดวันที่ <Blank /> เข้ารับราชการเมื่อวันที่ <Blank /> ข้าพเจ้า <Blank w="w-24" /> เคยอุปสมบท/ประกอบพิธีฮัจย์มาก่อน บัดนี้มีศรัทธาจะอุปสมบท/ประกอบพิธีฮัจย์ ณ <Blank w="w-96" /> จึงขออนุญาตลาตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}
+      </Body>
       <div className="mt-2 text-center text-sm leading-[1.15]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
@@ -343,14 +330,9 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
       <Head title={`แบบใบ${l.type}`} dateText={dateText} />
       <p>เรื่อง&nbsp;&nbsp;ขอ{l.type}</p>
       <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-0.5 leading-6">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
-      </p>
-      <p className="leading-6">เนื่องจาก {l.reason || <Blank w="w-96" />}</p>
-      <p className="leading-6">
-        ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
-      </p>
-      <p className="leading-6">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
+      <Body>
+        ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG} เนื่องจาก {l.reason || <Blank w="w-96" />} ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}
+      </Body>
       <div className="mt-2 text-center text-sm leading-[1.15]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
@@ -422,8 +404,12 @@ export default function PrintLeave() {
   const isOwnerLeave = l.userEmail === OWNER_EMAIL;
   // ทุกคนเรียนถึงผู้อำนวยการ รพ.สต. ยกเว้นใบลาของผู้อำนวยการเองที่ต้องส่งขึ้นไปที่กองสาธารณสุข
   const to = isOwnerLeave ? 'ผู้อำนวยการกองสาธารณสุข' : 'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
-  // วันที่หัวกระดาษ = วันที่บันทึกใบลาเข้าระบบจริง (createdAt) · วันที่ใต้ลายเซ็นคำสั่ง = วันที่กดบันทึกผลพิจารณาจริง (decidedAt)
-  const dateText = tsToThaiLong(l.createdAt);
+  // วันที่หัวกระดาษ ปกติ = วันที่บันทึกใบลาเข้าระบบจริง (createdAt) แต่ถ้าเป็น "ลาย้อนหลัง" (วันเริ่มลาอยู่ก่อนวันที่ยื่นจริง)
+  // ให้ใช้วันเริ่มลาแทนตามที่แจ้ง เพื่อไม่ให้หนังสือขอลาลงวันที่ขัดแย้งกับวันที่ลาจริงที่ระบุไว้ในเนื้อหา
+  // วันที่ใต้ลายเซ็นคำสั่ง = วันที่กดบันทึกผลพิจารณาจริง (decidedAt) ไม่เกี่ยวข้อง ไม่ต้องย้อนหลังตาม
+  const createdDateStr = tsToDateStr(l.createdAt);
+  const isBackdated = createdDateStr && l.start && l.start < createdDateStr;
+  const dateText = isBackdated ? fmtDateLong(l.start) : tsToThaiLong(l.createdAt);
   const decidedDate = tsToThaiLong(l.decidedAt);
 
   // ยอดวันลาพักผ่อน: ยกยอดสะสม (ตั้งค่าไว้ที่ทำเนียบบุคลากร) + สิทธิ์ปีนี้คงเหลือ (สิทธิ์รวม - ลามาแล้ว) = รวมสิทธิ์ทั้งหมด
