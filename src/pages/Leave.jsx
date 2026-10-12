@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
-import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, evalRoundStats, getQuota, posRank, usage, workingDays } from '../lib/leave';
+import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, getQuota, posRank, usage, workingDays } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
@@ -111,13 +111,20 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
   const overNow = qNow != null && alreadyNow + daysNow > qNow;
   const remainNow = qNow != null ? Math.max(0, qNow - alreadyNow) : null;
 
-  // เกณฑ์ประเมินผล (ลาป่วย+ลากิจ ไม่เกิน 9 ครั้ง/ประเภท และรวมกันไม่เกิน 23 วัน/รอบประเมิน 6 เดือน) — แจ้งเตือนเท่านั้น ไม่บล็อกการยื่น
+  // เกณฑ์ประเมินผล (ลาป่วย+ลากิจ ไม่เกิน 9 ครั้ง/ประเภท และรวมกันไม่เกิน 23 วันทำการ/รอบประเมิน 6 เดือน) — "เงื่อนไขบังคับห้ามเกิน" ตามที่แจ้ง
+  // บล็อกการยื่นเหมือนโควตาประจำปี (นับรวมใบที่รออนุมัติด้วย ไม่ใช่แค่อนุมัติแล้ว กันยื่นพร้อมกันหลายใบจนทะลุเกณฑ์ตอนอนุมัติทีหลัง)
   const isEvalType = f.type === EVAL_ROUND_RULE.sickType || f.type === EVAL_ROUND_RULE.personalType;
   const roundNow = evalRoundOf(f.start);
-  const evalNow = isEvalType ? evalRoundStats(mine.filter((l) => l.fy === fyNow), roundNow) : null;
-  const sickCountAfter = (evalNow?.sickCount || 0) + (f.type === EVAL_ROUND_RULE.sickType ? 1 : 0);
-  const personalCountAfter = (evalNow?.personalCount || 0) + (f.type === EVAL_ROUND_RULE.personalType ? 1 : 0);
-  const combinedDaysAfter = (evalNow?.combinedDays || 0) + daysNow;
+  const roundLeavesNow = mine.filter((l) => l.fy === fyNow && evalRoundOf(l.start) === roundNow && l.status !== 'ยกเลิก' && l.status !== 'ไม่อนุมัติ');
+  const sickCountNow = roundLeavesNow.filter((l) => l.type === EVAL_ROUND_RULE.sickType).length;
+  const personalCountNow = roundLeavesNow.filter((l) => l.type === EVAL_ROUND_RULE.personalType).length;
+  const combinedDaysNow = roundLeavesNow
+    .filter((l) => l.type === EVAL_ROUND_RULE.sickType || l.type === EVAL_ROUND_RULE.personalType)
+    .reduce((s, l) => s + (Number(l.days) || 0), 0);
+  const sickCountAfter = sickCountNow + (f.type === EVAL_ROUND_RULE.sickType ? 1 : 0);
+  const personalCountAfter = personalCountNow + (f.type === EVAL_ROUND_RULE.personalType ? 1 : 0);
+  const combinedDaysAfter = combinedDaysNow + daysNow;
+  const evalOverNow = isEvalType && (sickCountAfter > EVAL_ROUND_RULE.maxCountEach || personalCountAfter > EVAL_ROUND_RULE.maxCountEach || combinedDaysAfter > EVAL_ROUND_RULE.maxCombinedDays);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -131,6 +138,9 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
     const q = quota[f.type];
     if (q != null && (used[f.type] || 0) + (pending[f.type] || 0) + days > q) {
       return say({ type: 'error', text: `เกินสิทธิ์${f.type}ประจำปี ${q} วัน (ใช้/รออนุมัติแล้ว ${(used[f.type] || 0) + (pending[f.type] || 0)} วัน)` });
+    }
+    if (evalOverNow) {
+      return say({ type: 'error', text: `เกินเกณฑ์ประเมินผล${EVAL_ROUND_LABEL[roundNow]}: ลาป่วย/ลากิจ ไม่เกิน ${EVAL_ROUND_RULE.maxCountEach} ครั้งต่อประเภท และรวมกันไม่เกิน ${EVAL_ROUND_RULE.maxCombinedDays} วันทำการต่อรอบ กรุณาปรึกษาผู้บริหารก่อนยื่นเพิ่ม` });
     }
     setBusy(true);
     try {
@@ -168,11 +178,9 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
           </div>
         )}
         {isEvalType && (
-          <div className={`rounded-lg px-3 py-2 text-sm ${sickCountAfter > EVAL_ROUND_RULE.maxCountEach || personalCountAfter > EVAL_ROUND_RULE.maxCountEach || combinedDaysAfter > EVAL_ROUND_RULE.maxCombinedDays ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200' : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'}`}>
-            เกณฑ์ประเมินผล {EVAL_ROUND_LABEL[roundNow]}: ลาป่วย {sickCountAfter}/{EVAL_ROUND_RULE.maxCountEach} ครั้ง · ลากิจ {personalCountAfter}/{EVAL_ROUND_RULE.maxCountEach} ครั้ง · รวมวันลาป่วย+ลากิจ {combinedDaysAfter}/{EVAL_ROUND_RULE.maxCombinedDays} วัน (นับรวมใบนี้แล้ว)
-            {(sickCountAfter > EVAL_ROUND_RULE.maxCountEach || personalCountAfter > EVAL_ROUND_RULE.maxCountEach || combinedDaysAfter > EVAL_ROUND_RULE.maxCombinedDays) && (
-              <div className="mt-0.5 font-semibold">⚠️ เกินเกณฑ์ที่ใช้ประกอบการประเมินผลการปฏิบัติราชการในรอบนี้ (ยังยื่นใบลาได้ตามปกติ เพียงแจ้งเตือนไว้ประกอบการพิจารณา)</div>
-            )}
+          <div className={`rounded-lg px-3 py-2 text-sm ${evalOverNow ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'}`}>
+            เกณฑ์ประเมินผล {EVAL_ROUND_LABEL[roundNow]}: ลาป่วย {sickCountAfter}/{EVAL_ROUND_RULE.maxCountEach} ครั้ง · ลากิจ {personalCountAfter}/{EVAL_ROUND_RULE.maxCountEach} ครั้ง · รวมวันลาป่วย+ลากิจ {combinedDaysAfter}/{EVAL_ROUND_RULE.maxCombinedDays} วัน (นับรวมใบนี้แล้ว ไม่รวมใบที่ยกเลิก/ไม่อนุมัติ)
+            {evalOverNow && <div className="mt-0.5 font-semibold">⚠️ เกินเกณฑ์บังคับของรอบนี้ — ระบบจะไม่ให้บันทึกใบลานี้</div>}
           </div>
         )}
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="lr">เหตุผลการลา</label><textarea id="lr" required rows={2} className="input" value={f.reason} onChange={set('reason')} /></div>
@@ -187,7 +195,7 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
             {delegates.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}
           </select>
         </div>
-        <button className="btn btn-primary w-full" disabled={busy || overNow}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยื่นใบลา</button>
+        <button className="btn btn-primary w-full" disabled={busy || overNow || evalOverNow}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยื่นใบลา</button>
       </form>
     </Modal>
   );

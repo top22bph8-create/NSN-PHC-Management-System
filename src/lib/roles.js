@@ -32,7 +32,9 @@ export const ACCESS = {
   personnel: { read: ALL, write: ['super_admin'] },
   // กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก (Username/รหัสผ่าน/บทบาท/บัญชี) — Super Admin เท่านั้นทั้งดูและแก้
   users: { read: ['super_admin'], write: ['super_admin'] },
-  leave: { read: ALL, write: ALL, viewAll: ['super_admin'], approve: ['super_admin'] },
+  // ผู้ใช้งานทุกคนดูวันลาของทุกคนและพิมพ์ใบลาแทนกันได้แล้วตามที่แจ้ง (เดิมจำกัดเฉพาะ Super Admin) ส่วนการอนุมัติยังคง
+  // จำกัดเฉพาะ Super Admin เท่านั้นเหมือนเดิม — ต้องตรงกับ firestore.rules ที่ match /leaves/{id} (allow read: if isActive())
+  leave: { read: ALL, write: ALL, viewAll: ALL, approve: ['super_admin'] },
   assignments: { read: ALL, write: ALL },
   'reg-orders': { read: ALL, write: ALL },
   'reg-announce': { read: ALL, write: ALL },

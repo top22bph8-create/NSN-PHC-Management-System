@@ -49,9 +49,8 @@ service cloud.firestore {
 
     // ใบลา
     match /leaves/{id} {
-      // ดูใบลาของทุกคนได้เฉพาะ Super Admin (viewAll) ส่วนคนทั่วไปดูได้แค่ของตัวเอง
-      allow read: if isActive() && (resource.data.userEmail == request.auth.token.email
-                                    || hasRole(['super_admin']));
+      // ผู้ใช้งานที่ active ทุกคนดูใบลาของทุกคนได้แล้วตามที่แจ้ง (เดิมจำกัดเฉพาะ Super Admin) — เพื่อให้พิมพ์ใบลา/ยื่นแทนกันได้
+      allow read: if isActive();
       // ยื่นใบลา สถานะต้องเป็น "รอพิจารณา" (ผู้ใช้งานที่ active ทุกคนยื่นแทนเพื่อนร่วมงานได้เท่ากันหมดตามที่แจ้ง)
       allow create: if isActive() && request.resource.data.status == 'รอพิจารณา';
       // Super Admin แก้/ยกเลิก/พิจารณาแทนใครก็ได้ทุกกรณี (การอนุมัติทางเว็บจำกัดเฉพาะ Super Admin เท่านั้นตามที่แจ้ง

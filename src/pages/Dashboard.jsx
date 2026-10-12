@@ -2,17 +2,31 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight, BookOpenCheck,
+  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight, BookOpenCheck, User,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
+import { getQuota, usage } from '../lib/leave';
 import { addDays, fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
-import { ErrorState, Spinner } from '../components/ui';
+import { Badge, ErrorState, Spinner } from '../components/ui';
 import Logo from '../components/Logo';
 import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
+
+// สีแถบประจำแต่ละประเภทการลา (ไล่เฉดสด เห็นชัดเจน) ใช้ทั้งการ์ด "คนลาเดือนนี้" และแถบ "วันลาคงเหลือ" บนแดชบอร์ดตามที่แจ้ง
+const LEAVE_TYPE_TONE = {
+  'ลาป่วย': { bar: 'from-rose-400 to-rose-600', badge: 'bg-rose-100 text-rose-700' },
+  'ลากิจส่วนตัว': { bar: 'from-amber-400 to-amber-600', badge: 'bg-amber-100 text-amber-700' },
+  'ลาพักผ่อน': { bar: 'from-emerald-400 to-emerald-600', badge: 'bg-emerald-100 text-emerald-700' },
+  'ลาคลอดบุตร': { bar: 'from-pink-400 to-pink-600', badge: 'bg-pink-100 text-pink-700' },
+  'ลาไปช่วยเหลือภริยาที่คลอดบุตร': { bar: 'from-sky-400 to-sky-600', badge: 'bg-sky-100 text-sky-700' },
+  'ลาอุปสมบท/ประกอบพิธีฮัจย์': { bar: 'from-violet-400 to-violet-600', badge: 'bg-violet-100 text-violet-700' },
+  'ลาไปศึกษา/ฝึกอบรม/ดูงาน': { bar: 'from-cyan-400 to-cyan-600', badge: 'bg-cyan-100 text-cyan-700' },
+  'อื่น ๆ': { bar: 'from-slate-400 to-slate-600', badge: 'bg-slate-100 text-slate-700' },
+};
+const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่น ๆ'];
 
 // เมนูหลัก 4 งานทะเบียนที่ใช้งานบ่อยที่สุด แสดงเด่นบนแดชบอร์ด งานย่อยอื่น ๆ ไปอยู่ในแถบเมนูด้านซ้ายแทน
 const CARDS = [
@@ -42,8 +56,37 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [logs, setLogs] = useState([]);
+  const [leaveRows, setLeaveRows] = useState(null);
+  const [leaveQuota, setLeaveQuota] = useState(null);
 
   const readable = ['incoming', 'outgoing'].filter((m) => canRead(profile.role, m));
+  const canSeeLeave = canRead(profile.role, 'leave');
+
+  // คนลาเดือนนี้ + วันลาคงเหลือของตัวเอง — ดึงเฉพาะเมื่อมีสิทธิ์อ่านโมดูลวันลา (ทุกคนอ่านได้แล้วตามที่แจ้ง)
+  useEffect(() => {
+    if (!canSeeLeave) { setLeaveRows([]); return; }
+    let live = true;
+    setLeaveRows(null);
+    getDocs(query(collection(db, 'leaves'), where('fy', '==', fy)))
+      .then((s) => { if (live) setLeaveRows(s.docs.map((d) => ({ id: d.id, ...d.data() }))); })
+      .catch(() => { if (live) setLeaveRows([]); });
+    return () => { live = false; };
+  }, [fy, canSeeLeave]);
+  useEffect(() => { if (canSeeLeave) getQuota().then(setLeaveQuota).catch(() => setLeaveQuota({})); }, [canSeeLeave]);
+
+  const leaveMonth = useMemo(() => {
+    if (!leaveRows) return null;
+    const now = new Date();
+    const y = now.getFullYear(); const mo = now.getMonth();
+    const monthStart = `${y}-${String(mo + 1).padStart(2, '0')}-01`;
+    const monthEnd = `${y}-${String(mo + 1).padStart(2, '0')}-${String(new Date(y, mo + 1, 0).getDate()).padStart(2, '0')}`;
+    const onLeave = leaveRows
+      .filter((l) => l.status === 'อนุมัติ' && l.start <= monthEnd && l.end >= monthStart)
+      .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    const mine = leaveRows.filter((l) => l.userEmail === profile.email);
+    const { used, pending } = usage(mine);
+    return { onLeave, used, pending, monthLabel: `${thMonths[mo]} ${y + 543}` };
+  }, [leaveRows, profile.email]);
 
   useEffect(() => {
     let live = true;
@@ -223,6 +266,53 @@ export default function Dashboard() {
                     </ul>
                   )}
                 </div>
+
+                {canSeeLeave && leaveMonth && (
+                  <div className="card p-4">
+                    <h3 className="mb-3 flex items-center gap-2 font-semibold"><CalendarDays className="h-5 w-5 text-brand-700" /> คนลาเดือน{leaveMonth.monthLabel}</h3>
+                    {leaveMonth.onLeave.length === 0 ? (
+                      <p className="py-6 text-center text-slate-400">ไม่มีใครลาในเดือนนี้</p>
+                    ) : (
+                      <ul className="divide-y divide-slate-100">
+                        {leaveMonth.onLeave.map((l) => (
+                          <li key={l.id} className="flex cursor-pointer items-center gap-2 py-2 hover:bg-slate-50" onClick={() => nav('/leave')}>
+                            <User className="h-4 w-4 shrink-0 text-slate-400" />
+                            <div className="min-w-0 flex-1"><div className="truncate font-medium">{l.name}</div><div className="text-sm text-slate-500">{fmtDate(l.start)} - {fmtDate(l.end)} ({l.days} วัน)</div></div>
+                            <Badge className={leaveTone(l.type).badge}>{l.type}</Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {canSeeLeave && leaveMonth && leaveQuota && (
+                  <div className="card p-4">
+                    <h3 className="mb-3 flex items-center justify-between font-semibold">
+                      <span className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-brand-700" /> วันลาคงเหลือของฉัน (ปีงบ {fy})</span>
+                      <Link to="/leave" className="text-sm font-normal text-brand-700 hover:underline">ดูทั้งหมด</Link>
+                    </h3>
+                    <div className="space-y-2.5">
+                      {Object.entries(leaveQuota).map(([type, q]) => {
+                        const u = leaveMonth.used[type] || 0;
+                        const p = leaveMonth.pending[type] || 0;
+                        const isVacation = type === 'ลาพักผ่อน';
+                        const accrued = isVacation ? (Number(profile.vacationCarryOver) || 0) : 0;
+                        const remain = Math.max(0, q - u) + accrued;
+                        const pct = q ? Math.min(100, ((u + p) / q) * 100) : 0;
+                        return (
+                          <div key={type}>
+                            <div className="mb-0.5 flex items-center justify-between text-sm">
+                              <span className="font-medium text-slate-700">{type}</span>
+                              <span className="font-bold text-slate-800">{remain} <span className="font-normal text-slate-400">/ {q} วัน{isVacation && accrued ? `+${accrued}สะสม` : ''}</span></span>
+                            </div>
+                            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-2.5 rounded-full bg-gradient-to-r ${leaveTone(type).bar}`} style={{ width: `${pct}%` }} /></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {logs.length > 0 && (
                   <div className="card p-4 lg:col-span-2">
