@@ -3,14 +3,15 @@
 // (Username/รหัสผ่าน/บทบาท/สถานะเปิด-ปิดใช้งาน/อนุมัติสมัครสมาชิก) ส่วนข้อมูลส่วนตัว/ประวัติราชการย้ายไปอยู่ที่
 // หน้า "ทำเนียบบุคลากร" แทน (Super Admin เท่านั้นที่เข้าหน้านี้ได้ ทั้งดูและแก้ไข — ดู ACCESS.users ใน lib/roles.js)
 import { useEffect, useMemo, useState } from 'react';
-import { collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { Eye, EyeOff, FileSpreadsheet, KeyRound, Loader2, Pencil, Search, ShieldAlert, Trash2, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, FileSpreadsheet, KeyRound, Loader2, Pencil, Search, ShieldAlert, Trash2, UserPlus, Users } from 'lucide-react';
 import { db, functions } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { ASSIGNABLE_ROLES, PENDING_LABEL, ROLES, canWrite, normalizeRole } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { createAuthAccount, toEmail, usernameOf } from '../lib/accounts';
+import { normalizeName } from '../lib/people';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 
@@ -116,14 +117,18 @@ function ImportModal({ existing, onClose, say }) {
   );
 }
 
-function AddModal({ existing, onClose, say }) {
+function AddModal({ existing, rows, onClose, say }) {
   const [f, setF] = useState({ username: '', password: '', name: '', position: '', role: 'staff' });
   const [busy, setBusy] = useState(false);
+  const [dupConfirmed, setDupConfirmed] = useState(false);
+  // กันเพิ่มชื่อซ้ำตามที่แจ้ง: เทียบชื่อ (ตัดคำนำหน้าแล้ว) กับทะเบียนบุคลากรที่มีอยู่ ถ้าซ้ำ ต้องกดยืนยันอีกครั้งก่อนสร้างจริง
+  const dup = (rows || []).find((r) => normalizeName(r.name) && normalizeName(r.name) === normalizeName(f.name));
   const submit = async () => {
     const username = f.username.trim().toLowerCase();
     const email = toEmail(username);
     if (!/^[a-z0-9._@-]+$/.test(username)) return say({ type: 'error', text: 'ชื่อผู้ใช้ใช้ได้เฉพาะ a-z ตัวเลข . _ -' });
     if (existing.has(email)) return say({ type: 'error', text: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' });
+    if (dup && !dupConfirmed) return say({ type: 'error', text: `พบชื่อ "${f.name.trim()}" อยู่ในระบบแล้ว (username: ${usernameOf(dup.email)}) กดยืนยันด้านล่างอีกครั้งถ้าต้องการสร้างซ้ำจริง` });
     setBusy(true);
     try {
       try { await createAuthAccount(email, f.password); } catch (err) { if (err.code !== 'auth/email-already-in-use') throw err; }
@@ -145,7 +150,13 @@ function AddModal({ existing, onClose, say }) {
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="au">ชื่อผู้ใช้ (Username)</label><input id="au" required className="input" value={f.username} onChange={set('username')} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ap">รหัสผ่านเริ่มต้น</label><input id="ap" required className="input" value={f.password} onChange={set('password')} /></div>
         </div>
-        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="an">ชื่อ - สกุล</label><input id="an" required className="input" value={f.name} onChange={set('name')} /></div>
+        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="an">ชื่อ - สกุล</label><input id="an" required className="input" value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDupConfirmed(false); }} /></div>
+        {dup && (
+          <label className="flex items-start gap-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">
+            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={dupConfirmed} onChange={(e) => setDupConfirmed(e.target.checked)} />
+            <span>พบชื่อนี้อยู่ในระบบแล้ว (username: <b>{usernameOf(dup.email)}</b>) — ถ้าเป็นคนเดิม ให้ใช้ปุ่ม "ตั้งรหัสเริ่มต้นใหม่" ของบัญชีนั้นแทน ติ๊กที่นี่เพื่อยืนยันว่าต้องการสร้างบัญชีใหม่ซ้ำจริงๆ</span>
+          </label>
+        )}
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ao">ตำแหน่ง</label><input id="ao" className="input" value={f.position} onChange={set('position')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ar">บทบาท</label>
           <select id="ar" className="input" value={f.role} onChange={set('role')}>{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
@@ -261,6 +272,65 @@ function EditAccountModal({ user, onClose, say, prefill }) {
 
 // รีเซ็ตรหัสผ่านของทุกคนพร้อมกัน (ยกเว้น Super Admin และบัญชี "รอสมัครใหม่") เป็นรหัสผ่านเดียวกัน โดย Username ของแต่ละคนยังคงเดิม
 // เรียก Cloud Function "adminBulkResetPassword" (functions/index.js) ซึ่งใช้ Admin SDK แก้รหัสผ่านของทุกบัญชีได้โดยตรงในคำสั่งเดียว
+// รวมบัญชีซ้ำ: เลือกบัญชีที่ซ้ำ (ที่จะลบ) + บัญชีที่จะเก็บไว้ ย้ายทะเบียนลาทั้งหมดของบัญชีที่ซ้ำไปอยู่ภายใต้บัญชีที่เก็บไว้
+// แล้วลบบัญชีซ้ำทิ้ง (ตามที่แจ้งว่าตรวจพบชื่อซ้ำกันทั้งทะเบียนบุคลากรและทะเบียนลา) ป้องกันข้อมูลวันลาเก่าหายไปจากการลบตรงๆ
+function MergeModal({ rows, onClose, say }) {
+  const [dupEmail, setDupEmail] = useState('');
+  const [keepEmail, setKeepEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const options = rows || []; // แสดงทุกบัญชี รวมที่รออนุมัติด้วย (ซ้ำกันได้ทุกสถานะ)
+  const submit = async () => {
+    if (!dupEmail || !keepEmail) return say({ type: 'error', text: 'กรุณาเลือกทั้งสองบัญชี' });
+    if (dupEmail === keepEmail) return say({ type: 'error', text: 'ต้องเลือกบัญชีที่ต่างกัน' });
+    setBusy(true);
+    try {
+      const dup = options.find((r) => r.email === dupEmail);
+      const keep = options.find((r) => r.email === keepEmail);
+      const leavesSnap = await getDocs(query(collection(db, 'leaves'), where('userEmail', '==', dupEmail)));
+      const batch = writeBatch(db);
+      leavesSnap.docs.forEach((d) => {
+        batch.update(d.ref, { userEmail: keepEmail, name: keep.name || d.data().name, position: keep.position || d.data().position });
+      });
+      batch.delete(doc(db, 'users', dupEmail));
+      await batch.commit();
+      await deleteDoc(doc(db, 'credentials', dupEmail)).catch(() => {});
+      await writeAudit({
+        action: 'delete', module: 'users', docId: dupEmail,
+        label: `รวมบัญชีซ้ำ: ย้ายวันลา ${leavesSnap.size} รายการจาก "${dup?.name || dupEmail}" ไปรวมกับ "${keep?.name || keepEmail}" แล้วลบบัญชีที่ซ้ำ`,
+      });
+      say({ type: 'ok', text: `รวมบัญชีซ้ำแล้ว ย้ายวันลา ${leavesSnap.size} รายการไปที่ "${keep?.name || usernameOf(keepEmail)}" และลบบัญชีซ้ำออกแล้ว` });
+      onClose();
+    } catch (err) {
+      say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally { setBusy(false); }
+  };
+  return (
+    <Modal title="รวมบัญชีซ้ำ" onClose={busy ? () => {} : onClose}
+      footer={<button className="btn btn-primary w-full" onClick={submit} disabled={busy || !dupEmail || !keepEmail}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} รวมบัญชี</button>}>
+      <div className="space-y-3">
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+          ใช้เมื่อพบว่าคนเดิมมี 2 บัญชี (เช่น สมัครซ้ำ) — ระบบจะย้ายรายการ "ทะเบียนลา" ทั้งหมดของบัญชีที่เลือกเป็น "บัญชีที่ซ้ำ" ไปอยู่ภายใต้ "บัญชีที่เก็บไว้"
+          แล้วลบบัญชีที่ซ้ำทิ้ง (ข้อมูลวันลาไม่หายไป เปลี่ยนไปอยู่ภายใต้อีเมลที่เก็บไว้เท่านั้น) การกระทำนี้ย้อนกลับไม่ได้
+        </p>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="mdup">บัญชีที่ซ้ำ (จะถูกลบ)</label>
+          <select id="mdup" className="input" value={dupEmail} onChange={(e) => setDupEmail(e.target.value)}>
+            <option value="">-- เลือก --</option>
+            {options.map((r) => <option key={r.email} value={r.email} disabled={r.email === keepEmail}>{r.name || usernameOf(r.email)} ({usernameOf(r.email)})</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="mkeep">บัญชีที่เก็บไว้ (ปลายทาง)</label>
+          <select id="mkeep" className="input" value={keepEmail} onChange={(e) => setKeepEmail(e.target.value)}>
+            <option value="">-- เลือก --</option>
+            {options.map((r) => <option key={r.email} value={r.email} disabled={r.email === dupEmail}>{r.name || usernameOf(r.email)} ({usernameOf(r.email)})</option>)}
+          </select>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function BulkResetModal({ onClose, say }) {
   const [pw, setPw] = useState('05449');
   const [confirmed, setConfirmed] = useState(false);
@@ -384,6 +454,7 @@ export default function UserAccounts() {
             <button className="btn btn-outline" onClick={() => setModal({ t: 'import' })}><FileSpreadsheet className="h-5 w-5" /> นำเข้า Excel</button>
             <button className="btn btn-primary" onClick={() => setModal({ t: 'add' })}><UserPlus className="h-5 w-5" /> เพิ่มบัญชี</button>
             <button className="btn btn-outline text-red-700" onClick={() => setModal({ t: 'bulkReset' })}><ShieldAlert className="h-5 w-5" /> รีเซ็ตรหัสผ่านทุกคน</button>
+            <button className="btn btn-outline" onClick={() => setModal({ t: 'merge' })}><Users className="h-5 w-5" /> รวมบัญชีซ้ำ</button>
           </div>
         )} />
       {requests.length > 0 && (
@@ -455,6 +526,10 @@ export default function UserAccounts() {
                       ) : <Badge className={u.active ? 'bg-brand-100 text-brand-800' : 'bg-slate-200 text-slate-600'}>{u.active ? 'ใช้งาน' : 'ระงับ'}</Badge>}
                       {u.mustChangePassword && <div className="text-xs text-amber-700">ยังไม่เปลี่ยนรหัสผ่าน</div>}
                       {pending && writable && <div className="text-xs text-amber-700">เลือกบทบาทแล้วติ๊ก "ใช้งาน" เพื่ออนุมัติ</div>}
+                      {pending && (() => {
+                        const dup = (rows || []).find((r) => r.email !== u.email && r.role !== 'pending' && normalizeName(r.name) && normalizeName(r.name) === normalizeName(u.name));
+                        return dup ? <div className="mt-0.5 text-xs font-medium text-red-700">⚠️ ชื่อนี้ตรงกับบัญชีที่มีอยู่แล้ว (username: {usernameOf(dup.email)}) ตรวจสอบก่อนอนุมัติ อาจเป็นคนซ้ำ</div> : null;
+                      })()}
                     </td>
                     {writable && (
                       <td className="px-3 py-2">
@@ -473,10 +548,11 @@ export default function UserAccounts() {
         )}
       </div>
       {modal?.t === 'import' && <ImportModal existing={existing} onClose={() => setModal(null)} say={say} />}
-      {modal?.t === 'add' && <AddModal existing={existing} onClose={() => setModal(null)} say={say} />}
+      {modal?.t === 'add' && <AddModal existing={existing} rows={rows} onClose={() => setModal(null)} say={say} />}
       {modal?.t === 'reset' && <ResetModal user={modal.u} onClose={() => setModal(null)} say={say} />}
       {modal?.t === 'edit' && <EditAccountModal user={modal.u} prefill={modal.prefill} onClose={() => setModal(null)} say={say} />}
       {modal?.t === 'bulkReset' && <BulkResetModal onClose={() => setModal(null)} say={say} />}
+      {modal?.t === 'merge' && <MergeModal rows={rows} onClose={() => setModal(null)} say={say} />}
       {toDelete && (
         <ConfirmDialog
           message={`ลบ ${toDelete.name || usernameOf(toDelete.email)} ออกจากระบบถาวรหรือไม่? (ผู้ใช้นี้จะเข้าระบบไม่ได้อีกทันที — บัญชีใน Firebase Authentication จะยังค้างอยู่ ลบทิ้งเองที่ Console ภายหลังได้หากต้องการ)`}

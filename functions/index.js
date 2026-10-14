@@ -15,7 +15,7 @@
  *
  * วิธีติดตั้ง/เผยแพร่ และวิธีเตรียม LINE Official Account + หา Target ID: ดู README.md หัวข้อ "แจ้งเตือนไลน์"
  */
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { initializeApp } = require('firebase-admin/app');
@@ -481,4 +481,31 @@ exports.annualVacationCarryOver = onSchedule({ schedule: '0 1 1 10 *', timeZone:
   });
   await Promise.all(updates);
   console.log(`annualVacationCarryOver: ยกยอดลาพักผ่อนปีงบ ${endedFy} ให้ ${updates.length} คน`);
+});
+
+// ดูแลดัชนีชื่อ (settings/nameIndex) ให้ตรงกับทะเบียนบุคลากร (users) อยู่เสมอ เพื่อให้หน้า "สมัครใช้งาน" (Signup.jsx) เช็กชื่อซ้ำ
+// ก่อนสร้างบัญชีได้ "ก่อน" ล็อกอิน (ตอนนั้นยังอ่านคอลเลกชัน users ตรงๆ ไม่ได้ตามกฎความปลอดภัย จึงต้องมีดัชนีแยกที่อ่านได้แม้ไม่ล็อกอิน
+// — ดู firestore.rules match /settings/nameIndex, เขียนได้ทางฟังก์ชันนี้ผ่าน Admin SDK เท่านั้น ไม่ใช่จากไคลเอนต์)
+// ดัชนีเก็บเป็นลิสต์ [{key, email}] (key = ชื่อที่ตัดคำนำหน้า "นาย/นาง/นางสาว/..." แล้ว) เขียนทับทั้งลิสต์ใหม่ทุกครั้งที่มีการ
+// สร้าง/แก้ไข/ลบเอกสารใน users เพื่อไม่ให้ค้างชื่อเก่า (ลบคน/เปลี่ยนชื่อ) หรือพลาดคนใหม่
+const NAME_PREFIXES = ['นางสาว', 'นาง', 'นาย', 'น.ส.', 'ดร.', 'ว่าที่ร้อยตรีหญิง', 'ว่าที่ร้อยตรี'];
+function normalizeNameForIndex(name) {
+  let s = String(name || '').trim().replace(/\s+/g, ' ');
+  for (const p of NAME_PREFIXES) { if (s.startsWith(p)) { s = s.slice(p.length).trim(); break; } }
+  return s.toLowerCase();
+}
+exports.onUserWritten = onDocumentWritten('users/{email}', async (event) => {
+  const email = event.params.email;
+  const after = event.data.after.exists ? event.data.after.data() : null;
+  const ref = db.doc('settings/nameIndex');
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const list = snap.exists && Array.isArray(snap.data().list) ? snap.data().list : [];
+    const filtered = list.filter((x) => x.email !== email);
+    if (after && after.name) {
+      const key = normalizeNameForIndex(after.name);
+      if (key) filtered.push({ key, email });
+    }
+    tx.set(ref, { list: filtered, updatedAt: FieldValue.serverTimestamp() });
+  });
 });

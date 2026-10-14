@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { CalendarDays, Check, ChevronLeft, Download, Loader2, Plus, Printer, Trash2, User, X, XCircle } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, Download, Loader2, Pencil, Plus, Printer, Trash2, User, X, XCircle } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
-import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, getQuota, posRank, usage, workingDays } from '../lib/leave';
+import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, getHolidays, getQuota, posRank, usage, workingDays } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
@@ -82,12 +82,17 @@ function MiniQuota({ quota, used, vacationCarryOver }) {
 function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
   const [f, setF] = useState({ type: LEAVE_TYPES[0], start: todayStr(), end: todayStr(), days: 1, reason: '', contact: '', phone: '', delegateTo: '' });
   const [busy, setBusy] = useState(false);
+  // วันหยุดราชการ: โหลดครั้งเดียวตอนเปิดฟอร์ม ใช้ตัด "วันลา" ที่ตรงกับวันหยุดราชการออกจากจำนวนวันทำการอัตโนมัติ ตามที่แจ้ง
+  // (เช่น 13 ต.ค. วันนวมินทรมหาราช) — ดูแลรายการวันหยุดได้ที่หน้า "ตั้งค่าระบบ"
+  const [holidaySet, setHolidaySet] = useState(null);
+  useEffect(() => { getHolidays().then((list) => setHolidaySet(new Set(list.map((h) => h.date)))).catch(() => setHolidaySet(new Set())); }, []);
+  useEffect(() => { if (holidaySet) setF((p) => ({ ...p, days: workingDays(p.start, p.end, holidaySet) })); }, [holidaySet]);
   const set = (k) => (e) => {
     const v = e.target.value;
     setF((p) => {
       const n = { ...p, [k]: v };
       if (k === 'start' && n.end < v) n.end = v;
-      if (k === 'start' || k === 'end') n.days = workingDays(n.start, n.end);
+      if (k === 'start' || k === 'end') n.days = workingDays(n.start, n.end, holidaySet);
       return n;
     });
   };
@@ -96,7 +101,7 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
     setF((p) => {
       const n = { ...p, [k]: v };
       if (k === 'start' && n.end < v) n.end = v;
-      if (k === 'start' || k === 'end') n.days = workingDays(n.start, n.end);
+      if (k === 'start' || k === 'end') n.days = workingDays(n.start, n.end, holidaySet);
       return n;
     });
   };
@@ -170,7 +175,7 @@ function LeaveForm({ profile, quota, mine, pageFy, people, onClose, say }) {
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="le">ถึงวันที่</label><ThaiDateInput id="le" required min={f.start} value={f.end} onChange={setDate('end')} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ld">จำนวนวัน</label><input id="ld" type="number" step="0.5" min="0.5" required className="input" value={f.days} onChange={set('days')} /></div>
         </div>
-        <p className="text-xs text-slate-500">นับเฉพาะวันจันทร์-ศุกร์ อัตโนมัติ (ปรับเป็น 0.5 ได้กรณีลาครึ่งวัน) วันหยุดนักขัตฤกษ์ให้ปรับจำนวนวันเอง</p>
+        <p className="text-xs text-slate-500">นับเฉพาะวันจันทร์-ศุกร์ และไม่นับวันหยุดราชการ (เช่น 13 ต.ค.) ให้อัตโนมัติ (ปรับเป็น 0.5 ได้กรณีลาครึ่งวัน หรือแก้จำนวนวันเองได้หากไม่ตรงกับที่คำนวณ)</p>
         {qNow != null && (
           <div className={`rounded-lg px-3 py-2 text-sm ${overNow ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-brand-50 text-brand-800 ring-1 ring-brand-200'}`}>
             สิทธิ์{f.type}ตามระเบียบ {qNow} วัน/ปี · ใช้แล้ว/รออนุมัติ {alreadyNow} วัน · คงเหลือก่อนยื่นครั้งนี้ {remainNow} วัน
@@ -277,6 +282,40 @@ function DecideModal({ leave, decision, onClose, say, by }) {
       <p className="mb-2">{leave.type} {fmtDate(leave.start)} - {fmtDate(leave.end)} ({leave.days} วัน)</p>
       <label className="mb-1 block text-sm text-slate-600" htmlFor="dn">หมายเหตุ (ไม่บังคับ)</label>
       <input id="dn" className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+    </Modal>
+  );
+}
+
+// แก้ไขจำนวนวันลาของแถวที่มีอยู่แล้ว (Super Admin เท่านั้น) — ใช้แก้ให้ตรงตอนที่ระบบยังไม่หักวันหยุดราชการให้อัตโนมัติ
+// (เช่น วันลาที่คลุม 13 ต.ค. ควรนับ 4 วันทำการ ไม่ใช่ 5) มีปุ่ม "คำนวณใหม่ตามวันหยุดราชการ" ช่วยคำนวณให้ หรือจะพิมพ์เองก็ได้
+function EditDaysModal({ leave, onClose, say }) {
+  const [days, setDays] = useState(leave.days);
+  const [busy, setBusy] = useState(false);
+  const [holidaySet, setHolidaySet] = useState(null);
+  useEffect(() => { getHolidays().then((list) => setHolidaySet(new Set(list.map((h) => h.date)))).catch(() => setHolidaySet(new Set())); }, []);
+  const recalc = () => setDays(workingDays(leave.start, leave.end, holidaySet || new Set()));
+  const go = async () => {
+    const n = Number(days);
+    if (!n || n <= 0) return say({ type: 'error', text: 'กรุณากรอกจำนวนวันให้ถูกต้อง' });
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, 'leaves', leave.id), { days: n });
+      await writeAudit({ action: 'update', module: 'leave', docId: leave.id, label: `${leave.name} ${leave.type}`, before: { days: leave.days }, after: { days: n } });
+      say({ type: 'ok', text: 'แก้ไขจำนวนวันลาแล้ว' });
+      onClose();
+    } catch (err) {
+      say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally { setBusy(false); }
+  };
+  return (
+    <Modal title={`แก้ไขจำนวนวันลา: ${leave.name}`} onClose={onClose}
+      footer={<><button className="btn btn-outline" onClick={onClose}>ยกเลิก</button><button className="btn btn-primary" onClick={go} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button></>}>
+      <p className="mb-2 text-sm text-slate-600">{leave.type} {fmtDate(leave.start)} - {fmtDate(leave.end)} (เดิม {leave.days} วัน)</p>
+      <div className="flex items-end gap-2">
+        <div className="flex-1"><label className="mb-1 block text-sm text-slate-600" htmlFor="edd">จำนวนวันลา (วันทำการ)</label><input id="edd" type="number" step="0.5" min="0.5" className="input" value={days} onChange={(e) => setDays(e.target.value)} /></div>
+        <button type="button" className="btn btn-outline !py-2" onClick={recalc} disabled={!holidaySet} title="คำนวณใหม่โดยนับวันจันทร์-ศุกร์ และตัดวันหยุดราชการออก">คำนวณใหม่</button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">ปุ่ม "คำนวณใหม่" จะคำนวณจากวันจันทร์-ศุกร์ในช่วงวันที่ของใบลานี้ หักวันหยุดราชการที่ตั้งค่าไว้ (หน้า "ตั้งค่าระบบ") ออกให้</p>
     </Modal>
   );
 }
@@ -397,6 +436,7 @@ export default function Leave() {
   const [showCancel, setShowCancel] = useState(false);
   const [toDeleteRow, setToDeleteRow] = useState(null); // ลบแถวข้อมูลตรงๆ จากตาราง "ทั้งหมด" (Super Admin เท่านั้น)
   const [deletingRow, setDeletingRow] = useState(false);
+  const [editDaysRow, setEditDaysRow] = useState(null); // แก้ไขจำนวนวันลาของแถวที่มีอยู่แล้ว (Super Admin เท่านั้น เช่น แก้ให้ตรงหลังหักวันหยุดราชการ)
   const isSuperAdmin = profile.role === 'super_admin';
 
   const doDeleteRow = async () => {
@@ -480,6 +520,9 @@ export default function Leave() {
                           }}>ยกเลิก</button>
                         )}
                         {isSuperAdmin && (
+                          <button className="btn btn-outline !px-2 !py-1 text-sm" title="แก้ไขจำนวนวันลา" onClick={() => setEditDaysRow(l)}><Pencil className="h-4 w-4" /></button>
+                        )}
+                        {isSuperAdmin && (
                           <button className="btn btn-outline !px-2 !py-1 text-sm text-red-600" title="ลบแถวนี้ออกจากทะเบียนถาวร" onClick={() => setToDeleteRow(l)}><Trash2 className="h-4 w-4" /></button>
                         )}
                       </span>
@@ -498,6 +541,7 @@ export default function Leave() {
         <LeaveForm profile={quickForm} quota={quota} mine={(rows || []).filter((l) => l.userEmail === quickForm.email)} pageFy={fy} people={people} onClose={() => setQuickForm(null)} say={say} />
       )}
       {decide && <DecideModal leave={decide.l} decision={decide.d} by={profile.name || profile.email} onClose={() => setDecide(null)} say={say} />}
+      {editDaysRow && <EditDaysModal leave={editDaysRow} onClose={() => setEditDaysRow(null)} say={say} />}
       {showCancel && <CancelPickerModal rows={rows || []} profile={profile} isSuperAdmin={isSuperAdmin} onClose={() => setShowCancel(false)} say={say} />}
       {toDeleteRow && (
         <ConfirmDialog

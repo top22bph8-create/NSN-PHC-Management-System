@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Loader2, MessageCircle } from 'lucide-react';
+import { Loader2, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
 import { DEFAULT_NUMBERING, ORG_DOC_CODE, formatNumber, getNumbering } from '../lib/numbering';
 import { writeAudit } from '../lib/audit';
 import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
-import { DEFAULT_QUOTA, getQuota } from '../lib/leave';
+import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/leave';
+import ThaiDateInput from '../components/ThaiDateInput';
 import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
 import { Settings } from 'lucide-react';
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState(null);
   const [quota, setQuota] = useState(null);
+  const [holidays, setHolidays] = useState(null);
+  const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
@@ -27,6 +30,7 @@ export default function SettingsPage() {
   useEffect(() => {
     getNumbering().then(setCfg).catch((e) => setError(e.message));
     getQuota().then(setQuota).catch(() => setQuota({ ...DEFAULT_QUOTA }));
+    getHolidays().then((list) => setHolidays([...list].sort((a, b) => a.date.localeCompare(b.date)))).catch(() => setHolidays([...DEFAULT_HOLIDAYS]));
     getLineMeta().then(setLineMeta).catch(() => {});
     getLineWebhookLog().then(setLineTargets).catch((e) => {
       console.error('getLineWebhookLog failed:', e);
@@ -42,6 +46,8 @@ export default function SettingsPage() {
       await setDoc(doc(db, 'settings', 'numbering'), { ...value, updatedAt: serverTimestamp() });
       const qv = Object.fromEntries(Object.entries(quota || {}).map(([k, v]) => [k, Number(v) || 0]));
       await setDoc(doc(db, 'settings', 'leaveQuota'), qv);
+      const hv = [...(holidays || [])].sort((a, b) => a.date.localeCompare(b.date));
+      await setDoc(doc(db, 'settings', 'holidays'), { list: hv, updatedAt: serverTimestamp() });
       await writeAudit({ action: 'settings', module: 'settings', docId: 'numbering', label: 'รูปแบบเลขทะเบียน', after: value });
       await saveLineMeta(lineMeta);
       const tokenChanged = !!lineToken.trim();
@@ -104,6 +110,39 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="text-sm text-slate-500">การเปลี่ยนรูปแบบมีผลกับรายการใหม่เท่านั้น เลขที่ออกไปแล้วจะไม่ถูกแก้ไข ค่าเริ่มต้น: {DEFAULT_NUMBERING.digits} หลัก, พ.ศ.</p>
+
+          <div className="border-t border-brand-100 pt-4">
+            <h2 className="mb-2 font-semibold">วันหยุดราชการ (ไม่นับเป็นวันลาเมื่อลาตรงกับวันนี้)</h2>
+            <p className="mb-3 text-sm text-slate-500">
+              ระบบใช้รายการนี้ตัดวันหยุดราชการออกจากจำนวนวันลาที่คำนวณอัตโนมัติ (เช่น 13 ต.ค. วันนวมินทรมหาราช) บางวัน (มาฆบูชา/วิสาขบูชา/อาสาฬหบูชา และวันชดเชย) เลื่อนไปทุกปีตามปฏิทินจันทรคติ/วันหยุดสุดสัปดาห์
+              ต้องมาเพิ่มปีถัดไปเองที่นี่เมื่อมีประกาศจากทางราชการ (ราชกิจจานุเบกษา/ครม.)
+            </p>
+            {!holidays ? <Spinner /> : (
+              <div className="space-y-2">
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                  {holidays.length === 0 ? <p className="p-2 text-sm text-slate-400">ยังไม่มีรายการ</p> : holidays.map((h, i) => (
+                    <div key={`${h.date}-${i}`} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm">
+                      <span><b>{h.date}</b> — {h.name}</span>
+                      <button type="button" className="text-red-500 hover:text-red-700" onClick={() => setHolidays(holidays.filter((_, j) => j !== i))} aria-label={`ลบวันหยุด ${h.name}`}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div><label className="mb-1 block text-xs text-slate-600">วันที่</label><ThaiDateInput value={newHoliday.date} onChange={(v) => setNewHoliday({ ...newHoliday, date: v })} /></div>
+                  <div className="flex-1"><label className="mb-1 block text-xs text-slate-600">ชื่อวันหยุด</label><input className="input" placeholder="เช่น วันปิยมหาราช" value={newHoliday.name} onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })} /></div>
+                  <button
+                    type="button" className="btn btn-outline"
+                    onClick={() => {
+                      if (!newHoliday.date || !newHoliday.name.trim()) return;
+                      if (holidays.some((h) => h.date === newHoliday.date)) return;
+                      setHolidays([...holidays, { date: newHoliday.date, name: newHoliday.name.trim() }].sort((a, b) => a.date.localeCompare(b.date)));
+                      setNewHoliday({ date: '', name: '' });
+                    }}
+                  ><Plus className="h-4 w-4" /> เพิ่ม</button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="border-t border-brand-100 pt-4">
             <h2 className="mb-1 flex items-center gap-2 font-semibold"><MessageCircle className="h-5 w-5 text-brand-600" /> แจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณาวันลา (LINE Messaging API)</h2>

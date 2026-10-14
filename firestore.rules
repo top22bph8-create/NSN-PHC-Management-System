@@ -73,6 +73,13 @@ service cloud.firestore {
       allow read: if false;
       allow write: if hasRole(['super_admin']);
     }
+    // ดัชนีชื่อ (ตัดคำนำหน้าแล้ว -> อีเมล) สำหรับเช็กชื่อซ้ำตอนสมัครใช้งาน — ต้องอ่านได้แม้ "ยังไม่ได้ล็อกอิน" เพราะหน้าสมัครใช้งาน
+    // ต้องเช็กก่อนสร้างบัญชี Auth (ก่อนมีสิทธิ์อ่าน users ตามปกติ) เก็บแค่ชื่อ+อีเมลภายใน ไม่มีข้อมูลอ่อนไหวอื่น เขียนได้ทาง
+    // Cloud Function (onUserWritten, Admin SDK) เท่านั้น ไม่ให้ไคลเอนต์เขียนตรงเด็ดขาด
+    match /settings/nameIndex {
+      allow read: if true;
+      allow write: if false;
+    }
 
     // ตัวนับเลขทะเบียน (สิทธิ์จริงบังคับที่ทะเบียนปลายทางแต่ละอันด้านล่างอยู่แล้ว)
     match /counters/{id} {

@@ -5,6 +5,7 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { CheckCircle2, Loader2, UserPlus } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { firebasePassword, toEmail } from '../lib/accounts';
+import { findNameInIndex } from '../lib/people';
 import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
 import Logo from '../components/Logo';
 
@@ -31,6 +32,14 @@ export default function Signup() {
     if (f.password !== f.password2) return setErr('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
     if (!f.name.trim()) return setErr('กรุณากรอกชื่อ-สกุล');
     setBusy(true);
+    // กันเพิ่มชื่อซ้ำ: เช็กกับดัชนีชื่อที่มีอยู่แล้วในระบบก่อนสร้างบัญชีใหม่ (ตัดคำนำหน้า นาย/นาง/นางสาว/... ออกก่อนเทียบ)
+    // ถ้าพบชื่อนี้อยู่แล้ว ไม่ให้สมัครซ้ำ — บอกให้ติดต่อผู้ดูแลระบบขอรีเซ็ตรหัสผ่านบัญชีเดิมแทน
+    const dupEmail = await findNameInIndex(f.name);
+    if (dupEmail) {
+      setErr('พบชื่อนี้อยู่ในระบบแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขอรีเซ็ตรหัสผ่านบัญชีเดิม ไม่ต้องสมัครบัญชีใหม่ซ้ำ');
+      setBusy(false);
+      return;
+    }
     try {
       const email = toEmail(username);
       const cred = await createUserWithEmailAndPassword(auth, email, firebasePassword(f.password));
