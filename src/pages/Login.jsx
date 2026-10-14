@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { Eye, EyeOff, Loader2, Lock, User, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { firebasePassword, toEmail } from '../lib/accounts';
 import { ORG_UNDER, SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
@@ -136,9 +135,7 @@ export default function Login() {
             <button type="button" onClick={() => setShowRequest(true)} className="text-sm text-brand-700 hover:underline">ขอแก้ไข Username/Password</button>
           </div>
         </form>
-        <Link to="/signup" className="mt-4 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-brand-300 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50">
-          <UserPlus className="h-4 w-4" /> ยังไม่มีบัญชี? สมัครใช้งาน
-        </Link>
+        <p className="mt-4 text-center text-sm text-slate-500">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอให้เพิ่มชื่อเข้าใช้งาน</p>
         <p className="mt-6 text-center text-xs text-slate-500">สำหรับเจ้าหน้าที่ที่ได้รับอนุญาตเท่านั้น<br />{ORG_UNDER}</p>
       </div>
       {showRequest && <RequestChangeModal onClose={() => setShowRequest(false)} />}

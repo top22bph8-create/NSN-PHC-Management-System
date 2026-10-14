@@ -353,7 +353,6 @@ exports.adminBulkResetPassword = onCall(async (request) => {
     try {
       const authUser = await getAuth().getUserByEmail(u.email);
       await getAuth().updateUser(authUser.uid, { password: authPassword });
-      await db.doc(`users/${u.email}`).set({ mustChangePassword: true }, { merge: true });
       await db.doc(`credentials/${u.email}`).set({
         username: (u.username || u.email.split('@')[0]),
         password: rawPassword,

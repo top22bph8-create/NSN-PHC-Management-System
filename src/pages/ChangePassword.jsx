@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { KeyRound, Loader2, ShieldCheck } from 'lucide-react';
-import { auth, db } from '../firebase';
+import { KeyRound, Loader2 } from 'lucide-react';
+import { auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { firebasePassword } from '../lib/accounts';
 import { writeAudit } from '../lib/audit';
@@ -11,8 +10,8 @@ import { Toast } from '../components/ui';
 
 export const MIN_LEN = 8;
 
-// ฟอร์มเปลี่ยนรหัสผ่าน ใช้ทั้งหน้าบังคับครั้งแรก (forced) และหน้าบัญชีของฉัน
-export function PasswordForm({ forced = false }) {
+// ฟอร์มเปลี่ยนรหัสผ่าน (สมัครใจ ไม่มีการบังคับเปลี่ยนรหัสผ่านครั้งแรกอีกต่อไปตามที่แจ้ง — ใช้รหัสผ่านที่ผู้ดูแลระบบตั้งให้ได้ทันที)
+export function PasswordForm() {
   const { profile, refresh } = useAuth();
   const [oldPw, setOld] = useState('');
   const [pw1, setPw1] = useState('');
@@ -33,7 +32,6 @@ export function PasswordForm({ forced = false }) {
       const u = auth.currentUser;
       await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, firebasePassword(oldPw)));
       await updatePassword(u, pw1);
-      if (profile.mustChangePassword) await updateDoc(doc(db, 'users', profile.email), { mustChangePassword: false });
       try { await writeAudit({ action: 'update', module: 'auth', docId: profile.email, label: 'เปลี่ยนรหัสผ่าน' }); } catch { /* ignore */ }
       setOld(''); setPw1(''); setPw2('');
       setToast({ type: 'ok', text: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว' });
@@ -49,7 +47,7 @@ export function PasswordForm({ forced = false }) {
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <label htmlFor="old" className="mb-1 block text-sm font-medium text-slate-600">{forced ? 'รหัสผ่านเริ่มต้นที่ได้รับ' : 'รหัสผ่านปัจจุบัน'}</label>
+        <label htmlFor="old" className="mb-1 block text-sm font-medium text-slate-600">รหัสผ่านปัจจุบัน</label>
         <input id="old" type="password" required autoComplete="current-password" className="input" value={oldPw} onChange={(e) => setOld(e.target.value)} />
       </div>
       <div>
@@ -64,24 +62,6 @@ export function PasswordForm({ forced = false }) {
       <button className="btn btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึกรหัสผ่านใหม่</button>
       <Toast toast={toast} onClose={() => setToast(null)} />
     </form>
-  );
-}
-
-// หน้าเต็มจอ: บังคับเปลี่ยนรหัสผ่านตอนเข้าระบบครั้งแรก
-export function ForcedChange() {
-  const { logout } = useAuth();
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-200 via-brand-50 to-white p-4">
-      <div className="card w-full max-w-md p-6 sm:p-8">
-        <div className="mb-4 text-center">
-          <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-brand-700"><ShieldCheck className="h-8 w-8" /></div>
-          <h1 className="text-xl font-bold text-brand-900">ตั้งรหัสผ่านใหม่</h1>
-          <p className="text-sm text-slate-600">เพื่อความปลอดภัย กรุณาเปลี่ยนรหัสผ่านเริ่มต้นก่อนเข้าใช้งานครั้งแรก</p>
-        </div>
-        <PasswordForm forced />
-        <button onClick={logout} className="mt-3 w-full text-sm text-slate-500 hover:underline">ออกจากระบบ</button>
-      </div>
-    </div>
   );
 }
 

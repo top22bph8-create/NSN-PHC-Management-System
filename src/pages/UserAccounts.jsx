@@ -69,7 +69,7 @@ function ImportModal({ existing, onClose, say }) {
         }
         await setDoc(doc(db, 'users', email), {
           email, username: r.username, name: r.name, position: r.position, role: r.role,
-          active: true, mustChangePassword: true, createdAt: serverTimestamp(),
+          active: true, createdAt: serverTimestamp(),
         });
         await setDoc(doc(db, 'credentials', email), { username: r.username, password: r.password });
         await writeAudit({ action: 'create', module: 'users', docId: email, label: r.name, after: { role: r.role, position: r.position } });
@@ -92,7 +92,7 @@ function ImportModal({ existing, onClose, say }) {
       </>}>
       <p className="mb-3 text-sm text-slate-600">
         ไฟล์ต้องมีหัวคอลัมน์: <b>USER, รหัสผ่าน, ชื่อ - สกุล, ตำแหน่ง</b> ระบบอ่านไฟล์ในเครื่องของท่านเท่านั้น ไม่มีการเก็บรหัสผ่านไว้ในฐานข้อมูล
-        ผู้ใช้จะถูกบังคับเปลี่ยนรหัสผ่านตอนเข้าใช้งานครั้งแรก ทุกบัญชีที่นำเข้าจะได้บทบาท "ผู้ใช้งาน" (ปรับเป็น Super Admin ทีหลังได้ในตาราง)
+        ผู้ใช้เข้าระบบด้วย Username/รหัสผ่านที่ตั้งไว้นี้ได้ทันที ไม่ต้องเปลี่ยนรหัสผ่านก่อน ทุกบัญชีที่นำเข้าจะได้บทบาท "ผู้ใช้งาน" (ปรับเป็น Super Admin ทีหลังได้ในตาราง)
         ส่วนวันเกิด/วันบรรจุราชการ ฯลฯ ให้ไปกรอกเพิ่มที่หน้า "ทำเนียบบุคลากร"
       </p>
       <input type="file" accept=".xlsx,.xls" onChange={pickFile} className="mb-3 block w-full text-sm" aria-label="เลือกไฟล์ Excel" disabled={busy} />
@@ -132,7 +132,7 @@ function AddModal({ existing, rows, onClose, say }) {
     setBusy(true);
     try {
       try { await createAuthAccount(email, f.password); } catch (err) { if (err.code !== 'auth/email-already-in-use') throw err; }
-      await setDoc(doc(db, 'users', email), { email, username, name: clean(f.name), position: clean(f.position), role: f.role, active: true, mustChangePassword: true, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'users', email), { email, username, name: clean(f.name), position: clean(f.position), role: f.role, active: true, createdAt: serverTimestamp() });
       await setDoc(doc(db, 'credentials', email), { username, password: f.password });
       await writeAudit({ action: 'create', module: 'users', docId: email, label: clean(f.name), after: { role: f.role } });
       say({ type: 'ok', text: 'เพิ่มบัญชีผู้ใช้งานแล้ว ไปกรอกข้อมูลส่วนตัว/ประวัติราชการเพิ่มที่หน้า "ทำเนียบบุคลากร" ได้เลย' });
@@ -173,7 +173,6 @@ function ResetModal({ user, onClose, say }) {
     setBusy(true);
     try {
       await createAuthAccount(user.email, pw);
-      await updateDoc(doc(db, 'users', user.email), { mustChangePassword: true });
       await setDoc(doc(db, 'credentials', user.email), { username: usernameOf(user.email), password: pw }, { merge: true });
       await writeAudit({ action: 'update', module: 'users', docId: user.email, label: `ตั้งรหัสเริ่มต้นใหม่ ${user.name}` });
       say({ type: 'ok', text: 'ตั้งรหัสเริ่มต้นใหม่แล้ว' });
@@ -233,7 +232,6 @@ function EditAccountModal({ user, onClose, say, prefill }) {
       if (f.password.trim()) {
         try {
           await createAuthAccount(user.email, f.password.trim());
-          await updateDoc(doc(db, 'users', user.email), { mustChangePassword: true });
           await setDoc(doc(db, 'credentials', user.email), { username: newUsername, password: f.password.trim() }, { merge: true });
         } catch (err) {
           if (err.code === 'auth/email-already-in-use') { setNeedDelete(true); setBusy(false); return; }
@@ -360,7 +358,7 @@ function BulkResetModal({ onClose, say }) {
         <div className="space-y-3">
           <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
             คำสั่งนี้จะตั้งรหัสผ่านใหม่เป็นค่าเดียวกันให้กับผู้ใช้งาน <b>ทุกคน ยกเว้น Super Admin</b> (และบัญชี "รอสมัครใหม่") — Username ของแต่ละคนจะยังคงเดิม
-            ทุกคนจะต้องเปลี่ยนรหัสผ่านใหม่เองตอนล็อกอินครั้งถัดไป การกระทำนี้ย้อนกลับไม่ได้
+            ทุกคนเข้าระบบด้วยรหัสผ่านใหม่นี้ได้ทันที ไม่ต้องเปลี่ยนรหัสผ่านเองก่อน การกระทำนี้ย้อนกลับไม่ได้
           </p>
           <div>
             <label className="mb-1 block text-sm text-slate-600" htmlFor="brp">รหัสผ่านใหม่ (ตั้งให้ทุกคน)</label>
@@ -524,7 +522,6 @@ export default function UserAccounts() {
                       {writable ? (
                         <label className="flex items-center gap-2"><input type="checkbox" className="h-5 w-5" checked={!!u.active} disabled={me} onChange={(e) => change(u, { active: e.target.checked }, 'active')} /> {u.active ? 'ใช้งาน' : 'ระงับ'}</label>
                       ) : <Badge className={u.active ? 'bg-brand-100 text-brand-800' : 'bg-slate-200 text-slate-600'}>{u.active ? 'ใช้งาน' : 'ระงับ'}</Badge>}
-                      {u.mustChangePassword && <div className="text-xs text-amber-700">ยังไม่เปลี่ยนรหัสผ่าน</div>}
                       {pending && writable && <div className="text-xs text-amber-700">เลือกบทบาทแล้วติ๊ก "ใช้งาน" เพื่ออนุมัติ</div>}
                       {pending && (() => {
                         const dup = (rows || []).find((r) => r.email !== u.email && r.role !== 'pending' && normalizeName(r.name) && normalizeName(r.name) === normalizeName(u.name));

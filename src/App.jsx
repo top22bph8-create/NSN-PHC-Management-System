@@ -8,7 +8,6 @@ import RegistryPage from './components/RegistryPage';
 import { Spinner } from './components/ui';
 import Logo from './components/Logo';
 import Login from './pages/Login';
-import Signup from './pages/Signup';
 import PrintReport from './pages/PrintReport';
 import PrintLeave from './pages/PrintLeave';
 import PrintLeaveReport from './pages/PrintLeaveReport';
@@ -22,7 +21,7 @@ import Leave from './pages/Leave';
 import Assignments from './pages/Assignments';
 import RegistriesHub from './pages/RegistriesHub';
 import Backup from './pages/Backup';
-import Account, { ForcedChange } from './pages/ChangePassword';
+import Account from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
 import AuditLog from './pages/AuditLog';
 
@@ -30,7 +29,7 @@ function Blocked({ problem, error }) {
   const { logout, user, profile } = useAuth();
   const pending = problem === 'inactive' && profile?.role === 'pending';
   const text = pending
-    ? 'คำขอสมัครใช้งานของคุณกำลังรอผู้ดูแลระบบอนุมัติ กรุณารอการอนุมัติแล้วเข้าสู่ระบบใหม่อีกครั้ง'
+    ? 'บัญชีนี้ยังรอผู้ดูแลระบบเปิดใช้งาน กรุณาติดต่อผู้ดูแลระบบ'
     : {
         'no-profile': 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาแจ้งผู้ดูแลระบบให้เพิ่มอีเมลของท่านในเมนู "กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก"',
         inactive: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
@@ -125,7 +124,6 @@ function Shell() {
   if (loading) return <Spinner />;
   if (!user) return <Login />;
   if (problem || !profile) return <Blocked problem={problem} error={error} />;
-  if (profile.mustChangePassword) return <ForcedChange />;
   return (
     <FiscalYearProvider>
       <Routes>
@@ -159,7 +157,6 @@ export default function App() {
     <HashRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/signup" element={<Signup />} />
           <Route path="/print/:key" element={<PrintGate />} />
           <Route path="/print-personnel" element={<PrintPersonnelGate />} />
           <Route path="/print-leave/:id" element={<PrintLeaveGate />} />
