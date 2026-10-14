@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { collection, doc, deleteDoc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, deleteDoc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import { ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { db, storage } from '../firebase';
@@ -77,6 +77,15 @@ export default function RegistryPage({ cfg }) {
   const [slForm, setSlForm] = useState({});
   const [slSaving, setSlSaving] = useState(false);
   const [withdrawItem, setWithdrawItem] = useState(null); // เล่มที่กำลังจะกดเบิกออกจากคลัง (คุมคลังแบบรายเล่ม)
+  // ทะเบียนใบเสร็จเท่านั้น: ติดตามเลขที่ใช้ล่าสุด + เจาะปรุทำลายใบเสร็จคงเหลือปลายปีงบ
+  const RU = cfg.receiptUsage;
+  const [usageItem, setUsageItem] = useState(null); // เล่มที่กำลังจะบันทึกเลขที่ใช้ล่าสุด
+  const [usageForm, setUsageForm] = useState({});
+  const [usageSaving, setUsageSaving] = useState(false);
+  const [destroyItem, setDestroyItem] = useState(null); // เล่มที่กำลังจะเจาะปรุทำลาย
+  const [destroyForm, setDestroyForm] = useState({});
+  const [destroySaving, setDestroySaving] = useState(false);
+  const [showRemainReport, setShowRemainReport] = useState(false);
 
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 3500); };
 
@@ -200,6 +209,26 @@ export default function RegistryPage({ cfg }) {
     () => (isStockLedger && items ? items.filter((it) => it[cfg.statusField] === SL.outValue).sort((a, b) => bookSeq(a[cfg.numberField]) - bookSeq(b[cfg.numberField])) : []),
     [items, isStockLedger, SL, cfg],
   );
+  // ทะเบียนใบเสร็จเท่านั้น: เล่มที่ถูกเจาะปรุทำลายแล้ว (แยกออกจาก "เล่มที่ใช้อยู่")
+  const destroyedBooks = useMemo(
+    () => (RU && items ? items.filter((it) => it[cfg.statusField] === RU.destroyStatusValue) : []),
+    [items, RU, cfg],
+  );
+  // ดึงเฉพาะตัวเลขจากเลขที่ใบเสร็จ (เผื่อมีเลขศูนย์นำหน้า เช่น "01") เพื่อคำนวณแผ่นที่เหลือ
+  const numVal = (s) => parseInt(String(s || '').replace(/\D/g, ''), 10) || 0;
+  // ช่วงเลขที่ใบเสร็จที่ยังเหลืออยู่ในเล่ม = ตั้งแต่ (เลขที่ใช้ล่าสุด + 1) หรือเลขที่แรกของเล่มถ้ายังไม่เคยกรอกเลขที่ใช้ล่าสุด จนถึงเลขที่ท้ายเล่ม
+  const remainingRangeOf = (it) => {
+    const fromBase = numVal(it[SL.numFromKey]);
+    const used = it[RU.lastUsedKey] ? numVal(it[RU.lastUsedKey]) : fromBase - 1;
+    const from = Math.max(fromBase, used + 1);
+    const to = numVal(it[SL.numToKey]);
+    return { from, to };
+  };
+  // รายการใบเสร็จคงเหลือเมื่อปลายปีงบประมาณ (เฉพาะเล่มที่กำลังใช้อยู่และยังมีแผ่นเหลือ)
+  const remainingBooks = useMemo(() => {
+    if (!RU || !items) return [];
+    return outBooks.map((it) => ({ it, ...remainingRangeOf(it) })).filter((r) => r.to >= r.from);
+  }, [outBooks, RU, items, SL]);
 
   // เงื่อนไขแสดงฟิลด์แบบมีตัวเลือก (showIf) เช่น ทะเบียนหนังสือสัญญา: เลือกบุคลากรแทนช่องพิมพ์ชื่อเองเมื่อเป็น "ลูกจ้างชั่วคราว"
   const fieldVisible = (f, values) => !f.showIf || f.showIf(values);
@@ -296,6 +325,8 @@ export default function RegistryPage({ cfg }) {
     }
   };
 
+  // ลบรายการ — สำหรับทะเบียนที่กำหนด renumberOnDelete: true (เช่น ทะเบียนใบเสร็จ) หลังลบจะเรียงเลขที่ของเล่มที่เหลือในปีงบเดียวกันใหม่ทั้งหมด
+  // ให้ต่อเนื่องตามจริง (ไม่เหลือช่องว่างจากเล่มที่ถูกลบ) พร้อมปรับตัวนับ (counters) ให้ตรงกับจำนวนเล่มที่เหลือจริง เพื่อไม่ให้เล่มถัดไปที่เพิ่มออกเลขที่ซ้ำ/เว้นช่วง
   const doDelete = async () => {
     const it = toDelete;
     setDeleting(true);
@@ -305,7 +336,34 @@ export default function RegistryPage({ cfg }) {
       const snapshot = {};
       cfg.fields.forEach((f) => { snapshot[f.key] = it[f.key] ?? ''; });
       await writeAudit({ action: 'delete', module: cfg.key, docId: it.id, label: it[cfg.numberField], before: snapshot });
-      say({ type: 'ok', text: 'ลบข้อมูลแล้ว' });
+
+      if (cfg.renumberOnDelete) {
+        const remaining = (items || [])
+          .filter((x) => x.id !== it.id && x.fy === it.fy)
+          .sort((a, b) => bookSeq(a[cfg.numberField]) - bookSeq(b[cfg.numberField]));
+        const numCfg = await getNumbering();
+        const digits = cfg.numberDigits ?? numCfg.digits;
+        const prefix = cfg.numberPrefix ?? (numCfg.prefixes?.[cfg.key] || '');
+        const batch = writeBatch(db);
+        const renameLog = [];
+        remaining.forEach((r, idx) => {
+          const newNumber = formatNumber(idx + 1, digits, it.fy, prefix);
+          if (newNumber !== r[cfg.numberField]) {
+            batch.update(doc(db, cfg.key, r.id), { [cfg.numberField]: newNumber });
+            renameLog.push(`${r[cfg.numberField]} → ${newNumber}`);
+          }
+        });
+        batch.set(doc(db, 'counters', `${cfg.key}_${it.fy}`), { last: remaining.length, updatedAt: serverTimestamp() });
+        await batch.commit();
+        if (renameLog.length) {
+          await writeAudit({ action: 'update', module: cfg.key, docId: 'renumber', label: `เรียงเลขที่${cfg.numberLabel}ใหม่ ปีงบ ${it.fy}`, after: { changes: renameLog.join(', ') } });
+          say({ type: 'ok', text: `ลบข้อมูลแล้ว และเรียงเลขที่${cfg.numberLabel}ที่เหลือใหม่แล้ว (${renameLog.length} เล่ม)` });
+        } else {
+          say({ type: 'ok', text: 'ลบข้อมูลแล้ว' });
+        }
+      } else {
+        say({ type: 'ok', text: 'ลบข้อมูลแล้ว' });
+      }
       setToDelete(null);
       setViewId(null);
     } catch (err) {
@@ -427,6 +485,51 @@ export default function RegistryPage({ cfg }) {
     }
   };
 
+  // ===== ทะเบียนใบเสร็จเท่านั้น: บันทึกเลขที่ใช้ล่าสุด (เจ้าหน้าที่กรอกเองเป็นระยะ ไม่มีระบบตัดอัตโนมัติ) ใช้คำนวณแผ่นที่เหลือ =====
+  const openUsage = (it) => { setUsageForm({ lastUsedNo: it[RU.lastUsedKey] || '' }); setUsageItem(it); };
+  const submitUsage = async () => {
+    setUsageSaving(true);
+    try {
+      const after = { [RU.lastUsedKey]: String(usageForm.lastUsedNo || '').trim() };
+      await updateDoc(doc(db, cfg.key, usageItem.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: usageItem.id, label: usageItem[cfg.numberField], after });
+      say({ type: 'ok', text: `บันทึกเลขที่ใช้ล่าสุดของเล่ม ${usageItem[cfg.numberField]} แล้ว` });
+      setUsageItem(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setUsageSaving(false);
+    }
+  };
+
+  // ===== ทะเบียนใบเสร็จเท่านั้น: เจาะปรุทำลายใบเสร็จคงเหลือปลายปีงบประมาณ — เปลี่ยนสถานะเล่มเป็น "ทำลายแล้ว" บันทึกช่วงเลขที่ที่ทำลายและวันที่นำส่ง อบจ.สกลนคร =====
+  const openDestroy = (it) => {
+    const { from, to } = remainingRangeOf(it);
+    setDestroyForm({ date: todayStr(), from: String(from), to: String(to), sentDate: todayStr() });
+    setDestroyItem(it);
+  };
+  const submitDestroy = async () => {
+    if (!String(destroyForm.from || '').trim() || !String(destroyForm.to || '').trim()) { say({ type: 'error', text: 'กรุณากรอกช่วงเลขที่ที่ทำลาย' }); return; }
+    setDestroySaving(true);
+    try {
+      const after = {
+        [cfg.statusField]: RU.destroyStatusValue,
+        [RU.destroyDateKey]: destroyForm.date,
+        [RU.destroyFromKey]: destroyForm.from.trim(),
+        [RU.destroyToKey]: destroyForm.to.trim(),
+        [RU.destroySentDateKey]: destroyForm.sentDate,
+      };
+      await updateDoc(doc(db, cfg.key, destroyItem.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: destroyItem.id, label: destroyItem[cfg.numberField], after });
+      say({ type: 'ok', text: `บันทึกเจาะปรุทำลายเล่มที่ ${destroyItem[cfg.numberField]} แล้ว (เลขที่ ${destroyForm.from}-${destroyForm.to})` });
+      setDestroyItem(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setDestroySaving(false);
+    }
+  };
+
   const exportRows = () =>
     filtered.map((it) => {
       const r = {};
@@ -490,39 +593,93 @@ export default function RegistryPage({ cfg }) {
         <div className="card mb-4 p-4">
           <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1">
             <span className="flex items-center gap-1.5"><span className="font-semibold text-slate-700">คงเหลือในคลัง:</span> <span className="text-xl font-bold text-emerald-700">{inStockBooks.length}</span> {SL.unitLabel}</span>
-            <span className="flex items-center gap-1.5"><span className="font-semibold text-slate-700">เบิกใช้แล้ว:</span> <span className="text-xl font-bold text-orange-700">{outBooks.length}</span> {SL.unitLabel}</span>
+            <span className="flex items-center gap-1.5"><span className="font-semibold text-slate-700">{RU ? 'เล่มที่ใช้อยู่' : 'เบิกใช้แล้ว'}:</span> <span className="text-xl font-bold text-orange-700">{outBooks.length}</span> {SL.unitLabel}</span>
+            {RU && <span className="flex items-center gap-1.5"><span className="font-semibold text-slate-700">ทำลายแล้ว:</span> <span className="text-xl font-bold text-slate-500">{destroyedBooks.length}</span> {SL.unitLabel}</span>}
+            {RU && (
+              <button type="button" className="btn btn-outline ml-auto !py-1.5 text-sm" onClick={() => setShowRemainReport(true)}>
+                <FileSpreadsheet className="h-4 w-4" /> ใบเสร็จคงเหลือเมื่อปลายปีงบประมาณ
+              </button>
+            )}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มในคลัง {writable && '(คลิกที่เล่มเพื่อเบิกออกใช้)'}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {inStockBooks.length === 0 && <span className="text-sm text-slate-400">ไม่มีเล่มคงคลัง</span>}
-                {inStockBooks.map((it) => (
-                  <button
-                    key={it.id}
-                    type="button"
-                    disabled={!writable}
-                    onClick={() => openWithdraw(it)}
-                    title={writable ? `คลิกเพื่อเบิกเล่มที่ ${it[cfg.numberField]} ออกจากคลัง` : undefined}
-                    className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-default disabled:hover:bg-emerald-100"
-                  >
-                    เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
-                  </button>
-                ))}
+
+          {RU ? (
+            // แดชบอร์ดทะเบียนใบเสร็จ: แสดงเป็นรายการแนวตั้ง (ไม่ใช่ชิปไหลต่อกัน) เพื่อให้เห็นจำนวนเล่มในคลังชัดเจน แยกฝั่งจากเล่มที่กำลังใช้อยู่
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มในคลัง ({inStockBooks.length} เล่ม)</p>
+                <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {inStockBooks.length === 0 && <div className="p-3 text-sm text-slate-400">ไม่มีเล่มคงคลัง</div>}
+                  {inStockBooks.map((it) => (
+                    <div key={it.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <div>
+                        <div className="font-semibold text-emerald-800">เล่ม {it[cfg.numberField]}</div>
+                        <div className="text-xs text-slate-500">เลขที่ {it[SL.numFromKey]}-{it[SL.numToKey]}</div>
+                      </div>
+                      {writable && (
+                        <button type="button" className="btn btn-outline !py-1 !px-2.5 text-xs text-emerald-700" onClick={() => openWithdraw(it)}>เบิกออกใช้</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มที่ใช้อยู่ ({outBooks.length} เล่ม)</p>
+                <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {outBooks.length === 0 && <div className="p-3 text-sm text-slate-400">ยังไม่มีเล่มที่เบิกใช้</div>}
+                  {outBooks.map((it) => {
+                    const r = remainingRangeOf(it);
+                    const remain = Math.max(0, r.to - r.from + 1);
+                    return (
+                      <div key={it.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <div>
+                          <div className="font-semibold text-orange-800">เล่ม {it[cfg.numberField]}</div>
+                          <div className="text-xs text-slate-500">เลขที่ {it[SL.numFromKey]}-{it[SL.numToKey]} · ใช้ล่าสุดถึงเลขที่ {it[RU.lastUsedKey] || '-'} · เหลือ {remain} แผ่น</div>
+                        </div>
+                        {writable && (
+                          <div className="flex shrink-0 gap-1">
+                            <button type="button" className="btn btn-outline !py-1 !px-2.5 text-xs text-slate-600" onClick={() => openUsage(it)}>บันทึกเลขที่ใช้ล่าสุด</button>
+                            {remain > 0 && <button type="button" className="btn btn-outline !py-1 !px-2.5 text-xs text-red-700" onClick={() => openDestroy(it)}>เจาะปรุทำลาย</button>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-            <div>
-              <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มที่เบิกใช้แล้ว</p>
-              <div className="flex flex-wrap gap-1.5">
-                {outBooks.length === 0 && <span className="text-sm text-slate-400">ยังไม่มีเล่มที่เบิกใช้</span>}
-                {outBooks.map((it) => (
-                  <span key={it.id} className="rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-800">
-                    เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
-                  </span>
-                ))}
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มในคลัง {writable && '(คลิกที่เล่มเพื่อเบิกออกใช้)'}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {inStockBooks.length === 0 && <span className="text-sm text-slate-400">ไม่มีเล่มคงคลัง</span>}
+                  {inStockBooks.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      disabled={!writable}
+                      onClick={() => openWithdraw(it)}
+                      title={writable ? `คลิกเพื่อเบิกเล่มที่ ${it[cfg.numberField]} ออกจากคลัง` : undefined}
+                      className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-default disabled:hover:bg-emerald-100"
+                    >
+                      เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มที่เบิกใช้แล้ว</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {outBooks.length === 0 && <span className="text-sm text-slate-400">ยังไม่มีเล่มที่เบิกใช้</span>}
+                  {outBooks.map((it) => (
+                    <span key={it.id} className="rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-800">
+                      เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -986,9 +1143,116 @@ export default function RegistryPage({ cfg }) {
         </Modal>
       )}
 
+      {/* ทะเบียนใบเสร็จเท่านั้น: ป๊อปอัพบันทึกเลขที่ใช้ล่าสุดของเล่มที่กำลังใช้อยู่ */}
+      {usageItem && (
+        <Modal
+          title={`บันทึกเลขที่ใช้ล่าสุด — เล่ม ${usageItem[cfg.numberField]}`}
+          onClose={() => !usageSaving && setUsageItem(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={usageSaving} onClick={() => setUsageItem(null)}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={usageSaving} onClick={submitUsage}>{usageSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              ช่วงเลขที่ใบเสร็จทั้งเล่ม: <span className="font-semibold text-slate-800">{usageItem[SL?.numFromKey]}-{usageItem[SL?.numToKey]}</span>
+            </p>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">ใช้ใบเสร็จไปถึงเลขที่</label>
+              <input className="input" value={usageForm.lastUsedNo || ''} onChange={(e) => setUsageForm({ ...usageForm, lastUsedNo: e.target.value })} />
+            </div>
+            <p className="text-xs text-slate-500">ระบบใช้เลขนี้คำนวณแผ่นที่เหลือในเล่ม และใช้เป็นค่าเริ่มต้นเวลาเจาะปรุทำลายปลายปีงบ</p>
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนใบเสร็จเท่านั้น: ป๊อปอัพเจาะปรุทำลายใบเสร็จคงเหลือ */}
+      {destroyItem && (
+        <Modal
+          title={`เจาะปรุทำลายใบเสร็จคงเหลือ — เล่ม ${destroyItem[cfg.numberField]}`}
+          onClose={() => !destroySaving && setDestroyItem(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={destroySaving} onClick={() => setDestroyItem(null)}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={destroySaving} onClick={submitDestroy}>{destroySaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึกทำลาย</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              ช่วงเลขที่ใบเสร็จทั้งเล่ม: <span className="font-semibold text-slate-800">{destroyItem[SL?.numFromKey]}-{destroyItem[SL?.numToKey]}</span>
+              {destroyItem[RU?.lastUsedKey] && <> · ใช้ล่าสุดถึงเลขที่ {destroyItem[RU.lastUsedKey]}</>}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">ทำลายเลขที่ ตั้งแต่</label>
+                <input className="input" value={destroyForm.from || ''} onChange={(e) => setDestroyForm({ ...destroyForm, from: e.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">ทำลายเลขที่ ถึง</label>
+                <input className="input" value={destroyForm.to || ''} onChange={(e) => setDestroyForm({ ...destroyForm, to: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">วันที่เจาะปรุทำลาย</label>
+              <ThaiDateInput value={destroyForm.date} onChange={(v) => setDestroyForm({ ...destroyForm, date: v })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">วันที่นำส่ง อบจ.สกลนคร</label>
+              <ThaiDateInput value={destroyForm.sentDate} onChange={(v) => setDestroyForm({ ...destroyForm, sentDate: v })} />
+            </div>
+            <p className="text-xs text-slate-500">บันทึกนี้จะเปลี่ยนสถานะเล่มเป็น "ทำลายแล้ว" และนำออกจากรายการ "เล่มที่ใช้อยู่"</p>
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนใบเสร็จเท่านั้น: รายงานใบเสร็จคงเหลือเมื่อปลายปีงบประมาณ */}
+      {showRemainReport && (
+        <Modal wide title="ใบเสร็จคงเหลือเมื่อปลายปีงบประมาณ" onClose={() => setShowRemainReport(false)}
+          footer={<button className="btn btn-outline" onClick={() => setShowRemainReport(false)}>ปิด</button>}
+        >
+          {remainingBooks.length === 0 ? (
+            <p className="py-6 text-center text-slate-400">ไม่มีใบเสร็จคงเหลือในเล่มที่ใช้อยู่</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-100 text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">เล่มที่</th>
+                    <th className="px-3 py-2 font-semibold">เลขที่คงเหลือ</th>
+                    <th className="px-3 py-2 text-center font-semibold">แผ่นที่เหลือ</th>
+                    {writable && <th className="px-3 py-2"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {remainingBooks.map(({ it, from, to }) => (
+                    <tr key={it.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-semibold text-brand-800">{it[cfg.numberField]}</td>
+                      <td className="px-3 py-2">{from}-{to}</td>
+                      <td className="px-3 py-2 text-center">{to - from + 1}</td>
+                      {writable && (
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" className="btn btn-outline !py-1 !px-2.5 text-xs text-red-700" onClick={() => { setShowRemainReport(false); openDestroy(it); }}>เจาะปรุทำลาย</button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal>
+      )}
+
       {toDelete && (
         <ConfirmDialog
-          message={`คุณต้องการลบทะเบียน${cfg.noun}เลขที่ ${toDelete[cfg.numberField]} หรือไม่?`}
+          message={
+            cfg.renumberOnDelete
+              ? `คุณต้องการลบทะเบียน${cfg.noun}เลขที่ ${toDelete[cfg.numberField]} หรือไม่? หลังลบ ระบบจะเรียงเลขที่${cfg.numberLabel}ของเล่มอื่นที่เหลือในปีงบ ${toDelete.fy} ใหม่ทั้งหมดให้ต่อเนื่องตามจริง (เลขที่เล่มที่เหลืออาจเปลี่ยนแปลง)`
+              : `คุณต้องการลบทะเบียน${cfg.noun}เลขที่ ${toDelete[cfg.numberField]} หรือไม่?`
+          }
           busy={deleting} onConfirm={doDelete} onCancel={() => setToDelete(null)}
         />
       )}

@@ -358,6 +358,9 @@ export const REGISTRIES = {
   // แก้ไขฟังก์ชันให้เหมือนทะเบียนคุมเล่มเช็คด้านบนทั้งหมด (คุมคลังแบบรายเล่ม + แดชบอร์ดคลิกเล่มเพื่อเบิก + เลือกปีงบได้ตอนเพิ่มเข้าคลัง) ตามคำขอ — ต่างกันแค่ไม่มีเลขที่บัญชี/ชื่อบัญชีตายตัว (ใบเสร็จไม่มีเลขบัญชี)
   // defaultNumFrom/defaultNumTo: ค่าตั้งต้นของช่วงเลขที่ใบเสร็จต่อเล่มเป็น 01-100 (ขนาดเล่มมาตรฐานทั่วไป) แก้ไขเป็นช่วงอื่นได้ตอนกรอก
   // เลขที่เล่มใช้คำนำหน้า "บร." ไม่เติมศูนย์ (numberDigits: 1) ตามที่แจ้ง -> รูปแบบ "บร.1/2569", "บร.2/2569", ...
+  // renumberOnDelete: เฉพาะทะเบียนนี้ (ไม่กระทบทะเบียนเล่มเช็คที่ใช้ stockLedger ร่วมกัน) — ถ้าลบเล่มใดออก ระบบจะเรียงเลขที่ บร. ของเล่มที่เหลือในปีงบเดียวกันใหม่ทั้งหมดให้ต่อเนื่องตามจริง (ดู RegistryPage.jsx: doDelete)
+  // receiptUsage: เพิ่มใหม่ — ติดตามเลขที่ใช้ล่าสุดของเล่มที่กำลังใช้อยู่ (lastUsedNo กรอกเองเป็นระยะโดยเจ้าหน้าที่ ไม่มีระบบออกใบเสร็จจริงให้ตัดอัตโนมัติ)
+  // เพื่อคำนวณ "แผ่นที่เหลือ" และรองรับฟังก์ชัน "เจาะปรุทำลายใบเสร็จคงเหลือปลายปีงบประมาณ" (เปลี่ยนสถานะเป็น destroyStatusValue พร้อมบันทึกช่วงเลขที่ที่ทำลายและวันที่นำส่ง อบจ.สกลนคร)
   'reg-receipt': {
     key: 'reg-receipt',
     path: '/reg-receipt',
@@ -369,11 +372,13 @@ export const REGISTRIES = {
     numberPrefix: 'บร.',
     numberDigits: 1,
     hideInsert: true,
+    renumberOnDelete: true,
     dateField: 'dateIn',
     statusField: 'bookStatus',
     statusColors: {
       'คงคลัง': 'bg-emerald-100 text-emerald-800',
       'เบิกใช้แล้ว': 'bg-orange-100 text-orange-800',
+      'ทำลายแล้ว': 'bg-slate-200 text-slate-700',
     },
     stockLedger: {
       statusKey: 'bookStatus', inValue: 'คงคลัง', outValue: 'เบิกใช้แล้ว',
@@ -389,6 +394,13 @@ export const REGISTRIES = {
       // ช่องเพิ่มเติมเฉพาะตอนรับเข้าคลัง (ไม่มีในทะเบียนเล่มเช็ค) — เลขทะเบียนใบเสร็จที่ อบจ.สกลนคร ออกให้เล่มนั้นๆ
       extraInFields: [{ key: 'paoRegNo', label: 'เลขทะเบียนใบเสร็จจาก อบจ. เล่มที่' }],
     },
+    // เฉพาะทะเบียนใบเสร็จ (ไม่ใช้ร่วมกับเล่มเช็ค) — ดู RegistryPage.jsx ส่วน RU
+    receiptUsage: {
+      lastUsedKey: 'lastUsedNo',
+      destroyStatusValue: 'ทำลายแล้ว',
+      destroyDateKey: 'destroyDate', destroyFromKey: 'destroyFrom', destroyToKey: 'destroyTo',
+      destroySentDateKey: 'destroySentDate',
+    },
     fields: [
       { key: 'bookNo', label: 'เล่มที่', type: 'text', auto: true, list: true, search: true },
       { key: 'dateIn', label: 'วันที่รับเข้าคลัง', type: 'date', required: true, list: true },
@@ -396,19 +408,27 @@ export const REGISTRIES = {
       { key: 'receiptFrom', label: 'เลขที่ใบเสร็จ ตั้งแต่', type: 'text', required: true, list: true, search: true },
       { key: 'receiptTo', label: 'เลขที่ใบเสร็จ ถึง', type: 'text', required: true, list: true, search: true },
       { key: 'paoRegNo', label: 'เลขทะเบียนใบเสร็จจาก อบจ. เล่มที่', type: 'text', auto: true, list: true, search: true },
-      { key: 'bookStatus', label: 'สถานะเล่ม', type: 'select', auto: true, options: ['คงคลัง', 'เบิกใช้แล้ว'], default: 'คงคลัง', list: true },
+      { key: 'bookStatus', label: 'สถานะเล่ม', type: 'select', auto: true, options: ['คงคลัง', 'เบิกใช้แล้ว', 'ทำลายแล้ว'], default: 'คงคลัง', list: true },
       { key: 'dateOut', label: 'วันที่เบิกออกใช้', type: 'date', auto: true, list: true },
       { key: 'requester', label: 'ผู้เบิกใบเสร็จ', type: 'text', auto: true, list: true },
       { key: 'requesterPosition', label: 'ตำแหน่งผู้เบิก', type: 'text', auto: true },
+      // ใช้เลขที่ล่าสุด: กรอกผ่านปุ่ม "บันทึกเลขที่ใช้ล่าสุด" ในแดชบอร์ดเท่านั้น (ไม่ใช่ฟอร์มแก้ไขทั่วไป) ใช้คำนวณแผ่นที่เหลือ
+      { key: 'lastUsedNo', label: 'ใช้ใบเสร็จไปถึงเลขที่ (ล่าสุด)', type: 'text', auto: true, list: true },
+      // ชุดฟิลด์เจาะปรุทำลาย: กรอกผ่านปุ่ม "เจาะปรุทำลาย" เท่านั้น
+      { key: 'destroyDate', label: 'วันที่เจาะปรุทำลาย', type: 'date', auto: true, list: true },
+      { key: 'destroyFrom', label: 'ทำลายเลขที่ ตั้งแต่', type: 'text', auto: true, list: true },
+      { key: 'destroyTo', label: 'ทำลายเลขที่ ถึง', type: 'text', auto: true, list: true },
+      { key: 'destroySentDate', label: 'วันที่นำส่ง อบจ.สกลนคร', type: 'date', auto: true, list: true },
       { key: 'signer', label: 'ลายเซ็นผู้รับใบเสร็จ', type: 'text' },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'FFFF00',
-    reportColumns: ['bookNo', 'dateIn', 'sourceType', 'receiptFrom', 'receiptTo', 'paoRegNo', 'bookStatus', 'dateOut', 'requester'],
+    reportColumns: ['bookNo', 'dateIn', 'sourceType', 'receiptFrom', 'receiptTo', 'paoRegNo', 'bookStatus', 'dateOut', 'requester', 'lastUsedNo', 'destroyFrom', 'destroyTo', 'destroySentDate'],
     reportLayout: [
       { key: 'bookNo' }, { key: 'dateIn' }, { key: 'sourceType' },
       { group: 'เลขที่ใบเสร็จ', color: '00FFFF', keys: ['receiptFrom', 'receiptTo'] },
-      { key: 'paoRegNo' }, { key: 'bookStatus' }, { key: 'dateOut' }, { key: 'requester' },
+      { key: 'paoRegNo' }, { key: 'bookStatus' }, { key: 'dateOut' }, { key: 'requester' }, { key: 'lastUsedNo' },
+      { group: 'เจาะปรุทำลาย', color: 'FFCCCC', keys: ['destroyFrom', 'destroyTo', 'destroySentDate'] },
     ],
   },
   'reg-deeka': {
