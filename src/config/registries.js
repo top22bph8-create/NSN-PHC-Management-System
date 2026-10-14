@@ -301,7 +301,8 @@ export const REGISTRIES = {
   },
   // ออกแบบใหม่ทั้งหมดเป็น "ทะเบียนคุมคลังแบบรายเล่ม": แต่ละเล่มคือ 1 เอกสาร เริ่มที่สถานะ "คงคลัง" ตอนรับเข้า
   // แล้วกดเบิกออก (คลิกที่เล่มในแดชบอร์ด) จะอัปเดตเอกสารเล่มเดิมเป็น "เบิกใช้แล้ว" (ไม่ต้องกรอกช่วงเลขที่/จำนวนซ้ำตอนเบิก เพราะมีอยู่แล้วในเล่มนั้น)
-  // เลขที่เล่ม (bookNo) ออกให้อัตโนมัติ 2 หลัก ไล่ 01, 02, ... ต่อปีงบประมาณ ผ่านระบบเลขที่ทะเบียนเดียวกับทะเบียนอื่นๆ (numberDigits: 2)
+  // เลขที่เล่ม (bookNo) ยกเลิกการออกเลขที่อัตโนมัติแล้วตามที่แจ้ง — ผู้ใช้งานกำหนด/กรอกเลขที่เล่มเองทั้งหมดตอนเพิ่มเข้าคลัง (manualNumber: true)
+  // ปล่อยเป็นช่องว่างเปล่าให้กรอกเอง ไม่มีคำแนะนำ/เทมเพลตล่วงหน้า (ต่างจากทะเบียนใบเสร็จที่มีคำแนะนำ "บร.N/ปีงบ" ให้) ตามที่แจ้งว่า "เว้นช่องว่างไว้เฉยๆ"
   // stockLedger: กำหนดให้หน้า RegistryPage แสดงปุ่ม "เพิ่มเล่มเข้าคลัง" + แดชบอร์ดเล่มในคลัง/เล่มที่เบิกใช้แล้ว (คลิกเล่มเพื่อเบิก) — ดู src/components/RegistryPage.jsx
   'reg-cheque': {
     key: 'reg-cheque',
@@ -311,7 +312,7 @@ export const REGISTRIES = {
     noun: 'เล่มเช็ค',
     numberField: 'bookNo',
     numberLabel: 'เล่มที่',
-    numberDigits: 2,
+    manualNumber: true,
     hideInsert: true,
     dateField: 'dateIn',
     statusField: 'bookStatus',
@@ -333,7 +334,7 @@ export const REGISTRIES = {
       unitLabel: 'เล่ม',
     },
     fields: [
-      { key: 'bookNo', label: 'เล่มที่', type: 'text', auto: true, list: true, search: true },
+      { key: 'bookNo', label: 'เล่มที่', type: 'text', list: true, search: true },
       { key: 'dateIn', label: 'วันที่รับเข้าคลัง', type: 'date', required: true, list: true },
       { key: 'sourceType', label: 'ที่มา', type: 'select', options: ['ยอดรับมาจากปีงบก่อน', 'รับจากธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร สาขาธาตุนาเวง'], list: true },
       { key: 'chequeFrom', label: 'เลขที่เช็ค ตั้งแต่', type: 'text', required: true, list: true, search: true },
@@ -357,10 +358,11 @@ export const REGISTRIES = {
   },
   // แก้ไขฟังก์ชันให้เหมือนทะเบียนคุมเล่มเช็คด้านบนทั้งหมด (คุมคลังแบบรายเล่ม + แดชบอร์ดคลิกเล่มเพื่อเบิก + เลือกปีงบได้ตอนเพิ่มเข้าคลัง) ตามคำขอ — ต่างกันแค่ไม่มีเลขที่บัญชี/ชื่อบัญชีตายตัว (ใบเสร็จไม่มีเลขบัญชี)
   // defaultNumFrom/defaultNumTo: ค่าตั้งต้นของช่วงเลขที่ใบเสร็จต่อเล่มเป็น 01-100 (ขนาดเล่มมาตรฐานทั่วไป) แก้ไขเป็นช่วงอื่นได้ตอนกรอก
-  // เลขที่เล่มใช้คำนำหน้า "บร." ไม่เติมศูนย์ (numberDigits: 1) ตามที่แจ้ง -> รูปแบบ "บร.1/2569", "บร.2/2569", ...
-  // renumberOnDelete: เฉพาะทะเบียนนี้ (ไม่กระทบทะเบียนเล่มเช็คที่ใช้ stockLedger ร่วมกัน) — ถ้าลบเล่มใดออก ระบบจะเรียงเลขที่ บร. ของเล่มที่เหลือในปีงบเดียวกันใหม่ทั้งหมดให้ต่อเนื่องตามจริง (ดู RegistryPage.jsx: doDelete)
-  // receiptUsage: เพิ่มใหม่ — ติดตามเลขที่ใช้ล่าสุดของเล่มที่กำลังใช้อยู่ (lastUsedNo กรอกเองเป็นระยะโดยเจ้าหน้าที่ ไม่มีระบบออกใบเสร็จจริงให้ตัดอัตโนมัติ)
-  // เพื่อคำนวณ "แผ่นที่เหลือ" และรองรับฟังก์ชัน "เจาะปรุทำลายใบเสร็จคงเหลือปลายปีงบประมาณ" (เปลี่ยนสถานะเป็น destroyStatusValue พร้อมบันทึกช่วงเลขที่ที่ทำลายและวันที่นำส่ง อบจ.สกลนคร)
+  // ยกเลิกการออกเลขที่เล่มอัตโนมัติ (manualNumber: true) และยกเลิกการเรียงเลขที่ใหม่อัตโนมัติเมื่อลบเล่ม (renumberOnDelete ถูกถอดออกแล้ว) ตามที่แจ้ง — ผู้ใช้งานกำหนด/กรอกเลขที่เล่มเองทั้งหมด
+  // manualNumberSuggest: true -> ช่องกรอกเลขที่เล่มจะมีคำแนะนำเริ่มต้นให้ (เช่น "บร.1/2570" ทับด้วยปีงบประมาณที่เลือก) แต่ผู้ใช้แก้ไข/เขียนทับได้อย่างอิสระ ไม่ใช่ค่าบังคับ
+  // numberPrefix/numberDigits ยังเก็บไว้เพื่อใช้คำนวณ "คำแนะนำ" เลขที่เล่มถัดไปเท่านั้น (ดู RegistryPage.jsx: openStockIn) ไม่ได้ใช้กับระบบรันเลขอัตโนมัติ (createNumbered) อีกต่อไป
+  // receiptUsage: ติดตามเลขที่ใช้ล่าสุดของเล่มที่กำลังใช้อยู่ (lastUsedNo กรอกเองเป็นระยะโดยเจ้าหน้าที่ ไม่มีระบบออกใบเสร็จจริงให้ตัดอัตโนมัติ)
+  // เพื่อคำนวณ "แผ่นที่เหลือ" และรองรับฟังก์ชัน "เจาะปรุทำลายใบเสร็จคงเหลือปลายปีงบประมาณ" (เปลี่ยนสถานะเป็น destroyStatusValue พร้อมบันทึกช่วงเลขที่ที่ทำลายและวันที่นำส่ง อบจ.สกลนคร) — ไม่เปลี่ยนแปลงจากเดิม
   'reg-receipt': {
     key: 'reg-receipt',
     path: '/reg-receipt',
@@ -371,8 +373,9 @@ export const REGISTRIES = {
     numberLabel: 'เล่มที่',
     numberPrefix: 'บร.',
     numberDigits: 1,
+    manualNumber: true,
+    manualNumberSuggest: true,
     hideInsert: true,
-    renumberOnDelete: true,
     dateField: 'dateIn',
     statusField: 'bookStatus',
     statusColors: {
@@ -402,7 +405,7 @@ export const REGISTRIES = {
       destroySentDateKey: 'destroySentDate',
     },
     fields: [
-      { key: 'bookNo', label: 'เล่มที่', type: 'text', auto: true, list: true, search: true },
+      { key: 'bookNo', label: 'เล่มที่', type: 'text', list: true, search: true },
       { key: 'dateIn', label: 'วันที่รับเข้าคลัง', type: 'date', required: true, list: true },
       { key: 'sourceType', label: 'ที่มา', type: 'select', options: ['ยอดยกมาจากปีงบประมาณก่อน', 'รับจาก อบจ.สกลนคร'], list: true },
       { key: 'receiptFrom', label: 'เลขที่ใบเสร็จ ตั้งแต่', type: 'text', required: true, list: true, search: true },
