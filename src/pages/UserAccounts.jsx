@@ -224,6 +224,16 @@ function EditAccountModal({ user, onClose, say, prefill }) {
         await setDoc(doc(db, 'credentials', newEmail), { username: newUsername, password: pw });
         await deleteDoc(doc(db, 'users', user.email));
         await deleteDoc(doc(db, 'credentials', user.email)).catch(() => {});
+        // สำคัญ: ย้ายทะเบียนลาเดิมทั้งหมด (field userEmail) ไปอีเมลใหม่ด้วย ไม่งั้นใบลาเก่าจะ "หลุด" ไม่ถูกนับในสถิติ/โควตาของบัญชีใหม่อีกต่อไป
+        // (เดิมเคยเกิดปัญหานี้มาแล้วตอนเปลี่ยน Username ทำให้การ์ดสรุปวันลาที่หน้า "รายชื่อบุคลากร" ขึ้นเต็มโควตาผิดๆ เพราะจับคู่อีเมลไม่เจอ)
+        try {
+          const leaveSnap = await getDocs(query(collection(db, 'leaves'), where('userEmail', '==', user.email)));
+          if (!leaveSnap.empty) {
+            const batch = writeBatch(db);
+            leaveSnap.docs.forEach((d) => batch.update(d.ref, { userEmail: newEmail }));
+            await batch.commit();
+          }
+        } catch { /* ไม่ให้การเปลี่ยน Username ล้มเหลวเพราะขั้นตอนนี้ ผู้ดูแลซ่อมแซมภายหลังได้ที่หน้าทะเบียนวันลา */ }
         await writeAudit({ action: 'update', module: 'users', docId: newEmail, label: `เปลี่ยน Username ${usernameOf(user.email)} → ${newUsername}` });
         say({ type: 'ok', text: `เปลี่ยน Username แล้ว เข้าสู่ระบบด้วย "${newUsername}" ได้ทันที (บัญชีเดิมใน Firebase Authentication จะค้างอยู่แต่ใช้งานไม่ได้แล้ว ลบทิ้งเองที่ Console ภายหลังได้)` });
         onClose();

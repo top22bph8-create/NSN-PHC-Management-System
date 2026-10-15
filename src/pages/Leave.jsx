@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { CalendarDays, Check, ChevronLeft, Download, Loader2, Pencil, Plus, Printer, Trash2, User, X, XCircle } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,7 @@ import { can } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, getHolidays, getQuota, posRank, usage, workingDays } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
+import { normalizeName } from '../lib/people';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
@@ -438,6 +439,38 @@ export default function Leave() {
   const [deletingRow, setDeletingRow] = useState(false);
   const [editDaysRow, setEditDaysRow] = useState(null); // แก้ไขจำนวนวันลาของแถวที่มีอยู่แล้ว (Super Admin เท่านั้น เช่น แก้ให้ตรงหลังหักวันหยุดราชการ)
   const isSuperAdmin = profile.role === 'super_admin';
+  const [repairingGroup, setRepairingGroup] = useState(null);
+
+  // ตรวจหาใบลาที่ "อีเมลหลุด" ไม่ตรงกับบัญชีผู้ใช้ปัจจุบันในระบบแล้ว (userEmail ของใบลาไม่พบในทะเบียนบุคลากรตอนนี้)
+  // สาเหตุหลักคือเคยมีการเปลี่ยน Username/อีเมลภายในของบัญชีนั้นหลังยื่นใบลาไปแล้ว ทำให้การ์ดสรุปวันลาที่หน้า "รายชื่อบุคลากร"
+  // จับคู่อีเมลไม่เจอ เลยนับเป็น 0 เสมอ (ทั้งที่ตารางทะเบียน "ทั้งหมด" ยังแสดงรายการถูกต้อง เพราะเก็บชื่อ/ตำแหน่งไว้ในตัวเอกสารเองอยู่แล้ว)
+  // จับกลุ่มตามชื่อ (ตัดคำนำหน้าออกก่อนเทียบ) แล้วลองจับคู่กับบัญชีปัจจุบันที่ชื่อตรงกันพอดี 1 บัญชี เพื่อเสนอปุ่ม "ซ่อมแซม" ให้กดได้เลย
+  const orphanGroups = useMemo(() => {
+    if (!isSuperAdmin || !people || !rows) return [];
+    const emailSet = new Set(people.map((p) => p.email));
+    const byKey = new Map();
+    rows.forEach((l) => {
+      if (!l.userEmail || emailSet.has(l.userEmail)) return;
+      const key = `${normalizeName(l.name || '')}__${l.userEmail}`;
+      if (!byKey.has(key)) byKey.set(key, { name: l.name, oldEmail: l.userEmail, items: [] });
+      byKey.get(key).items.push(l);
+    });
+    return Array.from(byKey.values()).map((g) => ({ ...g, match: people.filter((p) => normalizeName(p.name) === normalizeName(g.name)) }));
+  }, [isSuperAdmin, people, rows]);
+
+  const repairOrphanGroup = async (g) => {
+    if (g.match.length !== 1) return;
+    setRepairingGroup(g.oldEmail);
+    try {
+      const batch = writeBatch(db);
+      g.items.forEach((l) => batch.update(doc(db, 'leaves', l.id), { userEmail: g.match[0].email }));
+      await batch.commit();
+      await writeAudit({ action: 'update', module: 'leave', label: `ซ่อมแซมอีเมลใบลาที่หลุด: ${g.name} (${g.items.length} รายการ) ${g.oldEmail} → ${g.match[0].email}` });
+      say({ type: 'ok', text: `ซ่อมแซมอีเมลใบลาของ ${g.name} แล้ว ${g.items.length} รายการ` });
+    } catch (err) {
+      say({ type: 'error', text: 'ซ่อมแซมไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally { setRepairingGroup(null); }
+  };
 
   const doDeleteRow = async () => {
     if (!toDeleteRow) return;
@@ -481,6 +514,31 @@ export default function Leave() {
         {tabs.map(([k, l]) => <button key={k} onClick={() => goTab(k)} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}
         {tab !== 'people' && tab !== 'reports' && viewAll && <button className="btn btn-outline ml-auto !py-1.5" onClick={exportAll} disabled={!list.length}><Download className="h-4 w-4" /> ส่งออก Excel</button>}
       </div>
+
+      {isSuperAdmin && orphanGroups.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">
+          <div className="font-semibold text-amber-800">
+            ⚠️ พบใบลา {orphanGroups.reduce((s, g) => s + g.items.length, 0)} รายการ ที่อีเมลในทะเบียนไม่ตรงกับบัญชีปัจจุบันของผู้ลาแล้ว (มักเกิดจากเคยเปลี่ยน Username/บัญชีภายหลังยื่นใบลา)
+            ทำให้การ์ดสรุปวันลาที่แท็บ "รายชื่อบุคลากร" ไม่นับรวมรายการเหล่านี้ (แม้จะยังอยู่ครบในแท็บ "ทั้งหมด" ก็ตาม) — กดปุ่มด้านล่างเพื่อซ่อมแซมให้ตรงกับบัญชีปัจจุบัน
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {orphanGroups.map((g) => (
+              <li key={g.oldEmail + g.name} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/70 px-2 py-1.5">
+                <span>{g.name} — {g.items.length} รายการ ({g.items.map((i) => `${i.type} ${fmtDate(i.start)}`).join(', ')})</span>
+                {g.match.length === 1 ? (
+                  <button className="btn btn-primary !px-2 !py-1 text-xs" disabled={repairingGroup === g.oldEmail} onClick={() => repairOrphanGroup(g)}>
+                    {repairingGroup === g.oldEmail && <Loader2 className="h-3.5 w-3.5 animate-spin" />} ซ่อมแซมให้ตรงกับบัญชีปัจจุบัน
+                  </button>
+                ) : g.match.length === 0 ? (
+                  <span className="text-xs text-red-600">ไม่พบบัญชีปัจจุบันที่ชื่อตรงกัน (ตรวจสอบเอง — อาจเป็นบัญชีที่ถูกลบไปแล้ว)</span>
+                ) : (
+                  <span className="text-xs text-red-600">พบบัญชีชื่อตรงกันมากกว่า 1 บัญชี (ต้องเลือกเอง)</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {tab === 'people' && (
         person ? (
