@@ -62,6 +62,22 @@ async function pushLine(channelAccessToken, targetId, messages) {
   }
 }
 
+// เหมือน pushLine ด้านบน แต่ "โยน error ออกมาจริง" แทนการกลืน error ไว้เงียบๆ แล้วแค่ log — ใช้เฉพาะจุดที่ผู้ใช้กดเองและรอผลจริง
+// (เช่น "ส่งแจ้งเตือนไลน์ซ้ำ") เพื่อให้เห็นสาเหตุตรงๆ บนหน้าเว็บ (เช่น Channel access token หมดอายุ/ผิด, บอทไม่ได้อยู่ในกลุ่มนั้นแล้ว)
+// ต่างจาก pushLine ที่ใช้ตอนแจ้งเตือนอัตโนมัติ (onLeaveCreated ฯลฯ) ซึ่งควรกลืน error ไว้ ไม่ให้กระทบขั้นตอนหลัก (บันทึกใบลา) ที่ผู้ใช้กำลังรออยู่
+async function pushLineOrThrow(channelAccessToken, targetId, messages) {
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${channelAccessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: targetId, messages }),
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => '');
+    console.error('LINE push ส่งไม่สำเร็จ (resend):', res.status, bodyText);
+    throw new Error(`LINE ปฏิเสธการส่งข้อความ (HTTP ${res.status}): ${bodyText || 'ไม่มีรายละเอียดเพิ่มเติม'}`);
+  }
+}
+
 async function replyLine(channelAccessToken, replyToken, text) {
   const res = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -388,14 +404,18 @@ exports.resendLeaveNotification = onCall(async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'ไม่พบใบลานี้ในระบบแล้ว');
   const l = snap.data();
 
-  if (l.status === 'รอพิจารณา') {
-    const statsLines = await buildLeaveStatsLines(l).catch((e) => { console.error('buildLeaveStatsLines error:', e); return []; });
-    await pushLine(channelAccessToken, targetId, [buildLeaveApprovalFlex(leaveId, l, statsLines)]);
-  } else {
-    const icon = l.status === 'อนุมัติ' ? '✅' : l.status === 'ไม่อนุมัติ' ? '❌' : '🚫';
-    let text = `${icon} (ส่งแจ้งเตือนซ้ำ) ใบลา\nชื่อ: ${l.name}\nตำแหน่ง: ${l.position || '-'}\nประเภท: ${l.type}\nวันที่: ${l.start} ถึง ${l.end} (${l.days} วัน)\nสถานะ: ${l.status}`;
-    if (l.status === 'อนุมัติ') text += `\n\n🖨️ พิมพ์ใบลา (เปิดแล้วกด "พิมพ์ / บันทึกเป็น PDF"):\n${printLeaveUrl(leaveId)}`;
-    await sendLine(channelAccessToken, targetId, text);
+  try {
+    if (l.status === 'รอพิจารณา') {
+      const statsLines = await buildLeaveStatsLines(l).catch((e) => { console.error('buildLeaveStatsLines error:', e); return []; });
+      await pushLineOrThrow(channelAccessToken, targetId, [buildLeaveApprovalFlex(leaveId, l, statsLines)]);
+    } else {
+      const icon = l.status === 'อนุมัติ' ? '✅' : l.status === 'ไม่อนุมัติ' ? '❌' : '🚫';
+      let text = `${icon} (ส่งแจ้งเตือนซ้ำ) ใบลา\nชื่อ: ${l.name}\nตำแหน่ง: ${l.position || '-'}\nประเภท: ${l.type}\nวันที่: ${l.start} ถึง ${l.end} (${l.days} วัน)\nสถานะ: ${l.status}`;
+      if (l.status === 'อนุมัติ') text += `\n\n🖨️ พิมพ์ใบลา (เปิดแล้วกด "พิมพ์ / บันทึกเป็น PDF"):\n${printLeaveUrl(leaveId)}`;
+      await pushLineOrThrow(channelAccessToken, targetId, [{ type: 'text', text }]);
+    }
+  } catch (err) {
+    throw new HttpsError('internal', err.message || 'ส่งข้อความเข้าไลน์ไม่สำเร็จ ไม่ทราบสาเหตุ');
   }
   return { ok: true };
 });
