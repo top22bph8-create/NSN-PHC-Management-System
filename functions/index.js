@@ -367,6 +367,39 @@ exports.adminBulkResetPassword = onCall(async (request) => {
   return results;
 });
 
+// ส่งแจ้งเตือนไลน์ซ้ำสำหรับใบลาที่มีอยู่แล้ว (Super Admin เท่านั้น) — ใช้กรณีตอนยื่นใบลาจริง (onLeaveCreated ด้านบน)
+// ไม่ติดเข้ากลุ่มไลน์ด้วยสาเหตุใดก็ตาม (เช่น ตอนนั้นยังไม่ได้ตั้งค่า/เปิดสวิตช์แจ้งเตือนไลน์ไว้ หรือเครือข่ายขัดข้องชั่วคราว)
+// ส่งข้อความตามสถานะปัจจุบันจริงของใบลานั้น (รอพิจารณา = การ์ดปุ่มอนุมัติ/ไม่อนุมัติเหมือนตอนยื่นใหม่, อนุมัติ/ไม่อนุมัติ/ยกเลิก = ข้อความผลพิจารณา)
+exports.resendLeaveNotification = onCall(async (request) => {
+  const callerEmail = request.auth && request.auth.token && request.auth.token.email;
+  if (!callerEmail) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
+  const callerSnap = await db.doc(`users/${callerEmail}`).get();
+  const callerRole = callerSnap.exists ? callerSnap.data().role : null;
+  if (callerRole !== 'super_admin') throw new HttpsError('permission-denied', 'เฉพาะ Super Admin เท่านั้นที่ใช้งานฟังก์ชันนี้ได้');
+
+  const leaveId = String((request.data && request.data.leaveId) || '').trim();
+  if (!leaveId) throw new HttpsError('invalid-argument', 'ไม่พบรหัสใบลา');
+
+  const { channelAccessToken, targetId, enabled } = await getLineSettings();
+  if (!channelAccessToken || !targetId) throw new HttpsError('failed-precondition', 'ยังไม่ได้ตั้งค่าการแจ้งเตือนไลน์ (Channel access token / Target ID) ที่หน้า "ตั้งค่าระบบ"');
+  if (!enabled) throw new HttpsError('failed-precondition', 'สวิตช์แจ้งเตือนไลน์ปิดอยู่ กรุณาเปิดที่หน้า "ตั้งค่าระบบ" ก่อนส่งแจ้งเตือนซ้ำ');
+
+  const snap = await db.doc(`leaves/${leaveId}`).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'ไม่พบใบลานี้ในระบบแล้ว');
+  const l = snap.data();
+
+  if (l.status === 'รอพิจารณา') {
+    const statsLines = await buildLeaveStatsLines(l).catch((e) => { console.error('buildLeaveStatsLines error:', e); return []; });
+    await pushLine(channelAccessToken, targetId, [buildLeaveApprovalFlex(leaveId, l, statsLines)]);
+  } else {
+    const icon = l.status === 'อนุมัติ' ? '✅' : l.status === 'ไม่อนุมัติ' ? '❌' : '🚫';
+    let text = `${icon} (ส่งแจ้งเตือนซ้ำ) ใบลา\nชื่อ: ${l.name}\nตำแหน่ง: ${l.position || '-'}\nประเภท: ${l.type}\nวันที่: ${l.start} ถึง ${l.end} (${l.days} วัน)\nสถานะ: ${l.status}`;
+    if (l.status === 'อนุมัติ') text += `\n\n🖨️ พิมพ์ใบลา (เปิดแล้วกด "พิมพ์ / บันทึกเป็น PDF"):\n${printLeaveUrl(leaveId)}`;
+    await sendLine(channelAccessToken, targetId, text);
+  }
+  return { ok: true };
+});
+
 // แปลงวันที่ ISO (YYYY-MM-DD) เป็นรูปแบบไทย วัน/เดือน/ปี พ.ศ. สำหรับใช้ในข้อความแจ้งเตือนไลน์ของทะเบียนสัญญายืมเงินด้านล่าง
 function thDate(s) {
   if (!s) return '-';

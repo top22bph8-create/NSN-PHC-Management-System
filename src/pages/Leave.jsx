@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
-import { CalendarDays, Check, ChevronLeft, Download, Loader2, Pencil, Plus, Printer, Trash2, User, X, XCircle } from 'lucide-react';
-import { db } from '../firebase';
+import { CalendarDays, Check, ChevronLeft, Download, Loader2, Pencil, Plus, Printer, Send, Trash2, User, X, XCircle } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
@@ -440,6 +441,19 @@ export default function Leave() {
   const [editDaysRow, setEditDaysRow] = useState(null); // แก้ไขจำนวนวันลาของแถวที่มีอยู่แล้ว (Super Admin เท่านั้น เช่น แก้ให้ตรงหลังหักวันหยุดราชการ)
   const isSuperAdmin = profile.role === 'super_admin';
   const [repairingGroup, setRepairingGroup] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
+
+  // ส่งแจ้งเตือนไลน์ของใบลาแถวนี้ซ้ำอีกครั้ง (Super Admin เท่านั้น) — กรณีตอนยื่น/พิจารณาจริง ไลน์ไม่แจ้งเตือนด้วยสาเหตุใดก็ตาม
+  // (เช่น ตอนนั้นยังปิดสวิตช์แจ้งเตือนอยู่ หรือเครือข่ายขัดข้องชั่วคราว) เรียก Cloud Function "resendLeaveNotification"
+  const resendNotify = async (l) => {
+    setResendingId(l.id);
+    try {
+      await httpsCallable(functions, 'resendLeaveNotification')({ leaveId: l.id });
+      say({ type: 'ok', text: 'ส่งแจ้งเตือนไลน์ซ้ำแล้ว' });
+    } catch (err) {
+      say({ type: 'error', text: 'ส่งไม่สำเร็จ: ' + (err.message || err.code) });
+    } finally { setResendingId(null); }
+  };
 
   // ตรวจหาใบลาที่ "อีเมลหลุด" ไม่ตรงกับบัญชีผู้ใช้ปัจจุบันในระบบแล้ว (userEmail ของใบลาไม่พบในทะเบียนบุคลากรตอนนี้)
   // สาเหตุหลักคือเคยมีการเปลี่ยน Username/อีเมลภายในของบัญชีนั้นหลังยื่นใบลาไปแล้ว ทำให้การ์ดสรุปวันลาที่หน้า "รายชื่อบุคลากร"
@@ -582,6 +596,11 @@ export default function Leave() {
                         )}
                         {isSuperAdmin && (
                           <button className="btn btn-outline !px-2 !py-1 text-sm" title="แก้ไขจำนวนวันลา" onClick={() => setEditDaysRow(l)}><Pencil className="h-4 w-4" /></button>
+                        )}
+                        {isSuperAdmin && (
+                          <button className="btn btn-outline !px-2 !py-1 text-sm" title="ส่งแจ้งเตือนไลน์ซ้ำ" disabled={resendingId === l.id} onClick={() => resendNotify(l)}>
+                            {resendingId === l.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          </button>
                         )}
                         {isSuperAdmin && (
                           <button className="btn btn-outline !px-2 !py-1 text-sm text-red-600" title="ลบแถวนี้ออกจากทะเบียนถาวร" onClick={() => setToDeleteRow(l)}><Trash2 className="h-4 w-4" /></button>
