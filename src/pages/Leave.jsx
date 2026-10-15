@@ -472,7 +472,10 @@ export default function Leave() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <PageHeader icon={CalendarDays} emoji="🗓️" title="ระบบควบคุมวันลา" subtitle={`ปีงบประมาณ ${fy} (1 ต.ค. - 30 ก.ย.)`}
-        actions={<button className="btn btn-outline" onClick={() => setShowCancel(true)}><XCircle className="h-5 w-5" /> ยกเลิกวันลา</button>} />
+        actions={<>
+          {isSuperAdmin && <button className="btn btn-outline" onClick={() => goTab('all')}><Pencil className="h-5 w-5" /> แก้ไขวันลาบุคลากร</button>}
+          <button className="btn btn-outline" onClick={() => setShowCancel(true)}><XCircle className="h-5 w-5" /> ยกเลิกวันลา</button>
+        </>} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {tabs.map(([k, l]) => <button key={k} onClick={() => goTab(k)} className={`rounded-full px-4 py-1.5 text-sm ${tab === k ? 'bg-brand-600 font-semibold text-white' : 'bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50'}`}>{l}</button>)}

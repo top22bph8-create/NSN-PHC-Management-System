@@ -34,6 +34,12 @@ const CHECKER_NAME = 'นางสาวพิไลวรรณ  กุลม�
 const CHECKER_POSITION = 'นักวิชาการสาธารณสุขชำนาญการ';
 const DIRECTOR_NAME = 'นายพงศกร  แป่มจำนัก';
 const DIRECTOR_POSITION = 'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
+// เฉพาะใบลาของผู้อำนวยการ (นายพงศกร แป่มจำนัก) เท่านั้น: ผู้อนุญาตการลา (ลงนามแทนในกล่อง "คำสั่ง") คือผู้อำนวยการกองสาธารณสุข
+// และผู้รับมอบงานระหว่างลาคือบุคคลนี้โดยเฉพาะ (ไม่ใช่ค่าที่กรอกเองในฟอร์มลาเหมือนบุคลากรทั่วไป) ตามที่ผู้อำนวยการแจ้งไว้ ไม่กระทบใบลาของบุคลากรคนอื่น
+const OWNER_APPROVER_NAME = 'นายวิสุทธิ์  ศิริคุณ';
+const OWNER_APPROVER_POSITION = 'ผู้อำนวยการกองสาธารณสุข';
+const OWNER_DELEGATE_NAME = 'นางสาวพิไลวรรณ  กุลมินทร์';
+const OWNER_DELEGATE_POSITION = 'นักวิชาการสาธารณสุขชำนาญการ';
 
 // เส้นประสำหรับให้กรอกด้วยลายมือ
 const Blank = ({ w = 'w-40' }) => <span className={`inline-block border-b border-dotted border-slate-500 align-bottom ${w}`}>&nbsp;</span>;
@@ -105,18 +111,21 @@ function CheckerLine({ presetName, presetPosition }) {
 }
 
 // คำสั่งมอบหมายงานในหน้าที่ระหว่างลา — แสดงชื่อผู้มอบงาน (ผู้ยื่นใบลา) และผู้รับมอบงาน (ผู้ที่ถูกเลือกไว้) ให้ครบตามตัวอย่าง
-function DelegateBox({ l }) {
+// isOwnerLeave: เฉพาะใบลาของผู้อำนวยการ (นายพงศกร แป่มจำนัก) ให้บังคับผู้รับมอบงานเป็น นางสาวพิไลวรรณ กุลมินทร์ เสมอ (ไม่ใช้ค่าที่กรอกเองในฟอร์ม)
+function DelegateBox({ l, isOwnerLeave }) {
+  const delegateName = isOwnerLeave ? OWNER_DELEGATE_NAME : l.delegateTo;
   return (
     <div className="mt-2 text-sm leading-5">
       <p>ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
-      <p>ให้ {l.delegateTo ? <b>{l.delegateTo}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
+      <p>ให้ {delegateName ? <b>{delegateName}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
       <div className="mt-1 text-center">
         <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
         <div>( {l.name} )</div>
       </div>
       <div className="mt-1 text-center">
         <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้รับมอบงาน</div>
-        <div>( {l.delegateTo || <Blank w="w-44" />} )</div>
+        <div>( {delegateName || <Blank w="w-44" />} )</div>
+        {isOwnerLeave && <div>ตำแหน่ง {OWNER_DELEGATE_POSITION}</div>}
       </div>
     </div>
   );
@@ -136,11 +145,11 @@ function OrderBox({ status, isOwnerLeave, decidedDate }) {
       <div className="mt-0.5 border-b border-dotted border-slate-400">&nbsp;</div>
       <div className="border-b border-dotted border-slate-400">&nbsp;</div>
       {isOwnerLeave ? (
-        <div className="mt-1">
-          <div><b>( ลงชื่อ )</b> <Blank w="w-52" /></div>
-          <div>( <Blank w="w-52" /> )</div>
-          <div>( ตำแหน่ง ) <Blank w="w-52" /></div>
-          <div>วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>
+        <div className="mt-1 text-center leading-[1.1]">
+          <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
+          <div>( {OWNER_APPROVER_NAME} )</div>
+          <div>{OWNER_APPROVER_POSITION}</div>
+          {decidedDate ? <div className="mt-0.5">วันที่ {decidedDate}</div> : <div className="mt-0.5">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
         </div>
       ) : (
         <div className="mt-1 text-center leading-[1.1]">
@@ -260,7 +269,7 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
         <div>
           <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <StatsTable rows={stats} />
-          <DelegateBox l={l} />
+          <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </div>
         <div>
@@ -297,7 +306,7 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
         <div>
           <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <VacationStatsTable before={before} thisTime={thisTime} total={total} />
-          <DelegateBox l={l} />
+          <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </div>
         <div>
@@ -332,7 +341,7 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
         <div>ตำแหน่ง {l.position}</div>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-4">
-        <DelegateBox l={l} />
+        <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
         <div>
           <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
           <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
@@ -366,7 +375,7 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
         <div>
           <p className="text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
           <StatsTable rows={stats} />
-          <DelegateBox l={l} />
+          <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
         </div>
         <div>
           <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />

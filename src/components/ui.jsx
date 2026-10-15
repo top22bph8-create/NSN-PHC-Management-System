@@ -32,11 +32,11 @@ export function ErrorState({ message, onRetry }) {
 
 export function Modal({ title, onClose, children, wide = false, footer }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 pb-16 sm:items-center sm:p-4 sm:pb-4" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
-        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}
+        className={`flex max-h-[80dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90vh] sm:rounded-2xl ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
@@ -44,7 +44,10 @@ export function Modal({ title, onClose, children, wide = false, footer }) {
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-slate-100" aria-label="ปิด"><X className="h-5 w-5" /></button>
         </div>
         {/* สำคัญสำหรับมือถือ: ต้องมี min-h-0 + flex-1 ที่ส่วนเนื้อหาเท่านั้นที่เลื่อนได้ ส่วนหัว/ปุ่มด้านล่างต้องไม่ถูกดันหลุดจอ
-            (เดิมไม่มี min-h-0/flex-1 ตรงนี้ ทำให้เนื้อหาฟอร์มยาวๆ ดันปุ่ม "บันทึก" ที่ footer หลุดออกนอกจอมือถือ มองไม่เห็น ต้องเลื่อนทั้งหน้าซึ่งทำไม่ได้เพราะเป็น overlay) */}
+            (เดิมไม่มี min-h-0/flex-1 ตรงนี้ ทำให้เนื้อหาฟอร์มยาวๆ ดันปุ่ม "บันทึก" ที่ footer หลุดออกนอกจอมือถือ มองไม่เห็น ต้องเลื่อนทั้งหน้าซึ่งทำไม่ได้เพราะเป็น overlay)
+            เพิ่มเติม: เดิมใช้ max-h-[92vh] ซึ่งบนมือถือคำนวณจากความสูงจอแบบเต็ม (รวมพื้นที่ที่ถูกแถบเมนูด้านล่างของแอป/แถบที่อยู่เว็บบัง) ทำให้กล่อง modal
+            ยืดยาวเลยพื้นที่ที่มองเห็นจริง ปุ่ม "บันทึก" ที่ footer จึงไปซ้อน/ถูกแถบเมนูด้านล่าง (หน้าหลัก, หนังสือรับ, ลางาน, รถยนต์, เมนูทั้งหมด) บังจนกดไม่ได้
+            แก้โดยใช้ dvh (ความสูงจอที่มองเห็นจริง) ร่วมกับเว้นระยะ pb-16 ของพื้นหลัง overlay บนมือถือ ให้กล่อง modal ยกตัวสูงพ้นแถบเมนูด้านล่างเสมอ */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">{footer}</div>}
       </div>
