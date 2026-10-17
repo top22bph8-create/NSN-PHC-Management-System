@@ -448,11 +448,14 @@ export const REGISTRIES = {
       { key: 'dikaRefNo', label: 'ฎีกาเลขที่', type: 'text', required: true, list: true, search: true },
       { key: 'deekaDate', label: 'วันที่', type: 'date', required: true, list: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
-      { key: 'amount', label: 'จำนวนเงิน', type: 'text', list: true },
+      // ยอดจ่ายเช็ค + ภาษีหัก ณ ที่จ่าย กรอกเอง แล้วรวมเป็น "มูลค่าตั้งเบิกตามฎีกา" อัตโนมัติ (คำนวณใน RegistryPage.jsx ตอนบันทึก และแสดงสดตอนกรอกฟอร์ม)
+      { key: 'payAmount', label: 'ยอดจ่ายเช็ค', type: 'number', list: true },
+      { key: 'taxWithheld', label: 'ภาษีหัก ณ ที่จ่าย', type: 'number', list: true },
+      { key: 'amount', label: 'มูลค่าตั้งเบิกตามฎีกา', type: 'computed', computeFrom: ['payAmount', 'taxWithheld'], list: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'B48EAD',
-    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'amount'],
+    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'amount'],
   },
   // ทะเบียนใหม่ตามแบบฟอร์มตัวอย่างที่ส่งมา — เลขที่เกียรติบัตรไม่เติมศูนย์หน้า (numberDigits: 1) เช่น 1/2569, 2/2569 ...
   'reg-certificate': {

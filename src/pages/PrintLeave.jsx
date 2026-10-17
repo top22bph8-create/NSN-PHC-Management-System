@@ -30,6 +30,7 @@ function PrintFonts() {
       .print-doc .text-lg { font-size: 14pt; }
       .print-doc .text-sm { font-size: 12pt; }
       .print-doc .text-xs:not(.chk-mark):not(.pf-tip) { font-size: 12pt; }
+      .print-doc .pf-label { display: inline-block; width: 3.2em; }
     `}</style>
   );
 }
@@ -109,7 +110,7 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
 // บรรทัดลงชื่อ "ผู้ตรวจสอบ" — จัดชื่อ/ตำแหน่ง/เส้นปะให้อยู่กึ่งกลางเพื่อความสวยงาม เว้นแต่ระบุ presetName ไว้ล่วงหน้า
 function CheckerLine({ presetName, presetPosition }) {
   return (
-    <div className="mt-3 text-center text-sm leading-[1.3]">
+    <div className="mt-4 text-center text-sm leading-[1.4]">
       <div className="leading-[1.3]"><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
       <div>( {presetName || <Blank w="w-52" />} )</div>
       <div>ตำแหน่ง {presetPosition || <Blank w="w-52" />}</div>
@@ -123,7 +124,7 @@ function CheckerLine({ presetName, presetPosition }) {
 function DelegateBox({ l, isOwnerLeave }) {
   const delegateName = isOwnerLeave ? OWNER_DELEGATE_NAME : l.delegateTo;
   return (
-    <div className="mt-3 text-sm leading-[1.4]">
+    <div className="mt-3 text-sm leading-[1.5]">
       <p>ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
       <p className="leading-[1.3]">ให้ {delegateName ? <b>{delegateName}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
       <div className="mt-1 text-center">
@@ -175,22 +176,22 @@ function OrderBox({ status, isOwnerLeave, decidedDate }) {
 // ซึ่งเคยทำให้ตารางสูงเกินและดันเนื้อหาล้นไปหน้า 2 — ดูหมายเหตุเวอร์ชันใน README
 function StatsTable({ rows }) {
   return (
-    <table className="mt-3 w-full border-collapse border border-slate-500 text-sm leading-[1.4]">
+    <table className="mt-2 w-full border-collapse border border-slate-500 text-sm leading-[1.3]">
       <thead>
         <tr className="bg-slate-100">
-          <th className="border border-slate-500 px-2 py-1.5">ประเภทลา</th>
-          <th className="border border-slate-500 px-2 py-1.5">ลามาแล้ว (วันทำการ)</th>
-          <th className="border border-slate-500 px-2 py-1.5">ลาครั้งนี้ (วันทำการ)</th>
-          <th className="border border-slate-500 px-2 py-1.5">รวมเป็น (วันทำการ)</th>
+          <th className="border border-slate-500 px-2 py-1">ประเภทลา</th>
+          <th className="border border-slate-500 px-2 py-1">ลามาแล้ว (วันทำการ)</th>
+          <th className="border border-slate-500 px-2 py-1">ลาครั้งนี้ (วันทำการ)</th>
+          <th className="border border-slate-500 px-2 py-1">รวมเป็น (วันทำการ)</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.type}>
-            <td className="border border-slate-500 px-2 py-1">{r.type}</td>
-            <td className="border border-slate-500 px-2 py-1 text-center">{r.before || '-'}</td>
-            <td className="border border-slate-500 px-2 py-1 text-center">{r.thisTime || '-'}</td>
-            <td className="border border-slate-500 px-2 py-1 text-center">{r.total || '-'}</td>
+            <td className="border border-slate-500 px-2 py-0.5">{r.type}</td>
+            <td className="border border-slate-500 px-2 py-0.5 text-center">{r.before || '-'}</td>
+            <td className="border border-slate-500 px-2 py-0.5 text-center">{r.thisTime || '-'}</td>
+            <td className="border border-slate-500 px-2 py-0.5 text-center">{r.total || '-'}</td>
           </tr>
         ))}
       </tbody>
@@ -201,24 +202,24 @@ function StatsTable({ rows }) {
 // ตาราง "สถิติการลาในปีงบประมาณนี้" แบบไม่มีคอลัมน์ประเภท (ใช้เฉพาะแบบใบลาพักผ่อน ตามตัวอย่าง แถวแรกกรอกข้อมูลจริง แถวสองเว้นว่าง) — เต็มความกว้างเช่นกัน
 function VacationStatsTable({ before, thisTime, total }) {
   return (
-    <table className="mt-3 w-full border-collapse border border-slate-500 text-sm leading-[1.4]">
+    <table className="mt-2 w-full border-collapse border border-slate-500 text-sm leading-[1.3]">
       <thead>
         <tr className="bg-slate-100">
-          <th className="border border-slate-500 px-2 py-1.5">ลามาแล้ว (วันทำการ)</th>
-          <th className="border border-slate-500 px-2 py-1.5">ลาครั้งนี้ (วันทำการ)</th>
-          <th className="border border-slate-500 px-2 py-1.5">รวมเป็น (วันทำการ)</th>
+          <th className="border border-slate-500 px-2 py-1">ลามาแล้ว (วันทำการ)</th>
+          <th className="border border-slate-500 px-2 py-1">ลาครั้งนี้ (วันทำการ)</th>
+          <th className="border border-slate-500 px-2 py-1">รวมเป็น (วันทำการ)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td className="border border-slate-500 px-2 py-1 text-center">{before || '-'}</td>
-          <td className="border border-slate-500 px-2 py-1 text-center">{thisTime || '-'}</td>
-          <td className="border border-slate-500 px-2 py-1 text-center">{total || '-'}</td>
+          <td className="border border-slate-500 px-2 py-0.5 text-center">{before || '-'}</td>
+          <td className="border border-slate-500 px-2 py-0.5 text-center">{thisTime || '-'}</td>
+          <td className="border border-slate-500 px-2 py-0.5 text-center">{total || '-'}</td>
         </tr>
         <tr>
-          <td className="border border-slate-500 px-2 py-1">&nbsp;</td>
-          <td className="border border-slate-500 px-2 py-1">&nbsp;</td>
-          <td className="border border-slate-500 px-2 py-1">&nbsp;</td>
+          <td className="border border-slate-500 px-2 py-0.5">&nbsp;</td>
+          <td className="border border-slate-500 px-2 py-0.5">&nbsp;</td>
+          <td className="border border-slate-500 px-2 py-0.5">&nbsp;</td>
         </tr>
       </tbody>
     </table>
@@ -246,7 +247,7 @@ function Head({ title, dateText }) {
 // ส่วน float ยอมให้ตัดแบ่งเนื้อหาข้ามหน้าได้ตามจริง จึงใช้พื้นที่กระดาษได้เต็มกว่า (ดูหมายเหตุเวอร์ชันใน README)
 function TwoCol({ left, right }) {
   return (
-    <div className="mt-4" style={{ display: 'flow-root' }}>
+    <div className="mt-5" style={{ display: 'flow-root' }}>
       <div style={{ float: 'left', width: '46%' }}>{left}</div>
       <div style={{ float: 'right', width: '46%' }}>{right}</div>
     </div>
@@ -259,13 +260,13 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
   return (
     <>
       <Head title="แบบใบลาป่วย ลาคลอดบุตร ลากิจส่วนตัว" dateText={dateText} />
-      <p>เรื่อง&nbsp;&nbsp;ขอลา{l.type.replace('ลา', '')}</p>
-      <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-1 leading-[1.45]">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
+      <p><span className="pf-label">เรื่อง</span>ขอลา{l.type.replace('ลา', '')}</p>
+      <p><span className="pf-label">เรียน</span>{to}</p>
+      <p className="mt-1 leading-[1.6]">
+        <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
       </p>
-      <p className="leading-[1.45]">สังกัด {ORG_LONG}</p>
-      <div className="mt-1 flex gap-3 leading-[1.45]">
+      <p className="leading-[1.6]">สังกัด {ORG_LONG}</p>
+      <div className="mt-1 flex gap-3 leading-[1.6]">
         <span>ขอลา</span>
         <span className="flex flex-col gap-1">
           <span><CheckBox checked={isType('ลาป่วย')} /> ป่วย</span>
@@ -273,20 +274,20 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
           <span><CheckBox checked={isType('ลาคลอดบุตร')} /> คลอดบุตร</span>
         </span>
       </div>
-      <p className="mt-1 leading-[1.45]">
+      <p className="mt-1 leading-[1.6]">
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึง {fmtDateLong(l.end)} มีกำหนดลาครั้งนี้ {l.days} วัน
       </p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.6]">
         ข้าพเจ้าได้ลา <CheckBox checked={isType('ลาป่วย')} />ป่วย <CheckBox checked={isType('ลากิจส่วนตัว')} />กิจส่วนตัว <CheckBox checked={isType('ลาคลอดบุตร')} />คลอดบุตร ครั้งสุดท้ายตั้งแต่วันที่ {lastSame ? fmtDateLong(lastSame) : <Blank />}
       </p>
-      <p className="leading-[1.45]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <p className="leading-[1.45]">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
-      <div className="mt-3 text-center text-sm leading-[1.3]">
+      <p className="leading-[1.6]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
+      <p className="leading-[1.6]">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
+      <div className="mt-4 text-center text-sm leading-[1.4]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-5 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-6 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <StatsTable rows={stats} />
       <TwoCol
         left={<>
@@ -307,23 +308,23 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
   return (
     <>
       <Head title="แบบใบลาพักผ่อน" dateText={dateText} />
-      <p>เรื่อง&nbsp;&nbsp;ขอลาพักผ่อน</p>
-      <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-1 leading-[1.45]">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
+      <p><span className="pf-label">เรื่อง</span>ขอลาพักผ่อน</p>
+      <p><span className="pf-label">เรียน</span>{to}</p>
+      <p className="mt-1 leading-[1.6]">
+        <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
       </p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.6]">
         สังกัด {ORG_DEPT} มีวันลาพักผ่อนสะสม {quotaAccrued} วันทำการ มีสิทธิลาพักผ่อนประจำปีนี้อีก {quotaRemain} วันทำการ รวมเป็น {quotaTotal} วันทำการ ประสงค์ขออนุญาตลาพักผ่อน
       </p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.6]">
         ระหว่างวันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} รวม {l.days} วันทำการ ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่โทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-56" />}
       </p>
-      <div className="mt-3 text-center text-sm leading-[1.3]">
+      <div className="mt-4 text-center text-sm leading-[1.4]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-5 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-6 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <VacationStatsTable before={before} thisTime={thisTime} total={total} />
       <TwoCol
         left={<>
@@ -344,19 +345,19 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
   return (
     <>
       <Head title={l.type.includes('ฮัจย์') ? 'แบบใบลาอุปสมบท/ประกอบพิธีฮัจย์' : 'แบบใบลาอุปสมบท'} dateText={dateText} />
-      <p>เรื่อง&nbsp;&nbsp;ขอลาอุปสมบท/ประกอบพิธีฮัจย์</p>
-      <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-1 leading-[1.45]">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
+      <p><span className="pf-label">เรื่อง</span>ขอลาอุปสมบท/ประกอบพิธีฮัจย์</p>
+      <p><span className="pf-label">เรียน</span>{to}</p>
+      <p className="mt-1 leading-[1.6]">
+        <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
       </p>
-      <p className="leading-[1.45]">เกิดวันที่ <Blank /> เข้ารับราชการเมื่อวันที่ <Blank /></p>
-      <p className="leading-[1.45]">ข้าพเจ้า <Blank w="w-24" /> เคยอุปสมบท/ประกอบพิธีฮัจย์มาก่อน</p>
-      <p className="leading-[1.45]">บัดนี้มีศรัทธาจะอุปสมบท/ประกอบพิธีฮัจย์ ณ <Blank w="w-96" /></p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.6]">เกิดวันที่ <Blank /> เข้ารับราชการเมื่อวันที่ <Blank /></p>
+      <p className="leading-[1.6]">ข้าพเจ้า <Blank w="w-24" /> เคยอุปสมบท/ประกอบพิธีฮัจย์มาก่อน</p>
+      <p className="leading-[1.6]">บัดนี้มีศรัทธาจะอุปสมบท/ประกอบพิธีฮัจย์ ณ <Blank w="w-96" /></p>
+      <p className="leading-[1.6]">
         จึงขออนุญาตลาตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
-      <p className="leading-[1.45]">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
-      <div className="mt-3 text-center text-sm leading-[1.3]">
+      <p className="leading-[1.6]">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
+      <div className="mt-4 text-center text-sm leading-[1.4]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
@@ -377,22 +378,22 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
   return (
     <>
       <Head title={`แบบใบ${l.type}`} dateText={dateText} />
-      <p>เรื่อง&nbsp;&nbsp;ขอ{l.type}</p>
-      <p>เรียน&nbsp;&nbsp;{to}</p>
-      <p className="mt-1 leading-[1.45]">
-        &nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
+      <p><span className="pf-label">เรื่อง</span>ขอ{l.type}</p>
+      <p><span className="pf-label">เรียน</span>{to}</p>
+      <p className="mt-1 leading-[1.6]">
+        <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
       </p>
-      <p className="leading-[1.45]">เนื่องจาก {l.reason || <Blank w="w-96" />}</p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.6]">เนื่องจาก {l.reason || <Blank w="w-96" />}</p>
+      <p className="leading-[1.6]">
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
-      <p className="leading-[1.45]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <div className="mt-3 text-center text-sm leading-[1.3]">
+      <p className="leading-[1.6]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
+      <div className="mt-4 text-center text-sm leading-[1.4]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-5 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-6 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <StatsTable rows={stats} />
       <TwoCol
         left={<DelegateBox l={l} isOwnerLeave={isOwnerLeave} />}

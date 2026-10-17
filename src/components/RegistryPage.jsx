@@ -271,6 +271,13 @@ export default function RegistryPage({ cfg }) {
   const submit = async (ev) => {
     ev.preventDefault();
     const values = Object.fromEntries(Object.entries(form.values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
+    // ฟิลด์คำนวณอัตโนมัติ (เช่น มูลค่าตั้งเบิกตามฎีกา) — คำนวณซ้ำจากค่าฟิลด์ต้นทางล่าสุดตอนบันทึกจริง ไม่พึ่งค่าที่โชว์บนจอเฉยๆ
+    // ถ้ายังไม่กรอกฟิลด์ต้นทางเลยสักช่อง (เช่น รายการเก่าก่อนอัปเดตที่เคยกรอก "จำนวนเงิน" ไว้ตรงๆ) จะไม่คำนวณทับ เพื่อไม่ให้ค่าที่เคยบันทึกไว้หายไปโดยไม่ตั้งใจ
+    cfg.fields.forEach((f) => {
+      if (f.type !== 'computed') return;
+      const hasAny = f.computeFrom.some((k) => String(values[k] ?? '').trim() !== '');
+      if (hasAny) values[f.key] = String(f.computeFrom.reduce((s, k) => s + (Number(values[k]) || 0), 0));
+    });
     // หนังสือรับ: วันที่/เวลารับ เป็นค่าที่ระบบกำหนดอัตโนมัติตามเวลาจริงตอนกดบันทึก (เฉพาะตอนเพิ่มใหม่ แก้ไขรายการเดิมไม่แตะค่านี้)
     if (isIncoming && !form.id) {
       values.receiveDate = todayStr();
@@ -969,6 +976,18 @@ export default function RegistryPage({ cfg }) {
                   </select>
                 ) : f.type === 'date' ? (
                   <ThaiDateInput id={`f-${f.key}`} required={f.required} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
+                ) : f.type === 'number' ? (
+                  <input id={`f-${f.key}`} type="number" step="0.01" inputMode="decimal" className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
+                ) : f.type === 'computed' ? (
+                  // ฟิลด์คำนวณอัตโนมัติ (เช่น มูลค่าตั้งเบิกตามฎีกา = ยอดจ่ายเช็ค + ภาษีหัก ณ ที่จ่าย) — แสดงผลรวมสดขณะกรอก แก้เองไม่ได้
+                  // ถ้ายังไม่ได้กรอกฟิลด์ต้นทางเลย (เช่น รายการเก่าก่อนอัปเดตฟีเจอร์นี้) ให้คงโชว์ค่าที่เคยบันทึกไว้เดิมแทนเลข 0 เพื่อไม่ให้ดูเหมือนค่าหายไป
+                  // ค่าจริงที่บันทึกลง Firestore คำนวณซ้ำอีกครั้งตอนกด submit() ด้านบน เพื่อกันกรณีค่าฟิลด์ต้นทางถูกแก้ไขหลังสุด
+                  <input id={`f-${f.key}`} type="text" readOnly className="input bg-slate-50 font-semibold text-slate-700"
+                    value={
+                      f.computeFrom.some((k) => String(form.values[k] ?? '').trim() !== '')
+                        ? f.computeFrom.reduce((s, k) => s + (Number(form.values[k]) || 0), 0).toLocaleString('th-TH')
+                        : (form.values[f.key] || '0')
+                    } />
                 ) : (
                   <input id={`f-${f.key}`} type="text" className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
                 )}
