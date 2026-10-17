@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
-import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, evalRoundOf, getHolidays, getQuota, posRank, usage, workingDays } from '../lib/leave';
+import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPE_COLORS, LEAVE_TYPES, evalRoundOf, getHolidays, getQuota, posRank, usage, workingDays } from '../lib/leave';
 import { exportXlsx } from '../lib/exportFile';
 import { normalizeName } from '../lib/people';
 import { fiscalYearBE, fmtDate, todayStr } from '../lib/thai';
@@ -42,14 +42,19 @@ function QuotaGrid({ quota, used, pending, vacationCarryOver }) {
         const accrued = isVacation ? (Number(vacationCarryOver) || 0) : 0;
         const remainThisYear = Math.max(0, q - u);
         const total = remainThisYear + accrued;
+        const c = LEAVE_TYPE_COLORS[type] || LEAVE_TYPE_COLORS._default;
         return (
-          <div key={type} className="card p-3">
-            <div className="text-sm text-slate-500">{type}</div>
-            <div className="text-2xl font-bold text-brand-800">{total} <span className="text-sm font-normal text-slate-500">/ {q} วัน{isVacation ? '+สะสม' : ''} คงเหลือ</span></div>
-            <div className="mt-1 h-2 overflow-hidden rounded bg-brand-100"><div className="h-2 rounded bg-brand-500" style={{ width: `${pct}%` }} /></div>
-            <div className="mt-1 text-xs text-slate-500">
-              ใช้แล้ว {u}{p ? ` · รออนุมัติ ${p}` : ''}
-              {isVacation && <span className="font-semibold text-brand-700"> · ยกยอดสะสม {accrued} วัน</span>}
+          <div key={type} className={`rounded-2xl p-4 ring-1 ${c.ring} ${c.tile}`}>
+            <div className={`text-sm font-semibold ${c.label}`}>{type}</div>
+            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/70"><div className={`h-2.5 rounded-full ${c.bar}`} style={{ width: `${pct}%` }} /></div>
+            <div className="mt-2 text-sm text-slate-600">
+              วันลาใช้ไป <span className={`font-bold ${c.label}`}>{u}</span> วัน{p ? <> · รออนุมัติ {p} วัน</> : null}
+            </div>
+            <div className={`text-lg font-bold ${c.value}`}>
+              คงเหลือ {total} วัน
+              <span className="ml-1 text-xs font-normal text-slate-500">
+                (สิทธิ์ {q} วัน/ปี{isVacation && accrued ? ` + ยกยอดสะสม ${accrued} วัน` : ''})
+              </span>
             </div>
           </div>
         );
@@ -58,22 +63,31 @@ function QuotaGrid({ quota, used, pending, vacationCarryOver }) {
   );
 }
 
-// แถบโควตาแบบย่อ แสดงเฉพาะตัวเลขคงเหลือ/ใช้ไป ต่อประเภทลา (ใช้ในการ์ดรายบุคคล) — ลาพักผ่อนรวมยอดสะสมเข้าไปในตัวเลขด้วย
+// การ์ดโควตาแบบย่อ (ใช้ในการ์ดรายบุคคลที่หน้ารายชื่อบุคลากร) — แยกสีต่อประเภทลา (LEAVE_TYPE_COLORS) และระบุชัดเจนเป็นคำว่า
+// "ใช้ไป...วัน" / "คงเหลือ...วัน" ต่อประเภท (ไม่ใช่แค่เลข X/Y ที่อาจตีความสับสน) — ลาพักผ่อนรวมยอดสะสมเข้าไปในตัวเลขคงเหลือด้วย
+// ใช้ชุดสี/คำเดียวกันกับ QuotaGrid (แดชบอร์ดรายบุคคล) เพื่อให้ตรงกันทุกหน้า ("สัมพันธ์กันทุกรายงาน")
 function MiniQuota({ quota, used, vacationCarryOver }) {
   if (!quota) return null;
   return (
-    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {Object.entries(quota).map(([type, q]) => {
         const u = used[type] || 0;
         const isVacation = type === 'ลาพักผ่อน';
         const accrued = isVacation ? (Number(vacationCarryOver) || 0) : 0;
         const left = Math.max(0, q - u) + accrued;
         const pct = q ? Math.min(100, (u / q) * 100) : 0;
+        const c = LEAVE_TYPE_COLORS[type] || LEAVE_TYPE_COLORS._default;
         return (
-          <div key={type} className="rounded-lg bg-white/70 px-2 py-1.5">
-            <div className="truncate text-[11px] text-slate-500" title={type}>{type}</div>
-            <div className="text-sm font-bold text-slate-700">{left} <span className="text-[11px] font-normal text-slate-400">/{q}{accrued ? `+${accrued}สะสม` : ''}</span></div>
-            <div className="mt-0.5 h-1 overflow-hidden rounded bg-white"><div className="h-1 rounded bg-brand-400" style={{ width: `${pct}%` }} /></div>
+          <div key={type} className={`rounded-xl p-2.5 ring-1 ${c.ring} ${c.tile}`}>
+            <div className={`truncate text-[11px] font-semibold ${c.label}`} title={type}>{type}</div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/70"><div className={`h-1.5 rounded-full ${c.bar}`} style={{ width: `${pct}%` }} /></div>
+            <div className="mt-1.5 text-[11px] text-slate-500">ใช้ไป <b className={c.label}>{u}</b> วัน</div>
+            <div className={`text-sm font-bold ${c.value}`}>
+              คงเหลือ {left} วัน
+              <span className="block text-[10px] font-normal text-slate-400">
+                จากสิทธิ์ {q} วัน/ปี{isVacation && accrued ? ` +สะสม ${accrued}` : ''}
+              </span>
+            </div>
           </div>
         );
       })}

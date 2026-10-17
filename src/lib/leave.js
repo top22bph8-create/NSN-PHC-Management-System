@@ -12,6 +12,21 @@ export const LEAVE_TYPES = [
   'อื่น ๆ',
 ];
 
+// ชุดสีประจำประเภทการลา — ใช้ร่วมกันทุกจุดที่แสดง "โควตา/ใช้ไป/คงเหลือ" รายบุคคล (การ์ดย่อในรายชื่อบุคลากร,
+// การ์ดละเอียดในแดชบอร์ดรายบุคคล ฯลฯ) เพื่อให้สีของประเภทลาเดียวกันตรงกันทุกหน้า ไม่สับสน
+// tile = พื้นการ์ด, ring = ขอบการ์ด, label = ข้อความหัวข้อ/ตัวเลขใช้ไป, value = ข้อความคงเหลือ(เด่น), bar = แถบความคืบหน้า
+export const LEAVE_TYPE_COLORS = {
+  'ลาป่วย': { tile: 'bg-rose-50', ring: 'ring-rose-200', label: 'text-rose-700', value: 'text-rose-800', bar: 'bg-rose-400' },
+  'ลากิจส่วนตัว': { tile: 'bg-amber-50', ring: 'ring-amber-200', label: 'text-amber-700', value: 'text-amber-800', bar: 'bg-amber-400' },
+  'ลาพักผ่อน': { tile: 'bg-emerald-50', ring: 'ring-emerald-200', label: 'text-emerald-700', value: 'text-emerald-800', bar: 'bg-emerald-400' },
+  'ลาคลอดบุตร': { tile: 'bg-pink-50', ring: 'ring-pink-200', label: 'text-pink-700', value: 'text-pink-800', bar: 'bg-pink-400' },
+  'ลาไปช่วยเหลือภริยาที่คลอดบุตร': { tile: 'bg-sky-50', ring: 'ring-sky-200', label: 'text-sky-700', value: 'text-sky-800', bar: 'bg-sky-400' },
+  'ลาอุปสมบท/ประกอบพิธีฮัจย์': { tile: 'bg-violet-50', ring: 'ring-violet-200', label: 'text-violet-700', value: 'text-violet-800', bar: 'bg-violet-400' },
+  'ลาไปศึกษา/ฝึกอบรม/ดูงาน': { tile: 'bg-cyan-50', ring: 'ring-cyan-200', label: 'text-cyan-700', value: 'text-cyan-800', bar: 'bg-cyan-400' },
+  'อื่น ๆ': { tile: 'bg-slate-50', ring: 'ring-slate-200', label: 'text-slate-600', value: 'text-slate-700', bar: 'bg-slate-400' },
+  _default: { tile: 'bg-slate-50', ring: 'ring-slate-200', label: 'text-slate-600', value: 'text-slate-700', bar: 'bg-slate-400' },
+};
+
 export const LEAVE_STATUS_COLORS = {
   'รอพิจารณา': 'bg-amber-100 text-amber-800',
   'อนุมัติ': 'bg-emerald-100 text-emerald-800',
