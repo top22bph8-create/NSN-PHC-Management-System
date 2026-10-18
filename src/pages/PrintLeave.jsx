@@ -86,9 +86,12 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
   return (
     <div className="mt-2 text-sm leading-[1.25]">
       <div className="font-bold underline">ความเห็นของ{role}</div>
+      {/* เส้นจุดสำหรับเขียนความเห็น 2 แถว ตามแบบฟอร์มตัวอย่าง (เดิมมีแถวเดียว) */}
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
+      <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
+      {/* เว้นระยะจากเส้นความเห็นด้านบนประมาณ 2 แถว ก่อนถึงบรรทัดลงนาม ไม่ให้ติดกัน */}
       {presetName ? (
-        <div className="mt-1 text-center leading-[1.15]">
+        <div className="mt-2 text-center leading-[1.15]">
           <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {presetName} )</div>
           <div>{presetPosition}</div>
@@ -247,7 +250,7 @@ function Head({ title, dateText }) {
 // ส่วน float ยอมให้ตัดแบ่งเนื้อหาข้ามหน้าได้ตามจริง จึงใช้พื้นที่กระดาษได้เต็มกว่า (ดูหมายเหตุเวอร์ชันใน README)
 function TwoCol({ left, right }) {
   return (
-    <div className="mt-4" style={{ display: 'flow-root' }}>
+    <div className="mt-3" style={{ display: 'flow-root' }}>
       <div style={{ float: 'left', width: '46%' }}>{left}</div>
       <div style={{ float: 'right', width: '46%' }}>{right}</div>
     </div>
@@ -262,11 +265,11 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
       <Head title="แบบใบลาป่วย ลาคลอดบุตร ลากิจส่วนตัว" dateText={dateText} />
       <p><span className="pf-label">เรื่อง</span>ขอลา{l.type.replace('ลา', '')}</p>
       <p><span className="pf-label">เรียน</span>{to}</p>
-      <p className="mt-1 leading-[1.45]">
+      <p className="mt-1 leading-[1.25]">
         <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
       </p>
-      <p className="leading-[1.45]">สังกัด {ORG_LONG}</p>
-      <div className="mt-1 flex gap-3 leading-[1.45]">
+      <p className="leading-[1.25]">สังกัด {ORG_LONG}</p>
+      <div className="mt-1 flex gap-3 leading-[1.25]">
         <span>ขอลา</span>
         <span className="flex flex-col gap-1">
           <span><CheckBox checked={isType('ลาป่วย')} /> ป่วย</span>
@@ -274,20 +277,20 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
           <span><CheckBox checked={isType('ลาคลอดบุตร')} /> คลอดบุตร</span>
         </span>
       </div>
-      <p className="mt-1 leading-[1.45]">
+      <p className="mt-1 leading-[1.25]">
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึง {fmtDateLong(l.end)} มีกำหนดลาครั้งนี้ {l.days} วัน
       </p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.25]">
         ข้าพเจ้าได้ลา <CheckBox checked={isType('ลาป่วย')} />ป่วย <CheckBox checked={isType('ลากิจส่วนตัว')} />กิจส่วนตัว <CheckBox checked={isType('ลาคลอดบุตร')} />คลอดบุตร ครั้งสุดท้ายตั้งแต่วันที่ {lastSame ? fmtDateLong(lastSame) : <Blank />}
       </p>
-      <p className="leading-[1.45]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <p className="leading-[1.45]">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
+      <p className="leading-[1.25]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
+      <p className="leading-[1.25]">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
       <div className="mt-3 text-center text-sm leading-[1.3]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-5 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-4 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <StatsTable rows={stats} />
       <TwoCol
         left={<>
@@ -310,13 +313,13 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
       <Head title="แบบใบลาพักผ่อน" dateText={dateText} />
       <p><span className="pf-label">เรื่อง</span>ขอลาพักผ่อน</p>
       <p><span className="pf-label">เรียน</span>{to}</p>
-      <p className="mt-1 leading-[1.45]">
+      <p className="mt-1 leading-[1.25]">
         <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
       </p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.25]">
         สังกัด {ORG_DEPT} มีวันลาพักผ่อนสะสม {quotaAccrued} วันทำการ มีสิทธิลาพักผ่อนประจำปีนี้อีก {quotaRemain} วันทำการ รวมเป็น {quotaTotal} วันทำการ ประสงค์ขออนุญาตลาพักผ่อน
       </p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.25]">
         ระหว่างวันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} รวม {l.days} วันทำการ ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่โทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-56" />}
       </p>
       <div className="mt-3 text-center text-sm leading-[1.3]">
@@ -324,7 +327,7 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-5 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-4 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <VacationStatsTable before={before} thisTime={thisTime} total={total} />
       <TwoCol
         left={<>
@@ -347,16 +350,16 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
       <Head title={l.type.includes('ฮัจย์') ? 'แบบใบลาอุปสมบท/ประกอบพิธีฮัจย์' : 'แบบใบลาอุปสมบท'} dateText={dateText} />
       <p><span className="pf-label">เรื่อง</span>ขอลาอุปสมบท/ประกอบพิธีฮัจย์</p>
       <p><span className="pf-label">เรียน</span>{to}</p>
-      <p className="mt-1 leading-[1.45]">
+      <p className="mt-1 leading-[1.25]">
         <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
       </p>
-      <p className="leading-[1.45]">เกิดวันที่ <Blank /> เข้ารับราชการเมื่อวันที่ <Blank /></p>
-      <p className="leading-[1.45]">ข้าพเจ้า <Blank w="w-24" /> เคยอุปสมบท/ประกอบพิธีฮัจย์มาก่อน</p>
-      <p className="leading-[1.45]">บัดนี้มีศรัทธาจะอุปสมบท/ประกอบพิธีฮัจย์ ณ <Blank w="w-96" /></p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.25]">เกิดวันที่ <Blank /> เข้ารับราชการเมื่อวันที่ <Blank /></p>
+      <p className="leading-[1.25]">ข้าพเจ้า <Blank w="w-24" /> เคยอุปสมบท/ประกอบพิธีฮัจย์มาก่อน</p>
+      <p className="leading-[1.25]">บัดนี้มีศรัทธาจะอุปสมบท/ประกอบพิธีฮัจย์ ณ <Blank w="w-96" /></p>
+      <p className="leading-[1.25]">
         จึงขออนุญาตลาตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
-      <p className="leading-[1.45]">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
+      <p className="leading-[1.25]">เหตุผล/รายละเอียดเพิ่มเติม {l.reason || <Blank w="w-96" />}</p>
       <div className="mt-3 text-center text-sm leading-[1.3]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
@@ -380,20 +383,20 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
       <Head title={`แบบใบ${l.type}`} dateText={dateText} />
       <p><span className="pf-label">เรื่อง</span>ขอ{l.type}</p>
       <p><span className="pf-label">เรียน</span>{to}</p>
-      <p className="mt-1 leading-[1.45]">
+      <p className="mt-1 leading-[1.25]">
         <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />} สังกัด {ORG_LONG}
       </p>
-      <p className="leading-[1.45]">เนื่องจาก {l.reason || <Blank w="w-96" />}</p>
-      <p className="leading-[1.45]">
+      <p className="leading-[1.25]">เนื่องจาก {l.reason || <Blank w="w-96" />}</p>
+      <p className="leading-[1.25]">
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึงวันที่ {fmtDateLong(l.end)} มีกำหนด {l.days} วัน
       </p>
-      <p className="leading-[1.45]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
+      <p className="leading-[1.25]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
       <div className="mt-3 text-center text-sm leading-[1.3]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-5 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+      <p className="mt-4 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
       <StatsTable rows={stats} />
       <TwoCol
         left={<DelegateBox l={l} isOwnerLeave={isOwnerLeave} />}

@@ -70,6 +70,11 @@ export default function RegistryPage({ cfg }) {
   const [repayItem, setRepayItem] = useState(null); // รายการสัญญายืมเงินที่กำลังจะบันทึกการคืนเงิน
   const [repayForm, setRepayForm] = useState({ date: todayStr(), dikaList: [''] });
   const [repaySaving, setRepaySaving] = useState(false);
+  // ทะเบียนคุมฎีกาเบิกจ่าย: สถานะจ่ายเช็ค และสถานะส่งภาษีหัก ณ ที่จ่ายให้สรรพากร แยกกันคนละสถานะ คนละปุ่ม ("ชำระ") ต้องเลือกวันที่ทุกครั้งที่กด
+  const isDeeka = cfg.key === 'reg-deeka';
+  const [payAction, setPayAction] = useState(null); // { item, kind: 'cheque' | 'tax' } — รายการที่กำลังจะบันทึกการชำระ
+  const [payActionDate, setPayActionDate] = useState('');
+  const [payActionSaving, setPayActionSaving] = useState(false);
   // ทะเบียนคุมคลัง (เล่มเช็ค/เล่มใบเสร็จ) — เพิ่มเข้าคลัง/เบิกออกจากคลังผ่านป๊อปอัพเฉพาะ คำนวณยอดคงเหลือให้อัตโนมัติ
   const SL = cfg.stockLedger;
   const isStockLedger = !!SL;
@@ -287,6 +292,11 @@ export default function RegistryPage({ cfg }) {
     if (isLoan && !form.id) {
       values.repaid = 'สัญญาค้างจ่ายเงินยืม';
     }
+    // ฎีกาเบิกจ่ายใหม่: เริ่มสถานะ "ค้างจ่าย"/"ค้างส่ง" เสมอ เปลี่ยนเป็นจ่ายแล้ว/ส่งแล้วได้ผ่านปุ่มท้ายแถวเท่านั้น (ดู openPayAction/submitPayAction)
+    if (isDeeka && !form.id) {
+      values.chequeStatus = 'ค้างจ่าย';
+      values.taxStatus = 'ค้างส่ง';
+    }
     const e = validate(values);
     setErrors(e);
     if (Object.keys(e).length) return;
@@ -432,6 +442,27 @@ export default function RegistryPage({ cfg }) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
     } finally {
       setExtendSaving(false);
+    }
+  };
+
+  // ===== ทะเบียนคุมฎีกาเบิกจ่าย: บันทึกการชำระเช็ค / การส่งภาษีหัก ณ ที่จ่ายให้สรรพากร (แยกกันคนละสถานะคนละปุ่ม ใช้ modal เดียวกันสลับตาม kind) =====
+  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayAction({ item: it, kind }); };
+  const submitPayAction = async () => {
+    if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
+    const { item, kind } = payAction;
+    const after = kind === 'cheque'
+      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate }
+      : { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate };
+    setPayActionSaving(true);
+    try {
+      await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
+      say({ type: 'ok', text: kind === 'cheque' ? 'บันทึกการจ่ายเช็คแล้ว' : 'บันทึกการส่งภาษีสรรพากรแล้ว' });
+      setPayAction(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setPayActionSaving(false);
     }
   };
 
@@ -751,6 +782,7 @@ export default function RegistryPage({ cfg }) {
                   <tr>
                     {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
                     {isLoan && <th className="px-3 py-2 text-center font-semibold">กำหนดส่งใช้ / การคืนเงินยืม</th>}
+                    {isDeeka && <th className="px-3 py-2 text-center font-semibold">การชำระเช็ค / ส่งภาษีสรรพากร</th>}
                     <th className="px-3 py-2 text-center font-semibold">ไฟล์</th>
                   </tr>
                 </thead>
@@ -762,6 +794,12 @@ export default function RegistryPage({ cfg }) {
                           {f.key === cfg.statusField ? (
                             isLoanOverdue(it) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[it[f.key]]}>{it[f.key]}</Badge>
                           )
+                            : isDeeka && f.key === 'chequeStatus' ? (
+                              <Badge className={it.chequeStatus === 'จ่ายแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.chequeStatus || 'ค้างจ่าย'}</Badge>
+                            )
+                            : isDeeka && f.key === 'taxStatus' ? (
+                              <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.taxStatus || 'ค้างส่ง'}</Badge>
+                            )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
                             : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key])}</span>}
                         </td>
@@ -786,6 +824,32 @@ export default function RegistryPage({ cfg }) {
                               )}
                             </div>
                           )}
+                        </td>
+                      )}
+                      {isDeeka && (
+                        <td className="px-3 py-2 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col items-center gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              {it.chequeStatus === 'จ่ายแล้ว' ? (
+                                <span className="text-xs text-emerald-700">จ่ายเช็คแล้ว {fmtDate(it.chequePaidDate)}</span>
+                              ) : (
+                                <>
+                                  <span className="text-xs text-amber-700">ค้างจ่ายเช็ค</span>
+                                  {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'cheque')}>ชำระเช็ค</button>}
+                                </>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {it.taxStatus === 'ส่งสรรพากรแล้ว' ? (
+                                <span className="text-xs text-emerald-700">ส่งสรรพากรแล้ว {fmtDate(it.taxPaidDate)}</span>
+                              ) : (
+                                <>
+                                  <span className="text-xs text-amber-700">ค้างส่งภาษี</span>
+                                  {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'tax')}>ส่งสรรพากร</button>}
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </td>
                       )}
                       <td className="px-3 py-2 text-center text-slate-500">{(it.attachments || []).length || '-'}</td>
@@ -1013,6 +1077,12 @@ export default function RegistryPage({ cfg }) {
                   <button className="btn btn-outline text-red-700" onClick={() => openRepay(viewItem)}><Plus className="h-4 w-4" /> คืนเงินยืม</button>
                 </>
               )}
+              {isDeeka && viewItem.chequeStatus !== 'จ่ายแล้ว' && (
+                <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'cheque')}>ชำระเช็ค</button>
+              )}
+              {isDeeka && viewItem.taxStatus !== 'ส่งสรรพากรแล้ว' && (
+                <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'tax')}>ส่งภาษีสรรพากร</button>
+              )}
               <button className="btn btn-primary" onClick={() => openEdit(viewItem)}><Pencil className="h-4 w-4" /> แก้ไข</button>
             </>
           )}
@@ -1101,6 +1171,27 @@ export default function RegistryPage({ cfg }) {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">กำหนดวันส่งใช้ใหม่</label>
               <ThaiDateInput value={extendDate} onChange={setExtendDate} />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนคุมฎีกาเบิกจ่าย: ป๊อปอัพบันทึกวันที่จ่ายเช็ค / วันที่ส่งภาษีสรรพากร (ใช้ modal เดียวกันสลับข้อความตาม payAction.kind) */}
+      {payAction && (
+        <Modal
+          title={`${payAction.kind === 'cheque' ? 'ชำระเช็ค' : 'ส่งภาษีหัก ณ ที่จ่ายให้สรรพากร'} — ${payAction.item[cfg.numberField]}`}
+          onClose={() => !payActionSaving && setPayAction(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={payActionSaving} onClick={() => setPayAction(null)}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={payActionSaving} onClick={submitPayAction}>{payActionSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">{payAction.kind === 'cheque' ? 'วันที่จ่ายเช็ค' : 'วันที่ส่งภาษีสรรพากร'}</label>
+              <ThaiDateInput value={payActionDate} onChange={setPayActionDate} />
             </div>
           </div>
         </Modal>

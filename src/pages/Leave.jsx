@@ -440,9 +440,10 @@ export default function Leave() {
   }, [fy, viewAll, profile.email]);
 
   // รายชื่อบุคลากรทั้งหมด: ใช้ทั้งหน้ารายชื่อบุคลากร (ทุกคนเห็นได้แล้ว) และตัวเลือก "มอบหมายงานให้" ในฟอร์มยื่นใบลา เรียงตามลำดับตำแหน่งที่กำหนด
+  // ตัด super_admin ออกจากรายชื่อนี้เสมอ เพราะเป็นบัญชีผู้ดูแลระบบ ไม่ใช่เจ้าหน้าที่จริงที่มีวันลา/ตำแหน่งงาน
   useEffect(() => {
     return onSnapshot(collection(db, 'users'),
-      (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending').sort((a, b) => {
+      (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending' && u.role !== 'super_admin').sort((a, b) => {
         const r = posRank(a.position) - posRank(b.position);
         return r !== 0 ? r : String(a.name || a.email).localeCompare(String(b.name || b.email), 'th');
       })),

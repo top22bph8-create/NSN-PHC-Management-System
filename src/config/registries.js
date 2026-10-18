@@ -453,9 +453,15 @@ export const REGISTRIES = {
       { key: 'taxWithheld', label: 'ภาษีหัก ณ ที่จ่าย', type: 'number', list: true },
       { key: 'amount', label: 'มูลค่าตั้งเบิกตามฎีกา', type: 'computed', computeFrom: ['payAmount', 'taxWithheld'], list: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
+      // สถานะการจ่ายเช็ค และสถานะการส่งภาษีหัก ณ ที่จ่ายให้สรรพากร — แยกกันคนละสถานะ คนละปุ่มกด ("ชำระ") ในหน้าทะเบียน (ดู isDeeka ใน RegistryPage.jsx)
+      // auto: true = ไม่ให้กรอกเองในฟอร์มเพิ่ม/แก้ไขทั่วไป ตั้งค่าได้ผ่านปุ่มกดท้ายแถวเท่านั้น เพื่อบังคับให้ต้องเลือกวันที่ชำระ/วันที่ส่งทุกครั้ง
+      { key: 'chequeStatus', label: 'สถานะจ่ายเช็ค', type: 'select', auto: true, options: ['ค้างจ่าย', 'จ่ายแล้ว'], default: 'ค้างจ่าย', list: true },
+      { key: 'chequePaidDate', label: 'วันที่จ่ายเช็ค', type: 'date', auto: true },
+      { key: 'taxStatus', label: 'สถานะส่งภาษีหัก ณ ที่จ่าย', type: 'select', auto: true, options: ['ค้างส่ง', 'ส่งสรรพากรแล้ว'], default: 'ค้างส่ง', list: true },
+      { key: 'taxPaidDate', label: 'วันที่ส่งภาษีสรรพากร', type: 'date', auto: true },
     ],
     reportColor: 'B48EAD',
-    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'amount'],
+    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'amount', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate'],
   },
   // ทะเบียนใหม่ตามแบบฟอร์มตัวอย่างที่ส่งมา — เลขที่เกียรติบัตรไม่เติมศูนย์หน้า (numberDigits: 1) เช่น 1/2569, 2/2569 ...
   'reg-certificate': {
