@@ -82,17 +82,18 @@ function CheckBox({ checked }) {
 }
 
 // กล่อง "ความเห็นของผู้บังคับบัญชา" — เว้นว่างให้เซ็นด้วยลายมือ เว้นแต่ระบุ presetName/Position ไว้ล่วงหน้า (presetExtra = บรรทัดตำแหน่งเพิ่มเติมใต้ตำแหน่งหลัก)
-function SignatureBox({ role, presetName, presetPosition, presetExtra }) {
+function SignatureBox({ role, presetName, presetPosition, presetExtra, sigWidth = 'w-56' }) {
   return (
     <div className="mt-2 text-sm leading-[1.25]">
       <div className="font-bold underline">ความเห็นของ{role}</div>
       {/* เส้นจุดสำหรับเขียนความเห็น 2 แถว ตามแบบฟอร์มตัวอย่าง (เดิมมีแถวเดียว) */}
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
-      {/* เว้นระยะจากเส้นความเห็นด้านบนประมาณ 2 แถว ก่อนถึงบรรทัดลงนาม ไม่ให้ติดกัน */}
+      {/* เว้นระยะจากเส้นความเห็นด้านบนห่างอีกประมาณ 1 แถว ก่อนถึงบรรทัดลงนาม ไม่ให้ติดกัน (ตามที่ ผอ. แจ้งปรับเพิ่ม)
+          และเส้นประจุดสำหรับลงลายเซ็นปรับให้พอดีกับความกว้างของชื่อในวงเล็บด้านล่าง (sigWidth) ไม่ให้กว้างเกินไป */}
       {presetName ? (
-        <div className="mt-2 text-center leading-[1.15]">
-          <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
+        <div className="mt-6 text-center leading-[1.15]">
+          <div className={`mx-auto ${sigWidth} border-b border-dotted border-slate-500`}>&nbsp;</div>
           <div>( {presetName} )</div>
           <div>{presetPosition}</div>
           {presetExtra ? <div>{presetExtra}</div> : null}
@@ -146,25 +147,31 @@ function DelegateBox({ l, isOwnerLeave }) {
 // กล่อง "คำสั่ง" อนุญาต/ไม่อนุญาต — ติ๊กเครื่องหมายถูกอัตโนมัติตามผลพิจารณาจริง ลงชื่อผู้อำนวยการไว้ล่วงหน้า
 // (ยกเว้นเป็นใบลาของผู้อำนวยการเอง ซึ่งไม่มีใครลงนามแทนตายตัวได้ จึงเว้นว่างไว้ให้เซ็นเอง)
 // วันที่ใต้ลายเซ็นเติมอัตโนมัติตามวันที่กดบันทึกผลพิจารณาจริง (decidedAt) ถ้ายังไม่พิจารณาจะเว้นว่างไว้
-function OrderBox({ status, isOwnerLeave, decidedDate }) {
+// pushTop: ระยะเลื่อนกล่อง "คำสั่ง" ลงมา (px) ให้หัวข้อ "คำสั่ง" อยู่ระดับบรรทัดเดียวกับ "ผู้มอบงาน" ในคอลัมน์ซ้าย ตามที่ ผอ. แจ้ง
+// ค่านี้ต่างกันตามความสูงของเนื้อหาคอลัมน์ซ้ายของแต่ละแบบฟอร์ม (วัดจริงด้วย Playwright getBoundingClientRect ของแต่ละแบบ)
+function OrderBox({ status, isOwnerLeave, decidedDate, pushTop = 82 }) {
   return (
-    <div className="mt-2 text-sm leading-[1.25]">
+    <div className="text-sm leading-[1.25]" style={{ marginTop: pushTop }}>
       <div className="font-bold underline">คำสั่ง</div>
       <div className="mt-1 flex gap-6">
         <label className="flex items-center gap-1.5"><CheckBox checked={status === 'อนุมัติ'} /> อนุญาต</label>
         <label className="flex items-center gap-1.5"><CheckBox checked={status === 'ไม่อนุมัติ'} /> ไม่อนุญาต</label>
       </div>
+      {/* เส้นจุดสำหรับเขียนความเห็น 2 แถว ให้ตรงกับกล่อง "ความเห็นของผู้บังคับบัญชา" */}
       <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
+      <div className="mt-1 border-b border-dotted border-slate-400">&nbsp;</div>
+      {/* เว้นระยะจากเส้นความเห็นด้านบนห่างอีกประมาณ 1 แถว ก่อนถึงบรรทัดลงนาม เท่ากับกล่องผู้บังคับบัญชา
+          และเส้นประจุดลงลายเซ็นปรับให้พอดีกับความกว้างของชื่อในวงเล็บด้านล่าง */}
       {isOwnerLeave ? (
-        <div className="mt-1 text-center leading-[1.15]">
-          <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
+        <div className="mt-6 text-center leading-[1.15]">
+          <div className="mx-auto w-[150px] border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {OWNER_APPROVER_NAME} )</div>
           <div>{OWNER_APPROVER_POSITION}</div>
           {decidedDate ? <div className="mt-1">วันที่ {decidedDate}</div> : <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
         </div>
       ) : (
-        <div className="mt-1 text-center leading-[1.15]">
-          <div className="mx-auto w-56 border-b border-dotted border-slate-500">&nbsp;</div>
+        <div className="mt-6 text-center leading-[1.15]">
+          <div className="mx-auto w-[130px] border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {DIRECTOR_NAME} )</div>
           <div>{DIRECTOR_POSITION}</div>
           {decidedDate ? <div className="mt-1">วันที่ {decidedDate}</div> : <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
@@ -290,15 +297,17 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-4 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
-      <StatsTable rows={stats} />
+      {/* ตารางสถิติการลา: ย่อให้เหลือครึ่งหน้า (คอลัมน์ซ้ายของ TwoCol) ชิดขอบซ้ายตรงกับข้อความด้านบน และอยู่บรรทัดเดียวกับ
+          "ความเห็นของผู้บังคับบัญชา" คอลัมน์ขวา ตามแบบฟอร์มตัวอย่างจริง (เดิมวางเต็มความกว้างแยกต่างหากก่อนคอลัมน์) */}
       <TwoCol
         left={<>
+          <p className="mt-2 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+          <StatsTable rows={stats} />
           <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </>}
         right={<>
-          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" sigWidth="w-[150px]" />
           <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
         </>}
       />
@@ -327,16 +336,16 @@ function Vacation({ l, to, quotaAccrued, quotaRemain, quotaTotal, before, thisTi
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-4 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
-      <VacationStatsTable before={before} thisTime={thisTime} total={total} />
       <TwoCol
         left={<>
+          <p className="mt-2 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+          <VacationStatsTable before={before} thisTime={thisTime} total={total} />
           <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
           <CheckerLine presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} />
         </>}
         right={<>
-          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
-          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" sigWidth="w-[150px]" />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} pushTop={42} />
         </>}
       />
     </>
@@ -368,8 +377,8 @@ function Ordination({ l, to, dateText, isOwnerLeave, decidedDate }) {
       <TwoCol
         left={<DelegateBox l={l} isOwnerLeave={isOwnerLeave} />}
         right={<>
-          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
-          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" sigWidth="w-[150px]" />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} pushTop={0} />
         </>}
       />
     </>
@@ -396,12 +405,14 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
       </div>
-      <p className="mt-4 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
-      <StatsTable rows={stats} />
       <TwoCol
-        left={<DelegateBox l={l} isOwnerLeave={isOwnerLeave} />}
+        left={<>
+          <p className="mt-2 text-sm font-bold underline">สถิติการลาในปีงบประมาณนี้</p>
+          <StatsTable rows={stats} />
+          <DelegateBox l={l} isOwnerLeave={isOwnerLeave} />
+        </>}
         right={<>
-          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" />
+          <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" sigWidth="w-[150px]" />
           <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
         </>}
       />
