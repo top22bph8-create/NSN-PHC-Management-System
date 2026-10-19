@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { thMonths } from '../lib/thai';
 
@@ -25,15 +26,54 @@ export default function ThaiDateInput({ id, value, onChange, required, min, max,
   const [viewY, setViewY] = useState(parsed ? parsed.y : today.getFullYear());
   const [viewM, setViewM] = useState(parsed ? parsed.m : today.getMonth() + 1);
   const wrapRef = useRef(null);
+  const popRef = useRef(null);
+  // ตำแหน่งกล่องปฏิทิน (คำนวณเป็น fixed โดยอิงตำแหน่งจริงของปุ่มบนจอ แล้ว "วาดออกนอก" DOM เดิมด้วย portal ไปที่ document.body
+  // แก้ปัญหาเดิม: เมื่อใช้ ThaiDateInput ในกล่องโต้ตอบ (Modal) ที่มี overflow ครอบไว้ (เช่นเมนูวันที่จ่ายเช็ค/วันที่ชำระภาษี
+  // ในทะเบียนคุมฎีกาเบิกจ่าย) ปฏิทินแบบเดิมที่วางด้วย position:absolute อยู่ภายใน Modal จะถูกครอบตัด (clip) มองไม่เห็นบางส่วน
+  // หรือเห็นไม่ครบ เปลี่ยนมาวาดนอกกล่องเสมอจึงไม่ถูกตัดอีกต่อไป ไม่ว่าจะใช้ที่ไหนในระบบ
+  const [pos, setPos] = useState(null);
 
   useEffect(() => {
     const p = parseISO(value);
     if (p) { setViewY(p.y); setViewM(p.m); }
   }, [value]);
 
+  const reposition = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const popWidth = 288; // w-72
+    const popHeight = 360; // ประมาณความสูงกล่องปฏิทิน ใช้กะทิศทางเปิดขึ้น/ลง
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = spaceBelow < popHeight && r.top > spaceBelow;
+    let left = r.left;
+    if (left + popWidth > window.innerWidth - 8) left = window.innerWidth - popWidth - 8;
+    if (left < 8) left = 8;
+    setPos({
+      left,
+      top: openUp ? undefined : r.bottom + 4,
+      bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    reposition();
+    // ต้องฟัง scroll แบบ capture เพื่อจับการเลื่อนของ container ภายใน (เช่นเนื้อหา Modal ที่เลื่อนได้) ไม่ใช่แค่หน้าเว็บหลัก
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    const onDoc = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
@@ -76,8 +116,12 @@ export default function ThaiDateInput({ id, value, onChange, required, min, max,
         <span className={display ? '' : 'text-slate-400'}>{display || placeholder}</span>
         <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
-      {open && (
-        <div className="absolute z-30 mt-1 w-72 rounded-xl border border-brand-200 bg-white p-3 shadow-lg">
+      {open && pos && createPortal(
+        <div
+          ref={popRef}
+          className="fixed z-[999] w-72 rounded-xl border border-brand-200 bg-white p-3 shadow-lg"
+          style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
+        >
           <div className="mb-2 flex items-center justify-between gap-1.5">
             <button type="button" className="rounded-lg p-1.5 hover:bg-brand-50" onClick={prevMonth} aria-label="เดือนก่อนหน้า"><ChevronLeft className="h-4 w-4" /></button>
             <div className="flex items-center gap-1">
@@ -114,7 +158,8 @@ export default function ThaiDateInput({ id, value, onChange, required, min, max,
           >
             วันนี้ ({pad(today.getDate())}/{pad(today.getMonth() + 1)}/{curCE + 543})
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

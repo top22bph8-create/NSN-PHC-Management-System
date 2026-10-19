@@ -32,7 +32,7 @@ const printLeaveUrl = (id) => `${HOSTING_URL}/#/print-leave/${id}`;
 // ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
 // เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
 // ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
-const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true };
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -464,6 +464,42 @@ exports.dailyLoanOverdueReminder = onSchedule({ schedule: '0 6 * * *', timeZone:
     .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))
     .map((l, i) => `${i + 1}. ${l.loanNo} · ${l.borrower} · ครบกำหนด ${thDate(l.dueDate)} (${l.amount || '-'} บาท)`);
   const text = `⚠️ สัญญายืมเงินเกินกำหนดส่งใช้ (${overdue.length} รายการ)\n\n${lines.join('\n')}`;
+  await sendLine(channelAccessToken, targetId, text);
+});
+
+// หาวันที่ "3 วันทำการ ก่อนสิ้นเดือน" ของเดือน/ปี (ค.ศ.) ที่ระบุ — นับเฉพาะวันจันทร์-ศุกร์ ไม่นับวันสุดท้ายของเดือนเองเป็นวันทำการที่ 1
+// (เริ่มนับถอยหลังจากวันก่อนวันสุดท้ายของเดือน) ไม่มีปฏิทินวันหยุดราชการ จึงนับเฉพาะเสาร์-อาทิตย์เป็นวันหยุดเท่านั้น
+function thirdBusinessDayBeforeMonthEnd(year, month /* 1-12 */) {
+  const d = new Date(Date.UTC(year, month, 0)); // วันสุดท้ายของเดือน (month เป็น 1-12 ให้ day=0 ของเดือนถัดไป)
+  let count = 0;
+  while (count < 3) {
+    d.setUTCDate(d.getUTCDate() - 1);
+    const dow = d.getUTCDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+// แจ้งเตือนเจ้าหน้าที่การเงินและบัญชีล่วงหน้าก่อนสิ้นเดือน 3 วันทำการ เวลา 08:30 น. (เวลาไทย) หากมีภาษีหัก ณ ที่จ่าย
+// ในทะเบียนคุมฎีกาเบิกจ่าย (reg-deeka) ที่ยังมีสถานะ "ค้างส่ง" (ยังไม่ได้นำส่งกรมสรรพากร) อยู่ — เพื่อให้มีเวลาจัดทำ
+// เอกสารฎีกาและนำส่งเงินภาษีให้ทันก่อนสิ้นเดือนตามที่แจ้ง รันทุกวันแต่จะส่งข้อความจริงเฉพาะวันที่ตรงกับ "3 วันทำการก่อน
+// สิ้นเดือน" ของเดือนปัจจุบันเท่านั้น (คำนวณสดทุกครั้งเพราะวันทำการก่อนสิ้นเดือนเปลี่ยนไปตามเดือน ไม่ใช่วันที่ตายตัว)
+exports.monthEndTaxReminder = onSchedule({ schedule: '30 8 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const today = bangkokDateStr();
+  const [y, m] = today.split('-').map(Number);
+  if (today !== thirdBusinessDayBeforeMonthEnd(y, m)) return;
+
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || !events.taxOverdueReminder) return;
+
+  const snap = await db.collection('reg-deeka').where('taxStatus', '==', 'ค้างส่ง').get();
+  const overdue = snap.docs.map((d) => d.data());
+  if (!overdue.length) return;
+
+  const lines = overdue
+    .sort((a, b) => String(a.deekaDate || '').localeCompare(String(b.deekaDate || '')))
+    .map((l, i) => `${i + 1}. ${l.deekaNo || '-'} · ${l.subject || '-'} · ภาษีหัก ณ ที่จ่าย ${l.taxWithheld || '-'} บาท`);
+  const text = `📌 แจ้งเตือนเจ้าหน้าที่การเงินและบัญชี: ใกล้สิ้นเดือนแล้ว ยังมีภาษีหัก ณ ที่จ่ายค้างนำส่งกรมสรรพากร (${overdue.length} รายการ)\nกรุณาจัดทำเอกสารฎีกาและนำส่งเงินภาษีให้ทันก่อนสิ้นเดือน\n\n${lines.join('\n')}`;
   await sendLine(channelAccessToken, targetId, text);
 });
 

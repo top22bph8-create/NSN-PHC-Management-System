@@ -12,24 +12,26 @@ import thSarabunBoldItalic from '../assets/fonts/THSarabunIT9-BoldItalic.ttf';
 
 const FONT_STACK = '"TH SarabunIT๙", "TH SarabunPSK", "THSarabunNew", "Sarabun", sans-serif';
 
-// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษ (1.2 ซม. เท่ากันทั้ง 4 ด้าน — ลดจากมาตรฐานหนังสือราชการ 2.5 ซม.
-// เพื่อให้มีที่พอสำหรับเนื้อหาทั้งหมดในแผ่นเดียว ตามที่แจ้ง ไม่ให้ตัวอักษรเล็กกว่านี้)
+// ฟอนต์ TH SarabunIT๙ (ไฟล์ที่แนบมา) + ระยะขอบกระดาษ (1 ซม. เท่ากันทั้ง 4 ด้าน — ลดจากมาตรฐานหนังสือราชการ 2.5 ซม.
+// เพื่อให้มีที่พอสำหรับเนื้อหาทั้งหมดในแผ่นเดียว หลังขยายตัวอักษรขึ้นเป็น 16pt/18pt ตามมาตรฐานราชการ โดยไม่ลดขนาดตัวอักษรลง)
 // หมายเหตุ: มีเฉพาะไฟล์ปกติ/เอียง/หนา-เอียง ไม่มีไฟล์ตัวหนาตรงแยกต่างหาก จึงให้เบราว์เซอร์สังเคราะห์ตัวหนาปกติ (faux bold) จากไฟล์ปกติแทน
 // ".print-doc" ด้านล่าง: ปรับขนาดตัวอักษรของคลาส Tailwind text-sm/text-xs/text-lg ที่ใช้อยู่ทั่วไฟล์นี้ให้เป็นหน่วย pt ที่กำหนดเอง
 // (เดิมคลาสเหล่านี้คำนวณจาก rem ของหน้าเว็บ) ใช้ selector เจาะจงคลาส .print-doc เพื่อไม่กระทบขนาดตัวอักษรของหน้าอื่นๆ ของเว็บ
-// ขนาด 12pt ที่เลือกนี้ผ่านการทดสอบจริงด้วยการแปลง PDF และนับจำนวนหน้าแล้ว (ดูหมายเหตุเวอร์ชันใน README) — เป็นขนาดใหญ่ที่สุด
-// เท่าที่จะทำให้หนังสือใบลา "แบบใบลาป่วย ลาคลอดบุตร ลากิจส่วนตัว" (แบบที่เนื้อหายาวที่สุดเพราะมีทั้งกล่องมอบหมายงาน + ผู้ตรวจสอบ
-// + ผู้บังคับบัญชา + คำสั่งผู้อำนวยการ) ยังพอดี 1 แผ่น A4 ไม่ล้นไปหน้า 2 — ถ้าขยายใหญ่กว่านี้จะล้นแผ่นอีกครั้ง
+// ขนาดตัวอักษรตามมาตรฐานหนังสือราชการไทย (ระเบียบสำนักนายกรัฐมนตรีว่าด้วยงานสารบรรณ + มติ ครม. การใช้ฟอนต์ TH SarabunPSK):
+// เนื้อหาทั่วไป 16pt, ชื่อเรื่อง/หัวแบบฟอร์ม 18pt ตัวหนา — ปรับขึ้นจาก 12pt/14pt เดิม (ตอนนั้นจำเป็นต้องใช้ขนาดเล็กเพราะตาราง
+// สถิติการลายังวางเต็มความกว้างแยกเป็นบล็อกข้างบน ทำให้เนื้อหาสูงมาก) หลังย่อตารางให้อยู่ในคอลัมน์ซ้ายแล้ว (ดูหมายเหตุเวอร์ชันใน
+// README) เหลือพื้นที่ว่างมากขึ้น จึงขยายตัวอักษรกลับไปที่ขนาดมาตรฐานได้ — ทดสอบจริงด้วยการแปลง PDF และนับจำนวนหน้าแล้วว่า
+// ยังพอดี 1 แผ่น A4 ไม่ล้นไปหน้า 2 (แบบที่เนื้อหายาวที่สุดคือ "แบบใบลาป่วย ลาคลอดบุตร ลากิจส่วนตัว")
 function PrintFonts() {
   return (
     <style>{`
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunRegular}') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
-      @page { size: A4; margin: 1.2cm; }
-      .print-doc .text-lg { font-size: 14pt; }
-      .print-doc .text-sm { font-size: 12pt; }
-      .print-doc .text-xs:not(.chk-mark):not(.pf-tip) { font-size: 12pt; }
+      @page { size: A4; margin: 1cm; }
+      .print-doc .text-lg { font-size: 18pt; }
+      .print-doc .text-sm { font-size: 16pt; }
+      .print-doc .text-xs:not(.chk-mark):not(.pf-tip) { font-size: 16pt; }
       .print-doc .pf-label { display: inline-block; width: 3.2em; }
     `}</style>
   );
@@ -92,12 +94,12 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra, sigWidth 
       {/* เว้นระยะจากเส้นความเห็นด้านบนห่างอีกประมาณ 1 แถว ก่อนถึงบรรทัดลงนาม ไม่ให้ติดกัน (ตามที่ ผอ. แจ้งปรับเพิ่ม)
           และเส้นประจุดสำหรับลงลายเซ็นปรับให้พอดีกับความกว้างของชื่อในวงเล็บด้านล่าง (sigWidth) ไม่ให้กว้างเกินไป */}
       {presetName ? (
-        <div className="mt-6 text-center leading-[1.15]">
+        <div className="mt-4 text-center leading-[1.15]">
           <div className={`mx-auto ${sigWidth} border-b border-dotted border-slate-500`}>&nbsp;</div>
           <div>( {presetName} )</div>
           <div>{presetPosition}</div>
           {presetExtra ? <div>{presetExtra}</div> : null}
-          <div className="mt-2">วันที่ <Blank w="w-40" /></div>
+          <div className="mt-1">วันที่ <Blank w="w-40" /></div>
         </div>
       ) : (
         <div className="mt-2">
@@ -114,8 +116,8 @@ function SignatureBox({ role, presetName, presetPosition, presetExtra, sigWidth 
 // บรรทัดลงชื่อ "ผู้ตรวจสอบ" — จัดชื่อ/ตำแหน่ง/เส้นปะให้อยู่กึ่งกลางเพื่อความสวยงาม เว้นแต่ระบุ presetName ไว้ล่วงหน้า
 function CheckerLine({ presetName, presetPosition }) {
   return (
-    <div className="mt-3 text-center text-sm leading-[1.3]">
-      <div className="leading-[1.3]"><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
+    <div className="mt-2 text-center text-sm leading-[1.2]">
+      <div className="leading-[1.2]"><b>( ลงชื่อ )</b> <Blank w="w-52" /> ผู้ตรวจสอบ</div>
       <div>( {presetName || <Blank w="w-52" />} )</div>
       <div>ตำแหน่ง {presetPosition || <Blank w="w-52" />}</div>
       <div>วันที่ <Blank w="w-40" /></div>
@@ -128,9 +130,9 @@ function CheckerLine({ presetName, presetPosition }) {
 function DelegateBox({ l, isOwnerLeave }) {
   const delegateName = isOwnerLeave ? OWNER_DELEGATE_NAME : l.delegateTo;
   return (
-    <div className="mt-3 text-sm leading-[1.4]">
+    <div className="mt-2 text-sm leading-[1.25]">
       <p>ในวันลาครั้งนี้ข้าพเจ้ามอบหมายการทำงานในหน้าที่</p>
-      <p className="leading-[1.3]">ให้ {delegateName ? <b>{delegateName}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
+      <p className="leading-[1.2]">ให้ {delegateName ? <b>{delegateName}</b> : <Blank w="w-56" />} เป็นผู้ดำเนินการแทน</p>
       <div className="mt-1 text-center">
         <div><b>( ลงชื่อ )</b> <Blank w="w-44" /> ผู้มอบงาน</div>
         <div>( {l.name} )</div>
@@ -148,8 +150,9 @@ function DelegateBox({ l, isOwnerLeave }) {
 // (ยกเว้นเป็นใบลาของผู้อำนวยการเอง ซึ่งไม่มีใครลงนามแทนตายตัวได้ จึงเว้นว่างไว้ให้เซ็นเอง)
 // วันที่ใต้ลายเซ็นเติมอัตโนมัติตามวันที่กดบันทึกผลพิจารณาจริง (decidedAt) ถ้ายังไม่พิจารณาจะเว้นว่างไว้
 // pushTop: ระยะเลื่อนกล่อง "คำสั่ง" ลงมา (px) ให้หัวข้อ "คำสั่ง" อยู่ระดับบรรทัดเดียวกับ "ผู้มอบงาน" ในคอลัมน์ซ้าย ตามที่ ผอ. แจ้ง
-// ค่านี้ต่างกันตามความสูงของเนื้อหาคอลัมน์ซ้ายของแต่ละแบบฟอร์ม (วัดจริงด้วย Playwright getBoundingClientRect ของแต่ละแบบ)
-function OrderBox({ status, isOwnerLeave, decidedDate, pushTop = 82 }) {
+// ค่านี้วัดจริงด้วย Playwright getBoundingClientRect ของแต่ละแบบ — หลังขยายฟอนต์เป็น 16pt/18pt (ดูหมายเหตุ PrintFonts) และย่อระยะห่าง
+// ต่างๆ ลงเพื่อให้พอดี 1 แผ่น ค่าที่วัดได้ใหม่คือ 42 สำหรับแบบที่มี DelegateBox (ลาป่วยฯ/ลาพักผ่อน/ลาทั่วไป) และ 0 สำหรับแบบลาอุปสมบท
+function OrderBox({ status, isOwnerLeave, decidedDate, pushTop = 42 }) {
   return (
     <div className="text-sm leading-[1.25]" style={{ marginTop: pushTop }}>
       <div className="font-bold underline">คำสั่ง</div>
@@ -163,14 +166,14 @@ function OrderBox({ status, isOwnerLeave, decidedDate, pushTop = 82 }) {
       {/* เว้นระยะจากเส้นความเห็นด้านบนห่างอีกประมาณ 1 แถว ก่อนถึงบรรทัดลงนาม เท่ากับกล่องผู้บังคับบัญชา
           และเส้นประจุดลงลายเซ็นปรับให้พอดีกับความกว้างของชื่อในวงเล็บด้านล่าง */}
       {isOwnerLeave ? (
-        <div className="mt-6 text-center leading-[1.15]">
+        <div className="mt-4 text-center leading-[1.15]">
           <div className="mx-auto w-[150px] border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {OWNER_APPROVER_NAME} )</div>
           <div>{OWNER_APPROVER_POSITION}</div>
           {decidedDate ? <div className="mt-1">วันที่ {decidedDate}</div> : <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
         </div>
       ) : (
-        <div className="mt-6 text-center leading-[1.15]">
+        <div className="mt-4 text-center leading-[1.15]">
           <div className="mx-auto w-[130px] border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {DIRECTOR_NAME} )</div>
           <div>{DIRECTOR_POSITION}</div>
@@ -186,22 +189,22 @@ function OrderBox({ status, isOwnerLeave, decidedDate, pushTop = 82 }) {
 // ซึ่งเคยทำให้ตารางสูงเกินและดันเนื้อหาล้นไปหน้า 2 — ดูหมายเหตุเวอร์ชันใน README
 function StatsTable({ rows }) {
   return (
-    <table className="mt-3 w-full border-collapse border border-slate-600 text-sm leading-[1.3]">
+    <table className="mt-2 w-full border-collapse border border-slate-600 text-sm leading-[1.2]">
       <thead>
         <tr>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">ประเภทลา</th>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">ลามาแล้ว<br />(วันทำการ)</th>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">ลาครั้งนี้<br />(วันทำการ)</th>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">รวมเป็น<br />(วันทำการ)</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">ประเภทลา</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">ลามาแล้ว<br />(วันทำการ)</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">ลาครั้งนี้<br />(วันทำการ)</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">รวมเป็น<br />(วันทำการ)</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.type}>
-            <td className="border border-slate-600 px-2 py-2.5">{r.type}</td>
-            <td className="border border-slate-600 px-2 py-2.5 text-center">{r.before || '-'}</td>
-            <td className="border border-slate-600 px-2 py-2.5 text-center">{r.thisTime || '-'}</td>
-            <td className="border border-slate-600 px-2 py-2.5 text-center">{r.total || '-'}</td>
+            <td className="border border-slate-600 px-2 py-1">{r.type}</td>
+            <td className="border border-slate-600 px-2 py-1 text-center">{r.before || '-'}</td>
+            <td className="border border-slate-600 px-2 py-1 text-center">{r.thisTime || '-'}</td>
+            <td className="border border-slate-600 px-2 py-1 text-center">{r.total || '-'}</td>
           </tr>
         ))}
       </tbody>
@@ -212,24 +215,24 @@ function StatsTable({ rows }) {
 // ตาราง "สถิติการลาในปีงบประมาณนี้" แบบไม่มีคอลัมน์ประเภท (ใช้เฉพาะแบบใบลาพักผ่อน ตามตัวอย่าง แถวแรกกรอกข้อมูลจริง แถวสองเว้นว่าง) — เต็มความกว้างเช่นกัน
 function VacationStatsTable({ before, thisTime, total }) {
   return (
-    <table className="mt-3 w-full border-collapse border border-slate-600 text-sm leading-[1.3]">
+    <table className="mt-2 w-full border-collapse border border-slate-600 text-sm leading-[1.2]">
       <thead>
         <tr>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">ลามาแล้ว<br />(วันทำการ)</th>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">ลาครั้งนี้<br />(วันทำการ)</th>
-          <th className="border border-slate-600 px-2 py-2.5 text-left align-top">รวมเป็น<br />(วันทำการ)</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">ลามาแล้ว<br />(วันทำการ)</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">ลาครั้งนี้<br />(วันทำการ)</th>
+          <th className="border border-slate-600 px-2 py-1 text-left align-top">รวมเป็น<br />(วันทำการ)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td className="border border-slate-600 px-2 py-2.5 text-center">{before || '-'}</td>
-          <td className="border border-slate-600 px-2 py-2.5 text-center">{thisTime || '-'}</td>
-          <td className="border border-slate-600 px-2 py-2.5 text-center">{total || '-'}</td>
+          <td className="border border-slate-600 px-2 py-1 text-center">{before || '-'}</td>
+          <td className="border border-slate-600 px-2 py-1 text-center">{thisTime || '-'}</td>
+          <td className="border border-slate-600 px-2 py-1 text-center">{total || '-'}</td>
         </tr>
         <tr>
-          <td className="border border-slate-600 px-2 py-2.5">&nbsp;</td>
-          <td className="border border-slate-600 px-2 py-2.5">&nbsp;</td>
-          <td className="border border-slate-600 px-2 py-2.5">&nbsp;</td>
+          <td className="border border-slate-600 px-2 py-1">&nbsp;</td>
+          <td className="border border-slate-600 px-2 py-1">&nbsp;</td>
+          <td className="border border-slate-600 px-2 py-1">&nbsp;</td>
         </tr>
       </tbody>
     </table>
@@ -239,15 +242,15 @@ function VacationStatsTable({ before, thisTime, total }) {
 // หัวแบบฟอร์ม (ไม่มีโลโก้ รพ.สต. / วันที่เติมอัตโนมัติตามวันที่บันทึกใบลาเข้าระบบ)
 function Head({ title, dateText }) {
   return (
-    <div className="mb-2">
-      <div className="text-center text-lg font-bold underline">{title}</div>
-      <div className="mt-1 flex justify-end">
-        <div className="text-left text-sm leading-[1.2]">
+    <div className="mb-1">
+      <div className="text-center text-lg font-bold underline leading-[1.1]">{title}</div>
+      <div className="mt-0.5 flex justify-end">
+        <div className="text-left text-sm leading-[1.1]">
           <div>{ORG_ADDRESS_LINE1}</div>
           <div>{ORG_ADDRESS_LINE2}</div>
         </div>
       </div>
-      <div className="text-center text-sm">วันที่ {dateText || <Blank w="w-40" />}</div>
+      <div className="text-center text-sm leading-[1.1]">วันที่ {dateText || <Blank w="w-40" />}</div>
     </div>
   );
 }
@@ -257,7 +260,7 @@ function Head({ title, dateText }) {
 // ส่วน float ยอมให้ตัดแบ่งเนื้อหาข้ามหน้าได้ตามจริง จึงใช้พื้นที่กระดาษได้เต็มกว่า (ดูหมายเหตุเวอร์ชันใน README)
 function TwoCol({ left, right }) {
   return (
-    <div className="mt-3" style={{ display: 'flow-root' }}>
+    <div className="mt-2" style={{ display: 'flow-root' }}>
       <div style={{ float: 'left', width: '46%' }}>{left}</div>
       <div style={{ float: 'right', width: '46%' }}>{right}</div>
     </div>
@@ -270,29 +273,29 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
   return (
     <>
       <Head title="แบบใบลาป่วย ลาคลอดบุตร ลากิจส่วนตัว" dateText={dateText} />
-      <p><span className="pf-label">เรื่อง</span>ขอลา{l.type.replace('ลา', '')}</p>
-      <p><span className="pf-label">เรียน</span>{to}</p>
-      <p className="mt-1 leading-[1.25]">
+      <p className="leading-[1.1]"><span className="pf-label">เรื่อง</span>ขอลา{l.type.replace('ลา', '')}</p>
+      <p className="leading-[1.1]"><span className="pf-label">เรียน</span>{to}</p>
+      <p className="mt-1 leading-[1.15]">
         <span className="pf-label"></span>ข้าพเจ้า {l.name} ตำแหน่ง {l.position || <Blank />}
       </p>
-      <p className="leading-[1.25]">สังกัด {ORG_LONG}</p>
-      <div className="mt-1 flex gap-3 leading-[1.25]">
+      <p className="leading-[1.15]">สังกัด {ORG_LONG}</p>
+      <div className="mt-1 flex gap-3 leading-[1.15]">
         <span>ขอลา</span>
-        <span className="flex flex-col gap-1">
+        <span className="flex flex-col gap-0.5">
           <span><CheckBox checked={isType('ลาป่วย')} /> ป่วย</span>
           <span><CheckBox checked={isType('ลากิจส่วนตัว')} /> กิจส่วนตัว</span>
           <span><CheckBox checked={isType('ลาคลอดบุตร')} /> คลอดบุตร</span>
         </span>
       </div>
-      <p className="mt-1 leading-[1.25]">
+      <p className="mt-1 leading-[1.15]">
         ตั้งแต่วันที่ {fmtDateLong(l.start)} ถึง {fmtDateLong(l.end)} มีกำหนดลาครั้งนี้ {l.days} วัน
       </p>
-      <p className="leading-[1.25]">
+      <p className="leading-[1.15]">
         ข้าพเจ้าได้ลา <CheckBox checked={isType('ลาป่วย')} />ป่วย <CheckBox checked={isType('ลากิจส่วนตัว')} />กิจส่วนตัว <CheckBox checked={isType('ลาคลอดบุตร')} />คลอดบุตร ครั้งสุดท้ายตั้งแต่วันที่ {lastSame ? fmtDateLong(lastSame) : <Blank />}
       </p>
-      <p className="leading-[1.25]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
-      <p className="leading-[1.25]">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
-      <div className="mt-3 text-center text-sm leading-[1.3]">
+      <p className="leading-[1.15]">ในระหว่างลาจะติดต่อข้าพเจ้าได้ที่ {l.contact || <Blank w="w-96" />}</p>
+      <p className="leading-[1.15]">หมายเลขโทรศัพท์มือถือหมายเลข {l.phone || <Blank w="w-64" />}</p>
+      <div className="mt-1 text-center text-sm leading-[1.15]">
         <div><b>( ลงชื่อ )</b> <Blank w="w-56" /></div>
         <div>( {l.name} )</div>
         <div>ตำแหน่ง {l.position}</div>
@@ -308,7 +311,7 @@ function SickPersonalMaternity({ l, stats, lastSame, to, dateText, isOwnerLeave,
         </>}
         right={<>
           <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" sigWidth="w-[150px]" />
-          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} pushTop={42} />
         </>}
       />
     </>
@@ -413,7 +416,7 @@ function GenericLeave({ l, stats, to, dateText, isOwnerLeave, decidedDate }) {
         </>}
         right={<>
           <SignatureBox role="ผู้บังคับบัญชา" presetName={CHECKER_NAME} presetPosition={CHECKER_POSITION} presetExtra="หัวหน้างานบริหาร" sigWidth="w-[150px]" />
-          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+          <OrderBox status={l.status} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} pushTop={42} />
         </>}
       />
     </>
@@ -427,6 +430,9 @@ export default function PrintLeave() {
   const [person, setPerson] = useState(null);
   const [quotaCfg, setQuotaCfg] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  // วันลาครั้งสุดท้ายของประเภทเดียวกัน (ช่อง "ครั้งสุดท้ายตั้งแต่วันที่" ในแบบใบลาป่วย/กิจ/คลอด) ต้องค้นหาข้ามปีงบประมาณด้วย
+  // ไม่จำกัดเฉพาะปีงบประมาณปัจจุบันเหมือนตาราง "สถิติการลา" (ดู lastSameDate ด้านล่าง)
+  const [lastSameDate, setLastSameDate] = useState(undefined); // undefined = กำลังค้นหา, null = ไม่เคยลาประเภทนี้มาก่อน
 
   // ซ่อนชื่อโปรแกรมออกจากหัวกระดาษ/ท้ายกระดาษที่เบราว์เซอร์แทรกให้อัตโนมัติตอนพิมพ์
   useEffect(() => {
@@ -444,6 +450,15 @@ export default function PrintLeave() {
       const s = await getDocs(query(collection(db, 'leaves'), where('fy', '==', data.fy), where('userEmail', '==', data.userEmail)));
       const others = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.id !== data.id && x.status === 'อนุมัติ');
       setExtra(others);
+      // ดึงประวัติการลา "ประเภทเดียวกัน" ของบุคคลนี้แยกต่างหาก โดยไม่จำกัดปีงบประมาณ (ต่างจากด้านบน) เพื่อหาวันลาครั้งสุดท้าย
+      // ของประเภทนี้มาใส่ในช่อง "ครั้งสุดท้ายตั้งแต่วันที่" — ถ้าจำกัดเฉพาะปีงบประมาณปัจจุบันเหมือน "ลามาแล้ว" ช่องนี้จะว่างผิดพลาด
+      // ทุกครั้งที่เป็นการลาประเภทนี้ครั้งแรกของปีงบประมาณ ทั้งที่จริงเคยลาประเภทเดียวกันไว้ในปีงบประมาณก่อนหน้า
+      const sameTypeSnap = await getDocs(query(collection(db, 'leaves'), where('userEmail', '==', data.userEmail), where('type', '==', data.type), where('status', '==', 'อนุมัติ')));
+      const prevSame = sameTypeSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((x) => x.id !== data.id && x.end < data.start)
+        .sort((a, b) => b.end.localeCompare(a.end))[0];
+      setLastSameDate(prevSame?.end || null);
       const [pSnap, q] = await Promise.all([getDoc(doc(db, 'users', data.userEmail)), getQuota()]);
       setPerson(pSnap.exists() ? pSnap.data() : {});
       setQuotaCfg(q);
@@ -451,11 +466,11 @@ export default function PrintLeave() {
   }, [id]);
 
   useEffect(() => {
-    if (l && extra && person && quotaCfg) setTimeout(() => window.print(), 400);
-  }, [l, extra, person, quotaCfg]);
+    if (l && extra && person && quotaCfg && lastSameDate !== undefined) setTimeout(() => window.print(), 400);
+  }, [l, extra, person, quotaCfg, lastSameDate]);
 
   if (notFound) return <div className="p-8 text-center">ไม่พบใบลานี้</div>;
-  if (!l || !extra || !person || !quotaCfg) return <div className="p-8 text-center text-slate-500">กำลังโหลดข้อมูล...</div>;
+  if (!l || !extra || !person || !quotaCfg || lastSameDate === undefined) return <div className="p-8 text-center text-slate-500">กำลังโหลดข้อมูล...</div>;
 
   const STAT_TYPES = ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาคลอดบุตร'];
   const stats = STAT_TYPES.map((type) => {
@@ -467,7 +482,6 @@ export default function PrintLeave() {
     const before = extra.filter((x) => x.type === l.type).reduce((s2, x) => s2 + (Number(x.days) || 0), 0);
     stats.push({ type: l.type, before: before || '', thisTime: l.days, total: before + Number(l.days || 0) });
   }
-  const prevSame = extra.filter((x) => x.type === l.type && x.end < l.start).sort((a, b) => b.end.localeCompare(a.end))[0];
   const isOwnerLeave = l.userEmail === OWNER_EMAIL;
   // ทุกคนเรียนถึงผู้อำนวยการ รพ.สต. ยกเว้นใบลาของผู้อำนวยการเองที่ต้องส่งขึ้นไปที่กองสาธารณสุข
   const to = isOwnerLeave ? 'ผู้อำนวยการกองสาธารณสุข' : 'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
@@ -490,7 +504,7 @@ export default function PrintLeave() {
   return (
     <div
       className="print-doc mx-auto max-w-[800px] bg-white p-8 text-slate-800 print:max-w-none print:p-0"
-      style={{ fontFamily: FONT_STACK, fontSize: '12pt', lineHeight: 1.25 }}
+      style={{ fontFamily: FONT_STACK, fontSize: '16pt', lineHeight: 1.25 }}
     >
       <PrintFonts />
       <div className="mb-3 flex justify-end gap-2 print:hidden">
@@ -501,7 +515,7 @@ export default function PrintLeave() {
       {l.type === 'ลาพักผ่อน' ? (
         <Vacation l={l} to={to} quotaAccrued={quotaAccrued} quotaRemain={quotaRemain} quotaTotal={quotaTotal} before={vBefore || ''} thisTime={vThisTime || ''} total={vTotal || ''} isOwnerLeave={isOwnerLeave} dateText={dateText} decidedDate={decidedDate} />
       ) : ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาคลอดบุตร'].includes(l.type) ? (
-        <SickPersonalMaternity l={l} stats={stats} lastSame={prevSame?.end} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+        <SickPersonalMaternity l={l} stats={stats} lastSame={lastSameDate} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
       ) : l.type === 'ลาอุปสมบท/ประกอบพิธีฮัจย์' ? (
         <Ordination l={l} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
       ) : (
