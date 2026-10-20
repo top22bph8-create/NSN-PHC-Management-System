@@ -72,6 +72,9 @@ export default function RegistryPage({ cfg }) {
   const [repaySaving, setRepaySaving] = useState(false);
   // ทะเบียนคุมฎีกาเบิกจ่าย: สถานะจ่ายเช็ค และสถานะส่งภาษีหัก ณ ที่จ่ายให้สรรพากร แยกกันคนละสถานะ คนละปุ่ม ("ชำระ") ต้องเลือกวันที่ทุกครั้งที่กด
   const isDeeka = cfg.key === 'reg-deeka';
+  // ฎีกาที่ไม่ได้ลงยอด "ภาษีหัก ณ ที่จ่าย" ไว้ (เว้นว่าง/เป็น 0) ถือว่าไม่มีภาษีต้องนำส่ง — แสดงสถานะ "ไม่มียอดหัก" สีเขียวแทน
+  // และไม่ต้องมีปุ่มกด "ส่งสรรพากร" ให้กด (มีแต่ปุ่ม "ชำระเช็ค" เท่านั้น) ตามที่ ผอ. แจ้ง
+  const hasNoTax = (it) => !(Number(it?.taxWithheld) > 0);
   const [payAction, setPayAction] = useState(null); // { item, kind: 'cheque' | 'tax' } — รายการที่กำลังจะบันทึกการชำระ
   const [payActionDate, setPayActionDate] = useState('');
   const [payActionSaving, setPayActionSaving] = useState(false);
@@ -798,7 +801,11 @@ export default function RegistryPage({ cfg }) {
                               <Badge className={it.chequeStatus === 'จ่ายแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.chequeStatus || 'ค้างจ่าย'}</Badge>
                             )
                             : isDeeka && f.key === 'taxStatus' ? (
-                              <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.taxStatus || 'ค้างส่ง'}</Badge>
+                              hasNoTax(it) ? (
+                                <Badge className="bg-emerald-100 text-emerald-800">ไม่มียอดหัก</Badge>
+                              ) : (
+                                <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.taxStatus || 'ค้างส่ง'}</Badge>
+                              )
                             )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
                             : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key])}</span>}
@@ -840,7 +847,9 @@ export default function RegistryPage({ cfg }) {
                               )}
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {it.taxStatus === 'ส่งสรรพากรแล้ว' ? (
+                              {hasNoTax(it) ? (
+                                <span className="text-xs text-emerald-700">ไม่มียอดหัก</span>
+                              ) : it.taxStatus === 'ส่งสรรพากรแล้ว' ? (
                                 <span className="text-xs text-emerald-700">ส่งสรรพากรแล้ว {fmtDate(it.taxPaidDate)}</span>
                               ) : (
                                 <>
@@ -1080,7 +1089,7 @@ export default function RegistryPage({ cfg }) {
               {isDeeka && viewItem.chequeStatus !== 'จ่ายแล้ว' && (
                 <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'cheque')}>ชำระเช็ค</button>
               )}
-              {isDeeka && viewItem.taxStatus !== 'ส่งสรรพากรแล้ว' && (
+              {isDeeka && !hasNoTax(viewItem) && viewItem.taxStatus !== 'ส่งสรรพากรแล้ว' && (
                 <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'tax')}>ส่งภาษีสรรพากร</button>
               )}
               <button className="btn btn-primary" onClick={() => openEdit(viewItem)}><Pencil className="h-4 w-4" /> แก้ไข</button>
@@ -1094,7 +1103,8 @@ export default function RegistryPage({ cfg }) {
                 <dd className="whitespace-pre-wrap font-medium">
                   {f.key === cfg.statusField ? (
                     isLoanOverdue(viewItem) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[viewItem[f.key]]}>{viewItem[f.key]}</Badge>
-                  ) : display(f, viewItem[f.key])}
+                  ) : isDeeka && f.key === 'taxStatus' && hasNoTax(viewItem) ? 'ไม่มียอดหัก'
+                  : display(f, viewItem[f.key])}
                 </dd>
               </div>
             ))}

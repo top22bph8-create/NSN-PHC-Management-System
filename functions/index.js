@@ -493,7 +493,9 @@ exports.monthEndTaxReminder = onSchedule({ schedule: '30 8 * * *', timeZone: 'As
   if (!channelAccessToken || !targetId || !enabled || !events.taxOverdueReminder) return;
 
   const snap = await db.collection('reg-deeka').where('taxStatus', '==', 'ค้างส่ง').get();
-  const overdue = snap.docs.map((d) => d.data());
+  // ฎีกาที่ไม่ได้ลงยอดภาษีหัก ณ ที่จ่ายไว้ (เว้นว่าง/เป็น 0) ถือว่าไม่มีภาษีต้องนำส่ง แม้ฟิลด์ taxStatus จะยังเป็นค่าเริ่มต้น "ค้างส่ง"
+  // อยู่ก็ตาม (ตั้งค่าเริ่มต้นเป็นค้างส่งเสมอตอนสร้างฎีกาใหม่ ไม่ว่าจะมียอดหักหรือไม่) จึงต้องกรองออกไม่ให้แจ้งเตือนรายการเหล่านี้
+  const overdue = snap.docs.map((d) => d.data()).filter((l) => Number(l.taxWithheld) > 0);
   if (!overdue.length) return;
 
   const lines = overdue
