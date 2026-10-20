@@ -83,6 +83,9 @@ export const REGISTRIES = {
     emoji: '🚗',
     title: 'ทะเบียนควบคุมยานพาหนะ',
     noun: 'การใช้รถ',
+    // ปุ่ม/หัวฟอร์ม "เพิ่มรายการ" ของทะเบียนนี้ใช้คำว่า "ขออนุญาตใช้รถ" แทนรูปแบบอัตโนมัติ "เพิ่ม{noun}" (= "เพิ่มการใช้รถ") ตามที่ ผอ. ขอ
+    // ส่วนข้อความอื่นที่อิง noun (เช่น "แก้ไขการใช้รถ", "บันทึกการใช้รถสำเร็จ") ยังคงใช้คำเดิมตามปกติ ไม่ได้เปลี่ยน
+    addLabel: 'ขออนุญาตใช้รถ',
     numberField: 'tripNo',
     numberLabel: 'เลขที่ใช้รถ',
     dateField: 'useDate',
@@ -97,7 +100,10 @@ export const REGISTRIES = {
     fields: [
       { key: 'tripNo', label: 'เลขที่ใช้รถ', type: 'text', auto: true, list: true, search: true },
       { key: 'useDate', label: 'วันที่ใช้รถ', type: 'date', required: true, list: true },
-      { key: 'plate', label: 'ทะเบียนรถ', type: 'text', required: true, list: true, search: true },
+      // เดิมเป็นช่องพิมพ์ทะเบียนรถเอง เปลี่ยนเป็นช้อยเลือกประเภทรถ+ทะเบียนจากทะเบียนยานพาหนะกลาง (ตั้งค่าได้ที่หน้า "ตั้งค่าระบบ")
+      // เพื่อลดการพิมพ์ผิด/ทะเบียนไม่ตรงกัน — คีย์ยังใช้ชื่อเดิม 'plate' ไว้ (ใช้เป็น groupField อยู่ด้วย) ข้อมูลเก่าที่เคยพิมพ์แบบอิสระไว้จะยังแสดงผลได้ตามปกติ
+      // optionsFrom: 'vehicleFleet' ให้ RegistryPage.jsx ดึงช้อยจาก settings/vehicleFleet แบบสด (real-time) แทนรายการตายตัว
+      { key: 'plate', label: 'ประเภทรถ', type: 'select', required: true, list: true, search: true, optionsFrom: 'vehicleFleet' },
       { key: 'purpose', label: 'ภารกิจ/จุดหมาย', type: 'textarea', required: true, list: true, search: true },
       { key: 'requester', label: 'ผู้ขอใช้รถ', type: 'text', list: true, search: true },
       { key: 'unit', label: 'กลุ่มงาน', type: 'select', options: UNITS },

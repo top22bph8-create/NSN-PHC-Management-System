@@ -17,6 +17,7 @@ import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } f
 import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
+import { vehicleLabel } from '../lib/vehicleConfig';
 
 const emptyForm = (cfg) => {
   const f = {};
@@ -62,6 +63,9 @@ export default function RegistryPage({ cfg }) {
   // ทะเบียนบางรายการ (เช่น ทะเบียนคุมเล่มเช็ค/เล่มใบเสร็จ) เลขที่ภายใน ("ลำดับ") ไม่ใช่เลขเอกสารที่มีความหมายให้แทรกย้อนหลังได้ จึงปิดเฉพาะปุ่มแทรกเลขที่สำหรับทะเบียนเหล่านี้
   const canInsertNumber = isGenericNumbered && !cfg.hideInsert;
   const hasUserSelect = cfg.fields.some((f) => f.type === 'select-users');
+  // ฟิลด์แบบ select ที่ดึงช้อยแบบสด (real-time) จากเอกสาร settings/<optionsFrom> แทนช้อยตายตัวในไฟล์ config (เช่น ประเภทรถ ดึงจากทะเบียนยานพาหนะกลาง)
+  const dynOptionsKeys = [...new Set(cfg.fields.filter((f) => f.optionsFrom).map((f) => f.optionsFrom))];
+  const [dynOptions, setDynOptions] = useState({});
   const [genInsertMode, setGenInsertMode] = useState(false);
   const [genInsertBase, setGenInsertBase] = useState('');
   const [genInsertPreview, setGenInsertPreview] = useState(null);
@@ -104,6 +108,22 @@ export default function RegistryPage({ cfg }) {
       (s) => setPeople(s.docs.map((d) => d.data()).filter((u) => u.role !== 'pending' && u.name).sort((a, b) => String(a.name).localeCompare(String(b.name), 'th'))),
       () => setPeople([]));
   }, [hasUserSelect]);
+
+  // ช้อยแบบสดจากเอกสาร settings/<key> (เช่น settings/vehicleFleet) — ใช้กับฟิลด์ที่ตั้ง optionsFrom ไว้ใน config/registries.js
+  // แปลงเป็นข้อความช้อยที่จะแสดง: ถ้ามี .plate (รูปแบบทะเบียนยานพาหนะ) ใช้ vehicleLabel, ถ้ามี .label ใช้ label, ปิดใช้งาน (active:false) จะไม่ขึ้นช้อย
+  useEffect(() => {
+    const unsubs = dynOptionsKeys.map((key) => onSnapshot(doc(db, 'settings', key),
+      (s) => {
+        const list = s.exists() && Array.isArray(s.data().list) ? s.data().list : [];
+        setDynOptions((prev) => ({ ...prev, [key]: list }));
+      },
+      () => setDynOptions((prev) => ({ ...prev, [key]: [] }))));
+    return () => unsubs.forEach((u) => u());
+  }, [dynOptionsKeys.join(',')]);
+
+  const dynOptionLabels = (key) => (dynOptions[key] || [])
+    .filter((o) => o.active !== false)
+    .map((o) => (o.plate ? vehicleLabel(o) : (o.label ?? o)));
 
   // คำนวณเลขแทรกลำดับถัดไปจริง (อ่านตัวนับปัจจุบัน) เพื่อโชว์พรีวิวก่อนบันทึก
   useEffect(() => {
@@ -655,7 +675,7 @@ export default function RegistryPage({ cfg }) {
             {writable && isStockLedger && (
               <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockIn}><Plus className="h-4 w-4" /> เพิ่มเล่มเข้าคลัง</button>
             )}
-            {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
+            {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> {cfg.addLabel || `เพิ่ม${cfg.noun}`}</button>}
           </div>
         }
       />
@@ -775,7 +795,7 @@ export default function RegistryPage({ cfg }) {
         {error ? <ErrorState message={error} onRetry={() => setReload((n) => n + 1)} />
           : items === null ? <Spinner />
           : items.length === 0 ? (
-            <EmptyState title={`ยังไม่มี${cfg.noun}ในปีงบประมาณ ${fy}`} hint={writable ? `กด "เพิ่ม${cfg.noun}" เพื่อเริ่มบันทึก` : undefined} />
+            <EmptyState title={`ยังไม่มี${cfg.noun}ในปีงบประมาณ ${fy}`} hint={writable ? `กด "${cfg.addLabel || `เพิ่ม${cfg.noun}`}" เพื่อเริ่มบันทึก` : undefined} />
           ) : filtered.length === 0 ? (
             <EmptyState title="ไม่พบรายการที่ตรงกับเงื่อนไข" hint="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" />
           ) : (
@@ -900,7 +920,7 @@ export default function RegistryPage({ cfg }) {
       ) : form && (
         <Modal
           wide
-          title={form.id ? `แก้ไข${cfg.noun} ${form.number}` : `เพิ่ม${cfg.noun}`}
+          title={form.id ? `แก้ไข${cfg.noun} ${form.number}` : (cfg.addLabel || `เพิ่ม${cfg.noun}`)}
           onClose={() => !saving && setForm(null)}
           footer={
             <>
@@ -996,7 +1016,7 @@ export default function RegistryPage({ cfg }) {
                 ) : f.type === 'select' ? (
                   <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
                     <option value="">-- เลือก --</option>
-                    {f.options.map((o) => <option key={o}>{o}</option>)}
+                    {(f.optionsFrom ? dynOptionLabels(f.optionsFrom) : f.options).map((o) => <option key={o}>{o}</option>)}
                   </select>
                 ) : f.type === 'select-other' ? (
                   (() => {

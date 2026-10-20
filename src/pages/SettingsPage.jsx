@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Loader2, MessageCircle, Plus, Trash2 } from 'lucide-react';
+import { Car, Loader2, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
 import { DEFAULT_NUMBERING, ORG_DOC_CODE, formatNumber, getNumbering } from '../lib/numbering';
@@ -10,6 +10,10 @@ import { PageHeader } from '../components/Logo';
 import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/leave';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
+import {
+  DEFAULT_DESTINATIONS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, VEHICLE_STATUSES, VEHICLE_TYPES,
+  getDestinations, getMissionTypes, getVehicleFleet, vehicleLabel,
+} from '../lib/vehicleConfig';
 import { Settings } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -17,6 +21,13 @@ export default function SettingsPage() {
   const [quota, setQuota] = useState(null);
   const [holidays, setHolidays] = useState(null);
   const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
+  // ===== เฟส 1 ของ "ระบบขออนุญาตใช้ยานพาหนะราชการ": ทะเบียนรถกลาง + ประเภทภารกิจ + สถานที่ปลายทาง ให้แก้ไขได้ที่นี่ =====
+  const [fleet, setFleet] = useState(null);
+  const [newVehicle, setNewVehicle] = useState({ type: VEHICLE_TYPES[0], name: '', plate: '', owner: 'รพ.สต.บ้านหนองสนม', caretaker: '', status: 'พร้อมใช้งาน', odometer: '', note: '' });
+  const [missionTypes, setMissionTypes] = useState(null);
+  const [newMission, setNewMission] = useState('');
+  const [destinations, setDestinations] = useState(null);
+  const [newDest, setNewDest] = useState('');
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
@@ -32,6 +43,9 @@ export default function SettingsPage() {
     getQuota().then(setQuota).catch(() => setQuota({ ...DEFAULT_QUOTA }));
     getHolidays().then((list) => setHolidays([...list].sort((a, b) => a.date.localeCompare(b.date)))).catch(() => setHolidays([...DEFAULT_HOLIDAYS]));
     getLineMeta().then(setLineMeta).catch(() => {});
+    getVehicleFleet().then(setFleet).catch(() => setFleet([...DEFAULT_VEHICLE_FLEET]));
+    getMissionTypes().then(setMissionTypes).catch(() => setMissionTypes([...DEFAULT_MISSION_TYPES]));
+    getDestinations().then(setDestinations).catch(() => setDestinations([...DEFAULT_DESTINATIONS]));
     getLineWebhookLog().then(setLineTargets).catch((e) => {
       console.error('getLineWebhookLog failed:', e);
       setLineTargetsError(`${e.code || ''} ${e.message || e}`.trim());
@@ -57,6 +71,13 @@ export default function SettingsPage() {
         setLineToken(''); setLineTargetId('');
       }
       await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged } });
+      const fleetV = (fleet || []).map((v, i) => ({ ...v, id: v.id || `v${Date.now()}_${i}` }));
+      await setDoc(doc(db, 'settings', 'vehicleFleet'), { list: fleetV, updatedAt: serverTimestamp() });
+      const missionV = missionTypes || [];
+      await setDoc(doc(db, 'settings', 'vehicleMissionTypes'), { list: missionV, updatedAt: serverTimestamp() });
+      const destV = destinations || [];
+      await setDoc(doc(db, 'settings', 'vehicleDestinations'), { list: destV, updatedAt: serverTimestamp() });
+      await writeAudit({ action: 'settings', module: 'settings', docId: 'vehicleConfig', label: 'ระบบขออนุญาตใช้ยานพาหนะราชการ (ทะเบียนรถ/ประเภทภารกิจ/สถานที่)', after: { fleetCount: fleetV.length, missionCount: missionV.length, destCount: destV.length } });
       say({ type: 'ok', text: 'บันทึกการตั้งค่าแล้ว' });
     } catch (err) {
       say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) });
@@ -231,6 +252,129 @@ export default function SettingsPage() {
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.taxOverdueReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, taxOverdueReminder: e.target.checked } })} /> ภาษีหัก ณ ที่จ่ายค้างส่งสรรพากร (แจ้งเวลา 08:30 น. ของวันก่อนสิ้นเดือน 3 วันทำการ)</label>
               </div>
             </div>
+          </div>
+
+          <div className="border-t border-brand-100 pt-4">
+            <h2 className="mb-1 flex items-center gap-2 font-semibold"><Car className="h-5 w-5 text-brand-600" /> ระบบขออนุญาตใช้ยานพาหนะราชการ — ทะเบียนรถ/ประเภทภารกิจ/สถานที่</h2>
+            <p className="mb-3 text-sm text-slate-500">
+              จัดการรายชื่อยานพาหนะของหน่วยงาน ประเภทภารกิจ และสถานที่ปลายทางมาตรฐาน ที่จะใช้เป็นช้อยในฟอร์มขอใช้รถ (เฟสถัดไป) — เปลี่ยนที่นี่จุดเดียว มีผลทุกจุดที่ใช้งาน
+            </p>
+
+            <h3 className="mb-2 text-sm font-semibold text-slate-700">ทะเบียนยานพาหนะ</h3>
+            {!fleet ? <Spinner /> : (
+              <div className="mb-4 space-y-2">
+                <div className="space-y-1">
+                  {fleet.length === 0 ? <p className="rounded-lg bg-slate-50 p-2 text-sm text-slate-400">ยังไม่มีรายการ</p> : fleet.map((v, i) => (
+                    <div key={v.id || i} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm">
+                      <span>
+                        {vehicleLabel(v)}
+                        <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${v.status === 'พร้อมใช้งาน' ? 'bg-emerald-100 text-emerald-800' : v.status === 'ไม่พร้อมใช้งาน' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-800'}`}>{v.status}</span>
+                        {v.caretaker && <span className="ml-2 text-xs text-slate-500">ผู้รับผิดชอบ: {v.caretaker}</span>}
+                      </span>
+                      <button type="button" className="text-red-500 hover:text-red-700" onClick={() => setFleet(fleet.filter((_, j) => j !== i))} aria-label={`ลบ ${vehicleLabel(v)}`}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-600">ประเภทยานพาหนะ</label>
+                    <select className="input" value={newVehicle.type} onChange={(e) => setNewVehicle({ ...newVehicle, type: e.target.value })}>
+                      {VEHICLE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-600">ชื่อ/รุ่นรถ (ไม่บังคับ)</label>
+                    <input className="input" value={newVehicle.name} onChange={(e) => setNewVehicle({ ...newVehicle, name: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-600">หมายเลขทะเบียน</label>
+                    <input className="input" value={newVehicle.plate} onChange={(e) => setNewVehicle({ ...newVehicle, plate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-600">หน่วยงานเจ้าของรถ</label>
+                    <input className="input" value={newVehicle.owner} onChange={(e) => setNewVehicle({ ...newVehicle, owner: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-600">ผู้รับผิดชอบรถ (ไม่บังคับ)</label>
+                    <input className="input" value={newVehicle.caretaker} onChange={(e) => setNewVehicle({ ...newVehicle, caretaker: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-600">สถานะ</label>
+                    <select className="input" value={newVehicle.status} onChange={(e) => setNewVehicle({ ...newVehicle, status: e.target.value })}>
+                      {VEHICLE_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <button
+                      type="button" className="btn btn-outline"
+                      onClick={() => {
+                        if (!newVehicle.plate.trim()) return;
+                        setFleet([...fleet, { ...newVehicle, id: `v${Date.now()}` }]);
+                        setNewVehicle({ type: VEHICLE_TYPES[0], name: '', plate: '', owner: 'รพ.สต.บ้านหนองสนม', caretaker: '', status: 'พร้อมใช้งาน', odometer: '', note: '' });
+                      }}
+                    ><Plus className="h-4 w-4" /> เพิ่มยานพาหนะ</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <h3 className="mb-2 text-sm font-semibold text-slate-700">ประเภทภารกิจ</h3>
+            {!missionTypes ? <Spinner /> : (
+              <div className="mb-4 space-y-2">
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                  {missionTypes.map((m, i) => (
+                    <div key={m.id || i} className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm ${m.active === false ? 'bg-slate-100 text-slate-400' : 'bg-slate-50'}`}>
+                      <input
+                        className="flex-1 bg-transparent outline-none"
+                        value={m.label}
+                        onChange={(e) => setMissionTypes(missionTypes.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                      />
+                      <button type="button" className="text-xs text-brand-700 underline" onClick={() => setMissionTypes(missionTypes.map((x, j) => (j === i ? { ...x, active: x.active === false } : x)))}>
+                        {m.active === false ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1"><label className="mb-1 block text-xs text-slate-600">เพิ่มประเภทภารกิจใหม่</label><input className="input" value={newMission} onChange={(e) => setNewMission(e.target.value)} /></div>
+                  <button
+                    type="button" className="btn btn-outline"
+                    onClick={() => {
+                      if (!newMission.trim()) return;
+                      setMissionTypes([...missionTypes, { id: `m${Date.now()}`, label: newMission.trim(), active: true }]);
+                      setNewMission('');
+                    }}
+                  ><Plus className="h-4 w-4" /> เพิ่ม</button>
+                </div>
+                <p className="text-xs text-slate-400">ปิดใช้งานแทนการลบ เพื่อไม่ให้รายการเก่าที่เคยเลือกประเภทนี้ไว้แสดงผลผิดเพี้ยน</p>
+              </div>
+            )}
+
+            <h3 className="mb-2 text-sm font-semibold text-slate-700">สถานที่ปลายทาง</h3>
+            {!destinations ? <Spinner /> : (
+              <div className="space-y-2">
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                  {destinations.length === 0 ? <p className="p-2 text-sm text-slate-400">ยังไม่มีรายการ</p> : destinations.map((d, i) => (
+                    <div key={d.id || i} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm">
+                      <span>{d.label}</span>
+                      <button type="button" className="text-red-500 hover:text-red-700" onClick={() => setDestinations(destinations.filter((_, j) => j !== i))} aria-label={`ลบ ${d.label}`}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1"><label className="mb-1 block text-xs text-slate-600">เพิ่มสถานที่ปลายทางใหม่</label><input className="input" value={newDest} onChange={(e) => setNewDest(e.target.value)} /></div>
+                  <button
+                    type="button" className="btn btn-outline"
+                    onClick={() => {
+                      if (!newDest.trim()) return;
+                      setDestinations([...destinations, { id: `d${Date.now()}`, label: newDest.trim() }]);
+                      setNewDest('');
+                    }}
+                  ><Plus className="h-4 w-4" /> เพิ่ม</button>
+                </div>
+                <p className="text-xs text-slate-400">ผู้ใช้ทั่วไปยังเลือก "อื่น ๆ (ระบุ)" แล้วพิมพ์เองได้เสมอในฟอร์มขอใช้รถ (เฟสถัดไป)</p>
+              </div>
+            )}
           </div>
 
           <button className="btn btn-primary" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
