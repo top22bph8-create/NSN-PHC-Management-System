@@ -9,6 +9,7 @@ import { EVAL_ROUND_LABEL, EVAL_ROUND_RULE, LEAVE_STATUS_COLORS, LEAVE_TYPES, ev
 import { exportXlsx } from '../lib/exportFile';
 import { fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Spinner } from './ui';
+import LeaveStatsChart from './LeaveStatsChart';
 
 const printUrl = (kind, fy, personEmail) => {
   const base = `${window.location.origin}${window.location.pathname}#/print-leave-report/${kind}?fy=${fy}`;
@@ -154,6 +155,12 @@ export default function LeaveReportsPanel() {
           </>
         )}
       </div>
+
+      {tab === 'statsAll' && matrixMode !== 'lastDate' && rows !== null && people !== null && (
+        <div className="card mb-4">
+          <LeaveStatsChart rows={matrix.rows} types={matrix.types} mode={matrixMode} />
+        </div>
+      )}
 
       <div className="card overflow-x-auto">
         {error ? <ErrorState message={error} /> : rows === null || people === null || !quota ? <Spinner /> : (
