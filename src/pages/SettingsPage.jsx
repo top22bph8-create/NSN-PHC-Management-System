@@ -9,7 +9,7 @@ import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/leave';
 import ThaiDateInput from '../components/ThaiDateInput';
-import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta, saveLineSupplyHeadId } from '../lib/lineNotify';
+import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
 import {
   DEFAULT_DESTINATIONS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, VEHICLE_STATUSES, VEHICLE_TYPES,
   getDestinations, getMissionTypes, getVehicleFleet, vehicleLabel,
@@ -200,16 +200,8 @@ export default function SettingsPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineVehicleTargetId">Target ID ไลน์กลุ่ม "ขออนุญาตใช้รถ" (แยกจากกลุ่มหลักด้านบน)</label>
                 <input id="lineVehicleTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineVehicleTargetId} onChange={(e) => setLineVehicleTargetId(e.target.value)} />
-                <p className="mt-1 text-xs text-slate-500">คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการ และหัวหน้าเจ้าหน้าที่พัสดุที่ตั้งไว้ — ใครคนใดคนหนึ่งกดก็ได้) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง</p>
+                <p className="mt-1 text-xs text-slate-500">คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการที่ตั้งไว้ด้านบน) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง</p>
               </div>
-              <p className="text-sm text-slate-600">
-                LINE หัวหน้าเจ้าหน้าที่พัสดุ (สำหรับปุ่มอนุมัติการใช้รถ):{' '}
-                {lineMeta.supplyHeadUserId ? (
-                  <span className="font-medium text-emerald-700">ตั้งค่าแล้ว ({lineMeta.supplyHeadUserId})</span>
-                ) : (
-                  <span className="font-medium text-amber-700">ยังไม่ได้ตั้งค่า — ให้หัวหน้าเจ้าหน้าที่พัสดุพิมพ์ข้อความคุยกับบอทแบบส่วนตัว (1:1) 1 ครั้ง แล้วกด "ตั้งเป็นหัวหน้าพัสดุ" ที่รายการด้านล่าง</span>
-                )}
-              </p>
               <div className="rounded-lg border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
                 {lineTargetsError ? (
@@ -233,9 +225,6 @@ export default function SettingsPage() {
                             {lineMeta.directorUserId && t.id === lineMeta.directorUserId && (
                               <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">ผู้อำนวยการ</span>
                             )}
-                            {lineMeta.supplyHeadUserId && t.id === lineMeta.supplyHeadUserId && (
-                              <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-800">หัวหน้าพัสดุ</span>
-                            )}
                           </div>
                           <div className="truncate text-xs text-slate-500">ข้อความล่าสุด: {t.lastMessage}</div>
                         </div>
@@ -251,14 +240,7 @@ export default function SettingsPage() {
                             >
                               ตั้งเป็นผู้อำนวยการ
                             </button>
-                          )}
-                          {t.type === 'รายบุคคล' && (
-                            <button
-                              type="button" className="btn btn-outline !py-1 text-xs"
-                              onClick={async () => { await saveLineSupplyHeadId(t.id); setLineMeta({ ...lineMeta, supplyHeadUserId: t.id }); say('ตั้งเป็นหัวหน้าพัสดุแล้ว'); }}
-                            >
-                              ตั้งเป็นหัวหน้าพัสดุ
-                            </button>
+
                           )}
                         </div>
                       </div>

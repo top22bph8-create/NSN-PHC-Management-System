@@ -1,7 +1,7 @@
 {
   "name": "nsn-phc-line-notify-functions",
   "description": "Cloud Function เสริม: ส่งแจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณา/ยกเลิกใบลา (ดู README.md หัวข้อ \"แจ้งเตือนไลน์\")",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "dependencies": {
     "firebase-admin": "^12.6.0",

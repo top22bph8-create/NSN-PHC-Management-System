@@ -34,7 +34,7 @@ export async function saveLineCredentials({ channelAccessToken, targetId, vehicl
 
 // บันทึกสถานะเปิด/ปิด และเหตุการณ์ที่จะแจ้งเตือน (แก้ได้อิสระจาก Token/Target ID)
 export async function saveLineMeta({ enabled, events }) {
-  // merge:true เพื่อไม่ทับ directorUserId / supplyHeadUserId ที่ตั้งไว้แยกต่างหาก
+  // merge:true เพื่อไม่ทับ directorUserId ที่ตั้งไว้แยกต่างหาก
   await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events } }, { merge: true });
 }
 
@@ -53,9 +53,4 @@ export async function getLineWebhookLog() {
   return Object.entries(targets)
     .map(([id, v]) => ({ id, ...v }))
     .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
-}
-
-// บันทึก LINE User ID ของ "หัวหน้าเจ้าหน้าที่พัสดุ" — ผู้อนุมัติการใช้รถทางไลน์ร่วมกับผู้อำนวยการ (ใครคนใดคนหนึ่งกดก็ได้)
-export async function saveLineSupplyHeadId(supplyHeadUserId) {
-  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { supplyHeadUserId }, { merge: true });
 }

@@ -50,9 +50,8 @@ async function getLineSettings() {
     // LINE User ID ของผู้อำนวยการ — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ใช่ข้อมูลลับ อ่านได้ปกติ)
     directorUserId: meta.directorUserId || '',
     // ระบบขออนุญาตใช้รถ: ใช้ไลน์กลุ่มแยกต่างหาก (vehicleTargetId เก็บใน settings/lineNotify เขียนได้ฝ่ายเดียวเหมือน targetId)
-    // ผู้กดอนุมัติในไลน์ได้ = ผู้อำนวยการ + หัวหน้าเจ้าหน้าที่พัสดุ (ใครคนใดคนหนึ่งกดก็ได้ ขั้นเดียว)
+    // ผู้กดอนุมัติการใช้รถในไลน์ได้ = ผู้อำนวยการ (directorUserId เดียวกับระบบใบลา) เท่านั้น
     vehicleTargetId: cred.vehicleTargetId || '',
-    supplyHeadUserId: meta.supplyHeadUserId || '',
   };
 }
 
@@ -363,21 +362,21 @@ async function handleVehiclePostback(ev) {
   const replyToken = ev.replyToken;
   if (!action || !vehicleId) return;
 
-  const { channelAccessToken, directorUserId, supplyHeadUserId } = await getLineSettings();
+  const { channelAccessToken, directorUserId } = await getLineSettings();
   if (!channelAccessToken) return;
   const reply = (text) => replyToken && replyLine(channelAccessToken, replyToken, text);
 
-  const senderId = (ev.source || {}).userId;
-  // ผู้มีสิทธิ์กดอนุมัติการใช้รถ: ผู้อำนวยการ หรือหัวหน้าเจ้าหน้าที่พัสดุ (ตั้งค่าได้ในหน้า "ตั้งค่าระบบ")
-  let by = '';
-  if (senderId && senderId === directorUserId) by = 'ผู้อำนวยการ (ผ่านไลน์)';
-  else if (senderId && senderId === supplyHeadUserId) by = 'หัวหน้าเจ้าหน้าที่พัสดุ (ผ่านไลน์)';
-  if (!by) {
-    await reply((!directorUserId && !supplyHeadUserId)
-      ? '⚠️ ยังไม่ได้ตั้งค่า LINE ID ผู้อนุมัติการใช้รถในระบบ กรุณาแจ้งผู้ดูแลระบบให้ตั้งค่าในหน้า "ตั้งค่าระบบ" ก่อน'
-      : '⚠️ ขออภัย ปุ่มนี้ใช้ได้เฉพาะผู้อำนวยการและหัวหน้าเจ้าหน้าที่พัสดุเท่านั้น');
+  // ผู้มีสิทธิ์กดอนุมัติการใช้รถ: ผู้อำนวยการเท่านั้น (LINE User ID เดียวกับที่ตั้งไว้สำหรับอนุมัติใบลา ในหน้า "ตั้งค่าระบบ")
+  if (!directorUserId) {
+    await reply('⚠️ ยังไม่ได้ตั้งค่า LINE ID ของผู้อำนวยการในระบบ กรุณาแจ้งผู้ดูแลระบบให้ตั้งค่าในหน้า "ตั้งค่าระบบ" ก่อน');
     return;
   }
+  const senderId = (ev.source || {}).userId;
+  if (senderId !== directorUserId) {
+    await reply('⚠️ ขออภัย ปุ่มนี้ใช้ได้เฉพาะผู้อำนวยการเท่านั้น');
+    return;
+  }
+  const by = 'ผู้อำนวยการ (ผ่านไลน์)';
 
   const ref = db.doc(`vehicle/${vehicleId}`);
   const snap = await ref.get();
