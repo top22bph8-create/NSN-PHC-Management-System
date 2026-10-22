@@ -116,6 +116,8 @@ export const REGISTRIES = {
       // optionsFrom: 'vehicleFleet' ให้ RegistryPage.jsx ดึงช้อยจาก settings/vehicleFleet แบบสด (real-time) แทนรายการตายตัว
       { key: 'plate', label: 'ยานพาหนะที่ต้องการใช้ (ประเภทรถ)', type: 'select', required: true, list: true, search: true, optionsFrom: 'vehicleFleet' },
       { key: 'driver', label: 'พนักงานขับรถ (ผู้มีสิทธิ์ขับรถตามคำสั่ง)', type: 'select', options: VEHICLE_DRIVERS, search: true },
+      // เลขไมล์ปัจจุบัน (เฉพาะรถยนต์) กรอกด้วยแป้นตัวเลข — ระบบนำไปหักลบเลขไมล์ครั้งก่อนเป็น "ระยะทางครั้งนี้" ตอนบันทึก (odoPrev/distance)
+      { key: 'odoCurrent', label: 'เลขไมล์ปัจจุบัน', type: 'odometer', showIf: (v) => String(v.plate || '').startsWith('รถยนต์ราชการ') },
       { key: 'missionType', label: 'ภารกิจ/จุดหมาย (ติ๊กเลือกได้หลายข้อ)', type: 'multi-check', required: true, list: true, search: true, optionsFrom: 'vehicleMissionTypes' },
       // ช่องระบุรายละเอียดจะโผล่เมื่อติ๊ก "ภารกิจอื่น ๆ (ระบุรายละเอียดเพิ่มเติม)" เท่านั้น
       { key: 'missionOther', label: 'ระบุภารกิจอื่น ๆ', type: 'text', showIf: (v) => (Array.isArray(v.missionType) ? v.missionType : []).some((m) => String(m).startsWith('ภารกิจอื่น ๆ')) },
@@ -133,7 +135,8 @@ export const REGISTRIES = {
       { key: 'odoStart', label: 'เลขไมล์ก่อนเดินทาง', type: 'text', auto: true },
       { key: 'timeIn', label: 'วันและเวลากลับถึงหน่วยงาน', type: 'text', auto: true },
       { key: 'odoEnd', label: 'เลขไมล์เมื่อกลับ', type: 'text', auto: true },
-      { key: 'distance', label: 'ระยะทางรวม (กม.)', type: 'text', auto: true },
+      { key: 'odoPrev', label: 'เลขไมล์ครั้งก่อน', type: 'text', auto: true },
+      { key: 'distance', label: 'ระยะทางครั้งนี้ (กม.)', type: 'text', auto: true },
       { key: 'tripResult', label: 'ผลการปฏิบัติงาน', type: 'textarea', auto: true },
       { key: 'note', label: 'หมายเหตุหรือเหตุขัดข้อง', type: 'textarea', auto: true },
     ],

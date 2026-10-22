@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { Download, FileSpreadsheet, Printer } from 'lucide-react';
 import { db } from '../firebase';
-import { asList, getDestinations, getMissionTypes, getVehicleFleet, listText, numberedText, missionLines, vehicleLabel } from '../lib/vehicleConfig';
+import { hasKm, odoFrom, odoTo, asList, getDestinations, getMissionTypes, getVehicleFleet, listText, numberedText, missionLines, vehicleLabel } from '../lib/vehicleConfig';
 import { exportXlsx } from '../lib/exportFile';
 import { fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Spinner } from '../components/ui';
@@ -62,7 +62,7 @@ export default function VehicleReport() {
     const travelled = filtered.filter((r) => ['กำลังใช้งาน', 'เสร็จสิ้น'].includes(r.status));
     // ระยะทางรวม: นับเฉพาะเที่ยวที่ "เสร็จสิ้น" แล้วและมีค่า distance ที่คำนวณจากเลขไมล์จริงบันทึกไว้เท่านั้น (ค่าที่บันทึกจริง ไม่ใช่ตัวเลขประมาณการ)
     // ไม่มีแนวคิด "ระยะทางประมาณการ" ในระบบนี้ จึงไม่แสดงตัวเลขอื่นใดปนมาเป็นระยะทางรวม
-    const distanceEntries = filtered.filter((r) => r.status === 'เสร็จสิ้น' && String(r.distance || '').trim() !== '');
+    const distanceEntries = filtered.filter((r) => hasKm(r));
     const totalDistance = distanceEntries.reduce((s, r) => s + (Number(r.distance) || 0), 0);
     const pending = filtered.filter((r) => r.status === 'รออนุมัติ');
     const notEnded = filtered.filter((r) => r.status === 'กำลังใช้งาน');
@@ -74,7 +74,7 @@ export default function VehicleReport() {
       (ms.length ? ms : ['(ไม่ระบุ)']).forEach((k) => {
         byMission[k] = byMission[k] || { count: 0, distance: 0 };
         byMission[k].count += 1;
-        if (r.status === 'เสร็จสิ้น' && String(r.distance || '').trim() !== '') byMission[k].distance += Number(r.distance) || 0;
+        if (hasKm(r)) byMission[k].distance += Number(r.distance) || 0;
       });
     });
     const byDestination = {};
@@ -91,7 +91,7 @@ export default function VehicleReport() {
       เลขที่: r.tripNo, วันที่ขอใช้รถ: fmtDate(r.useDate), ผู้ขอใช้รถ: r.requester, ตำแหน่ง: r.requesterPosition || '-', ยานพาหนะ: r.plate,
       ผู้ขับรถ: r.driver || '-', ภารกิจ: numberedText(missionLines(r)).replace(/\n/g, ' ') || '-', ปลายทาง: r.destination || '-',
       สถานะ: r.status, ออกเดินทางจริง: r.timeOut || '-', กลับถึง: r.timeIn || '-',
-      เลขไมล์ก่อนเดินทาง: r.odoStart || '-', เลขไมล์เมื่อกลับ: r.odoEnd || '-', ระยะทางกม: r.distance || '-',
+      เลขไมล์ครั้งก่อน: odoFrom(r) || '-', เลขไมล์ปัจจุบัน: odoTo(r) || '-', ระยะทางครั้งนี้กม: r.distance || '-',
     })),
     'ประวัติการใช้รถ', `รายงานผู้บริหาร-ยานพาหนะ-${from}-ถึง-${to}`,
   );
@@ -100,6 +100,8 @@ export default function VehicleReport() {
     'สรุปเลขไมล์รายคัน', `สรุปเลขไมล์-${from}-ถึง-${to}`,
   );
 
+  const [dailyDate, setDailyDate] = useState(todayStr());
+  const dailyUrl = () => `${window.location.origin}${window.location.pathname}#/print-vehicle-daily?date=${dailyDate}`;
   const printUrl = () => {
     const p = new URLSearchParams({ from, to, plate: plateFilter, missionType: missionFilter, driver: driverFilter });
     return `${window.location.origin}${window.location.pathname}#/print-vehicle-report?${p.toString()}`;
@@ -118,6 +120,11 @@ export default function VehicleReport() {
           </div>
         }
       />
+
+      <div className="card mb-4 flex flex-wrap items-end gap-3 p-4">
+        <div><label className="mb-1 block text-xs text-slate-600">รายงานการเดินทางประจำวัน — เลือกวันที่</label><ThaiDateInput value={dailyDate} onChange={setDailyDate} /></div>
+        <button className="btn btn-primary" onClick={() => window.open(dailyUrl(), '_blank')} disabled={!dailyDate}><Printer className="h-4 w-4" /> พิมพ์รายงานประจำวัน</button>
+      </div>
 
       <div className="card mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div><label className="mb-1 block text-xs text-slate-600">ตั้งแต่วันที่</label><ThaiDateInput value={from} onChange={setFrom} /></div>
@@ -153,7 +160,7 @@ export default function VehicleReport() {
             <div className="card p-4">
               <div className="text-sm text-slate-500">ระยะทางรวมของรถยนต์ (กม.)</div>
               <div className="text-2xl font-bold text-emerald-700">{stats.totalDistance.toLocaleString('th-TH')}</div>
-              <div className="text-xs text-slate-400">คำนวณจากเลขไมล์จริง {stats.distanceEntries.length} เที่ยวที่เสร็จสิ้นแล้วเท่านั้น (ไม่มีตัวเลขประมาณการปนอยู่)</div>
+              <div className="text-xs text-slate-400">คำนวณจากเลขไมล์ปัจจุบัน − เลขไมล์ครั้งก่อน ของ {stats.distanceEntries.length} รายการที่บันทึกเลขไมล์ไว้ (ไม่มีตัวเลขประมาณการปนอยู่)</div>
             </div>
             <div className="card p-4"><div className="text-sm text-slate-500">รออนุมัติ / ยังไม่สิ้นสุดเดินทาง</div><div className="text-2xl font-bold text-amber-700">{stats.pending.length} / {stats.notEnded.length}</div></div>
           </div>
@@ -213,7 +220,7 @@ export default function VehicleReport() {
 
           <div className="card mb-4 overflow-x-auto p-4">
             <h3 className="mb-1 font-semibold">สรุปเลขไมล์รถยนต์รายคัน</h3>
-            <p className="mb-2 text-xs text-slate-400">เลขไมล์ล่าสุดนับจากเที่ยวที่เสร็จสิ้นทุกช่วงเวลา ส่วนจำนวนเที่ยว/ระยะทางรวมนับเฉพาะช่วงวันที่ที่เลือก (ระยะทางจากเลขไมล์ที่บันทึกจริงเท่านั้น)</p>
+            <p className="mb-2 text-xs text-slate-400">เลขไมล์ล่าสุดนับจากเลขไมล์ปัจจุบันที่บันทึกไว้ทุกช่วงเวลา ส่วนจำนวนเที่ยว/ระยะทางรวมนับเฉพาะช่วงวันที่ที่เลือก (ระยะทางจากเลขไมล์ที่บันทึกจริงเท่านั้น)</p>
             {mileage.length === 0 ? <EmptyState title="ไม่มีรถยนต์ในทะเบียนยานพาหนะ" /> : (
               <table className="w-full min-w-[600px] text-left text-sm">
                 <thead className="text-slate-500"><tr><th className="py-1">ยานพาหนะ</th><th className="py-1 text-center">เลขไมล์เริ่มต้น</th><th className="py-1 text-center">เลขไมล์ล่าสุด</th><th className="py-1 text-center">จำนวนเที่ยว</th><th className="py-1 text-center">ระยะทางรวม (กม.)</th></tr></thead>
@@ -240,7 +247,7 @@ export default function VehicleReport() {
                   <tr>
                     <th className="px-2 py-2">เลขที่</th><th className="px-2 py-2">วันที่</th><th className="px-2 py-2">ผู้ขอใช้รถ</th>
                     <th className="px-2 py-2">ยานพาหนะ</th><th className="px-2 py-2">ภารกิจ</th><th className="px-2 py-2">ปลายทาง</th>
-                    <th className="px-2 py-2 text-center">สถานะ</th><th className="px-2 py-2">ออก–กลับจริง</th><th className="px-2 py-2 text-center">เลขไมล์ ก่อน→กลับ</th><th className="px-2 py-2 text-center">ระยะทาง</th>
+                    <th className="px-2 py-2 text-center">สถานะ</th><th className="px-2 py-2">ออก–กลับจริง</th><th className="px-2 py-2 text-center">เลขไมล์ ครั้งก่อน→ปัจจุบัน</th><th className="px-2 py-2 text-center">ระยะทาง</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -254,7 +261,7 @@ export default function VehicleReport() {
                       <td className="px-2 py-1.5">{r.destination || '-'}</td>
                       <td className="px-2 py-1.5 text-center"><Badge className={cfg.statusColors[r.status]}>{r.status}</Badge></td>
                       <td className="px-2 py-1.5 text-xs">{r.timeOut ? `${r.timeOut} → ${r.timeIn || '-'}` : '-'}</td>
-                      <td className="px-2 py-1.5 text-center">{r.odoStart ? `${r.odoStart} → ${r.odoEnd || '-'}` : '-'}</td>
+                      <td className="px-2 py-1.5 text-center">{odoTo(r) ? `${odoFrom(r) || '-'} → ${odoTo(r)}` : '-'}</td>
                       <td className="px-2 py-1.5 text-center">{r.distance || '-'}</td>
                     </tr>
                   ))}

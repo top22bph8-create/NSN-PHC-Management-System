@@ -4,7 +4,7 @@ import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
 import { fmtDate } from '../lib/thai';
-import { asList, missionLines, numberedText, getVehicleFleet } from '../lib/vehicleConfig';
+import { hasKm, odoFrom, odoTo, asList, missionLines, numberedText, getVehicleFleet } from '../lib/vehicleConfig';
 import { fetchAllCompletedTrips, mileageSummary } from '../lib/vehicleMileage';
 import { ORG_SHORT, ORG_UNDER } from '../config/brand';
 import Logo from '../components/Logo';
@@ -43,7 +43,7 @@ export default function PrintVehicleReport() {
 
   const stats = useMemo(() => {
     const travelled = filtered.filter((r) => ['กำลังใช้งาน', 'เสร็จสิ้น'].includes(r.status));
-    const distanceEntries = filtered.filter((r) => r.status === 'เสร็จสิ้น' && String(r.distance || '').trim() !== '');
+    const distanceEntries = filtered.filter((r) => hasKm(r));
     const totalDistance = distanceEntries.reduce((s, r) => s + (Number(r.distance) || 0), 0);
     const pending = filtered.filter((r) => r.status === 'รออนุมัติ');
     const notEnded = filtered.filter((r) => r.status === 'กำลังใช้งาน');
@@ -82,7 +82,7 @@ export default function PrintVehicleReport() {
             <div className="rounded border border-slate-300 p-2"><div className="text-slate-500">ระยะทางรวม (กม.)</div><div className="text-lg font-bold">{stats.totalDistance.toLocaleString('th-TH')}</div></div>
             <div className="rounded border border-slate-300 p-2"><div className="text-slate-500">รออนุมัติ / ค้างเดินทาง</div><div className="text-lg font-bold">{stats.pending.length} / {stats.notEnded.length}</div></div>
           </div>
-          <p className="mb-2 text-xs text-slate-400">* ระยะทางรวมคำนวณจากเลขไมล์จริงของเที่ยวที่บันทึก "เสร็จสิ้น" แล้วเท่านั้น ({stats.distanceEntries.length} เที่ยว) ไม่มีตัวเลขประมาณการปนอยู่</p>
+          <p className="mb-2 text-xs text-slate-400">* ระยะทางรวมคำนวณจากเลขไมล์ปัจจุบัน − เลขไมล์ครั้งก่อน ของ {stats.distanceEntries.length} รายการที่บันทึกเลขไมล์ไว้ ไม่มีตัวเลขประมาณการปนอยู่</p>
 
           {mileage.length > 0 && (
             <table className="mb-3 w-full border-collapse text-sm">
@@ -102,7 +102,7 @@ export default function PrintVehicleReport() {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                {['เลขที่', 'วันที่', 'ผู้ขอใช้รถ', 'ยานพาหนะ', 'ผู้ขับรถ', 'ภารกิจ', 'ปลายทาง', 'สถานะ', 'ออก–กลับจริง', 'เลขไมล์ ก่อน→กลับ', 'ระยะทาง (กม.)'].map((l) => (
+                {['เลขที่', 'วันที่', 'ผู้ขอใช้รถ', 'ยานพาหนะ', 'ผู้ขับรถ', 'ภารกิจ', 'ปลายทาง', 'สถานะ', 'ออก–กลับจริง', 'เลขไมล์ ครั้งก่อน→ปัจจุบัน', 'ระยะทาง (กม.)'].map((l) => (
                   <th key={l} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{l}</th>
                 ))}
               </tr>
@@ -121,7 +121,7 @@ export default function PrintVehicleReport() {
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.destination || '-'}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.status}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.timeOut ? `${r.timeOut} → ${r.timeIn || '-'}` : '-'}</td>
-                  <td className="border border-slate-300 px-2 py-1 align-top">{r.odoStart ? `${r.odoStart} → ${r.odoEnd || '-'}` : '-'}</td>
+                  <td className="border border-slate-300 px-2 py-1 align-top">{odoTo(r) ? `${odoFrom(r) || '-'} → ${odoTo(r)}` : '-'}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.distance || '-'}</td>
                 </tr>
               ))}

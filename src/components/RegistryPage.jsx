@@ -19,6 +19,7 @@ import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
 import { VEHICLE_TYPES, getVehicleFleet, vehicleLabel, asList, numberedText, groupMissions, normalizeMissionDoc, missionLines } from '../lib/vehicleConfig';
 import TimeKeypadInput from './TimeKeypadInput';
+import OdometerKeypadInput from './OdometerKeypadInput';
 import MissionGroupPicker from './MissionGroupPicker';
 
 const emptyForm = (cfg) => {
@@ -119,40 +120,46 @@ export default function RegistryPage({ cfg }) {
   const [tripModal, setTripModal] = useState(null); // { item, kind: 'start' | 'end' }
   const [tripForm, setTripForm] = useState({});
   const [tripSaving, setTripSaving] = useState(false);
-  // เลขไมล์ครั้งก่อนของรถคันนี้: ค่ามากสุดของ "เลขไมล์เมื่อกลับ" จากเที่ยวที่เสร็จสิ้นแล้วทุกปีงบประมาณ ถ้ายังไม่เคยมีเที่ยวเสร็จสิ้น ใช้ "เลขไมล์เริ่มต้น" ที่ตั้งไว้ในหน้าตั้งค่าระบบ
-  // (คำนวณจากข้อมูลเที่ยว ไม่ต้องเขียนกลับไปที่หน้าตั้งค่า เพราะหน้านั้นแก้ได้เฉพาะ Super Admin)
-  const [tripPrev, setTripPrev] = useState(null); // { odo: number|null, source: string }
-  const loadPrevOdo = async (it) => {
-    setTripPrev(null);
-    if (!isCarTrip(it)) return null;
+  // เลขไมล์ครั้งก่อนของรถยนต์คันนี้ = ค่ามากสุดของ "เลขไมล์ปัจจุบัน" ที่เคยบันทึกไว้กับคำขออื่นของรถคันเดียวกัน (รวมคำขอเก่าที่ใช้เลขไมล์เมื่อกลับ) ถ้ายังไม่มีเลย ใช้ "เลขไมล์เริ่มต้น" ในตั้งค่าระบบ
+  // (คำนวณจากข้อมูลคำขอ ไม่เขียนกลับหน้าตั้งค่า เพราะหน้านั้นแก้ได้เฉพาะ Super Admin)
+  const computePrevOdo = async (plate, excludeId) => {
+    if (!String(plate || '').startsWith(VEHICLE_TYPES[0])) return null;
     let best = null;
     try {
-      const snap = await getDocs(query(collection(db, cfg.key), where('plate', '==', it.plate)));
+      const snap = await getDocs(query(collection(db, cfg.key), where('plate', '==', plate)));
       snap.docs.forEach((d) => {
+        if (d.id === excludeId) return;
         const x = d.data();
-        if (d.id === it.id || x.status !== 'เสร็จสิ้น' || String(x.odoEnd || '').trim() === '') return;
-        const n = Number(x.odoEnd);
-        if (!Number.isNaN(n) && (best === null || n > best)) best = n;
+        [x.odoCurrent, x.odoEnd].forEach((raw) => {
+          if (raw === undefined || raw === null || String(raw).trim() === '') return;
+          const n = Number(raw);
+          if (!Number.isNaN(n) && (best === null || n > best)) best = n;
+        });
       });
     } catch { /* ใช้ค่าเริ่มต้นแทน */ }
-    if (best !== null) { setTripPrev({ odo: best, source: 'จากเที่ยวล่าสุดที่บันทึกไว้' }); return best; }
-    const fv = (dynOptions.vehicleFleet || []).find((v) => vehicleLabel(v) === it.plate);
-    const n = fv && String(fv.odometer || '').trim() !== '' ? Number(fv.odometer) : null;
-    setTripPrev({ odo: n, source: n !== null ? 'เลขไมล์เริ่มต้นที่ตั้งไว้ในตั้งค่าระบบ' : '' });
-    return n;
+    if (best !== null) return best;
+    let list = dynOptions.vehicleFleet;
+    if (!list) { try { list = await getVehicleFleet(); } catch { list = []; } }
+    const fv = (list || []).find((v) => vehicleLabel(v) === plate);
+    return fv && String(fv.odometer || '').trim() !== '' && !Number.isNaN(Number(fv.odometer)) ? Number(fv.odometer) : null;
   };
+  const [formPrev, setFormPrev] = useState(null);
+  useEffect(() => {
+    if (!isVehicle || !form) { setFormPrev(null); return undefined; }
+    let alive = true;
+    computePrevOdo(form.values.plate, form.id).then((n) => { if (alive) setFormPrev(n); });
+    return () => { alive = false; };
+  }, [isVehicle, form?.values?.plate, form?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // วัน+เวลา ของเที่ยวจริงเก็บเป็นข้อความ "YYYY-MM-DD HH:MM" เหมือนเดิม แต่หน้าจอแยกเป็น ช่องวันที่ + แป้นกดเวลา
   const splitDT = (str) => { const m = String(str || '').match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})/); return m ? { d: m[1], t: m[2].padStart(5, '0') } : { d: todayStr(), t: '' }; };
   const joinDT = (d, t) => (d && t ? `${d} ${t}` : '');
   const openTripStart = (it) => {
-    setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}`, odoStart: it.odoStart || '' });
+    setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}` });
     setTripModal({ item: it, kind: 'start' });
-    loadPrevOdo(it).then((n) => { if (n !== null) setTripForm((f) => ({ ...f, odoStart: f.odoStart || String(n) })); });
   };
   const openTripEnd = (it) => {
-    setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, odoEnd: '', tripResult: '', note: it.note || '' });
+    setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, tripResult: '', note: it.note || '' });
     setTripModal({ item: it, kind: 'end' });
-    loadPrevOdo(it);
   };
   // เปิดหน้าลงเลขไมล์จากป๊อปอัพเตือน (?trip=รหัส&kind=start|end) — ดึงเอกสารตรงๆ เพราะเที่ยวอาจอยู่คนละปีงบประมาณกับที่เปิดดูอยู่
   useEffect(() => {
@@ -197,18 +204,11 @@ export default function RegistryPage({ cfg }) {
     let after;
     if (kind === 'start') {
       if (!String(tripForm.timeOut || '').trim()) { say({ type: 'error', text: 'กรุณากรอกวันและเวลาออกเดินทาง' }); return; }
-      if (isCarTrip(item) && !String(tripForm.odoStart || '').trim()) { say({ type: 'error', text: 'กรุณากรอกเลขไมล์ก่อนเดินทาง' }); return; }
-      after = { status: 'กำลังใช้งาน', timeOut: tripForm.timeOut.trim(), odoStart: isCarTrip(item) ? String(tripForm.odoStart).trim() : '' };
+      after = { status: 'กำลังใช้งาน', timeOut: tripForm.timeOut.trim() };
     } else {
       if (!String(tripForm.timeIn || '').trim()) { say({ type: 'error', text: 'กรุณากรอกวันและเวลากลับถึงหน่วยงาน' }); return; }
-      if (isCarTrip(item)) {
-        if (!String(tripForm.odoEnd || '').trim()) { say({ type: 'error', text: 'กรุณากรอกเลขไมล์เมื่อกลับ' }); return; }
-        if (Number(tripForm.odoEnd) < Number(item.odoStart || 0)) { say({ type: 'error', text: 'เลขไมล์เมื่อกลับต้องไม่น้อยกว่าเลขไมล์ก่อนเดินทาง' }); return; }
-      }
-      const distance = isCarTrip(item) && String(item.odoStart || '').trim() ? String(Number(tripForm.odoEnd) - Number(item.odoStart)) : '';
       after = {
         status: 'เสร็จสิ้น', timeIn: tripForm.timeIn.trim(),
-        odoEnd: isCarTrip(item) ? String(tripForm.odoEnd).trim() : '', distance,
         tripResult: String(tripForm.tripResult || '').trim(), note: String(tripForm.note || '').trim(),
       };
     }
@@ -216,7 +216,7 @@ export default function RegistryPage({ cfg }) {
     try {
       await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
       await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
-      say({ type: 'ok', text: kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : `บันทึกสิ้นสุดการเดินทางแล้ว${after.distance ? ` — ระยะทางครั้งนี้ ${Number(after.distance).toLocaleString('th-TH')} กม.` : ''}` });
+      say({ type: 'ok', text: kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : 'บันทึกสิ้นสุดการเดินทางแล้ว' });
       setTripModal(null);
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
@@ -357,7 +357,7 @@ export default function RegistryPage({ cfg }) {
   const viewItem = items?.find((x) => x.id === viewId) || null;
   const listFields = cfg.fields.filter((f) => f.list);
 
-  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : v || '-');
+  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : f.type === 'odometer' && v ? `${Number(v).toLocaleString('th-TH')} กม.` : v || '-');
 
   // เลขที่หนังสือส่งหลัก (insertSeq = 0) ในปีงบประมาณนี้ ใหม่สุดก่อน สำหรับตัวเลือก "แทรกเลขที่ย้อนหลัง"
   const outgoingBases = useMemo(
@@ -485,6 +485,22 @@ export default function RegistryPage({ cfg }) {
     const e = validate(values);
     setErrors(e);
     if (Object.keys(e).length) return;
+    // คำนวณระยะทางครั้งนี้ = เลขไมล์ปัจจุบัน − เลขไมล์ครั้งก่อน (เฉพาะรถยนต์ที่กรอกเลขไมล์ปัจจุบัน)
+    if (isVehicle) {
+      const oldRec = form.id ? items.find((x) => x.id === form.id) : null;
+      const isCar = String(values.plate || '').startsWith(VEHICLE_TYPES[0]);
+      const curTxt = String(values.odoCurrent ?? '').trim();
+      if (isCar && curTxt !== '') {
+        const prev = await computePrevOdo(values.plate, form.id);
+        if (prev !== null && Number(curTxt) < prev) { say({ type: 'error', text: `เลขไมล์ปัจจุบันต้องไม่น้อยกว่าเลขไมล์ครั้งก่อน (${prev.toLocaleString('th-TH')} กม.)` }); return; }
+        values.odoCurrent = curTxt;
+        values.odoPrev = prev !== null ? String(prev) : '';
+        values.distance = prev !== null ? String(Number(curTxt) - prev) : '';
+      } else {
+        values.odoCurrent = '';
+        if (oldRec?.odoCurrent) { values.odoPrev = ''; values.distance = ''; }
+      }
+    }
     setSaving(true);
     try {
       const old = form.id ? items.find((x) => x.id === form.id) : null;
@@ -1077,8 +1093,11 @@ export default function RegistryPage({ cfg }) {
                                 <button className="btn btn-outline !py-1 !px-2 text-xs text-emerald-700" onClick={() => openTripEnd(it)}>สิ้นสุดการเดินทาง</button>
                               )}
                             </div>
+                            {it.odoCurrent && (
+                              <span className="text-xs text-slate-500">เลขไมล์ {Number(it.odoCurrent).toLocaleString('th-TH')}{it.distance && ` · ใช้รถ ${Number(it.distance).toLocaleString('th-TH')} กม.`}</span>
+                            )}
                             {it.status === 'เสร็จสิ้น' && it.timeOut && (
-                              <span className="text-xs text-slate-500">{it.timeOut} → {it.timeIn}{it.distance && ` · ${it.distance} กม.`}</span>
+                              <span className="text-xs text-slate-500">{it.timeOut} → {it.timeIn}</span>
                             )}
                           </div>
                         </td>
@@ -1217,6 +1236,8 @@ export default function RegistryPage({ cfg }) {
                   <textarea id={`f-${f.key}`} rows={3} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
                 ) : f.type === 'multi-check' ? (
                   <MissionGroupPicker id={`f-${f.key}`} groups={groupMissions(dynOptions[f.optionsFrom] || [])} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
+                ) : f.type === 'odometer' ? (
+                  <OdometerKeypadInput id={`f-${f.key}`} value={form.values[f.key]} prev={formPrev} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
                 ) : f.type === 'time' ? (
                   <TimeKeypadInput id={`f-${f.key}`} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
                 ) : f.type === 'select' ? (
@@ -1502,19 +1523,6 @@ export default function RegistryPage({ cfg }) {
                     <TimeKeypadInput value={splitDT(tripForm.timeOut).t} onChange={(t) => setTripForm({ ...tripForm, timeOut: joinDT(splitDT(tripForm.timeOut).d, t) })} />
                   </div>
                 </div>
-                {isCarTrip(tripModal.item) && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-600">เลขไมล์ก่อนเดินทาง <span className="text-red-600">*</span></label>
-                    <input className="input" inputMode="numeric" value={tripForm.odoStart || ''} onChange={(e) => setTripForm({ ...tripForm, odoStart: e.target.value.replace(/\D/g, '') })} />
-                    <p className="mt-1 text-sm text-slate-600">
-                      เลขไมล์ครั้งก่อน: <b>{tripPrev?.odo != null ? `${tripPrev.odo.toLocaleString('th-TH')} กม.` : 'ยังไม่มีข้อมูล (ตั้งเลขไมล์เริ่มต้นได้ที่เมนูตั้งค่าระบบ)'}</b>
-                      {tripPrev?.source && <span className="text-xs text-slate-400"> ({tripPrev.source})</span>}
-                    </p>
-                    {tripPrev?.odo != null && tripForm.odoStart !== '' && Number(tripForm.odoStart) < tripPrev.odo && (
-                      <p className="mt-1 text-sm font-medium text-amber-700">⚠️ เลขไมล์ที่กรอกต่ำกว่าเลขไมล์ครั้งก่อน กรุณาตรวจสอบ</p>
-                    )}
-                  </div>
-                )}
                 <p className="text-sm text-slate-500">ผู้ขับรถ: {tripModal.item.driver || '-'} · ยานพาหนะ: {tripModal.item.plate}</p>
               </>
             ) : (
@@ -1526,21 +1534,6 @@ export default function RegistryPage({ cfg }) {
                     <TimeKeypadInput value={splitDT(tripForm.timeIn).t} onChange={(t) => setTripForm({ ...tripForm, timeIn: joinDT(splitDT(tripForm.timeIn).d, t) })} />
                   </div>
                 </div>
-                {isCarTrip(tripModal.item) && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-600">เลขไมล์เมื่อกลับ <span className="text-red-600">*</span></label>
-                    <input className="input" inputMode="numeric" value={tripForm.odoEnd || ''} onChange={(e) => setTripForm({ ...tripForm, odoEnd: e.target.value.replace(/\D/g, '') })} />
-                    <div className="mt-2 rounded-xl bg-slate-50 p-2 text-sm text-slate-700">
-                      <div>เลขไมล์ครั้งก่อน: <b>{tripPrev?.odo != null ? `${tripPrev.odo.toLocaleString('th-TH')} กม.` : '-'}</b></div>
-                      <div>เลขไมล์ก่อนเดินทางครั้งนี้: <b>{tripModal.item.odoStart ? `${Number(tripModal.item.odoStart).toLocaleString('th-TH')} กม.` : '-'}</b></div>
-                      {String(tripForm.odoEnd || '') !== '' && tripModal.item.odoStart && (
-                        Number(tripForm.odoEnd) >= Number(tripModal.item.odoStart)
-                          ? <div className="mt-1 text-base font-bold text-emerald-700">ระยะทางครั้งนี้: {(Number(tripForm.odoEnd) - Number(tripModal.item.odoStart)).toLocaleString('th-TH')} กม.</div>
-                          : <div className="mt-1 font-medium text-red-600">เลขไมล์เมื่อกลับต้องไม่น้อยกว่าเลขไมล์ก่อนเดินทาง</div>
-                      )}
-                    </div>
-                  </div>
-                )}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">ผลการปฏิบัติงาน</label>
                   <textarea rows={2} className="input" value={tripForm.tripResult || ''} onChange={(e) => setTripForm({ ...tripForm, tripResult: e.target.value })} />

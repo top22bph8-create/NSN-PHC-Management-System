@@ -15,6 +15,7 @@ import PrintPersonnel from './pages/PrintPersonnel';
 import PrintVehicleReport from './pages/PrintVehicleReport';
 import PrintVehicle from './pages/PrintVehicle';
 import PrintVehicleQr from './pages/PrintVehicleQr';
+import PrintVehicleDaily from './pages/PrintVehicleDaily';
 import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
@@ -150,6 +151,18 @@ function PrintVehicleQrGate() {
   return <PrintVehicleQr />;
 }
 
+// เกตหน้าพิมพ์รายงานการเดินทางประจำวัน: ต้องล็อกอินและมีสิทธิ์อ่านโมดูลยานพาหนะ
+function PrintVehicleDailyGate() {
+  const { loading, user, profile, problem, error } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Login />;
+  if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (!canRead(profile.role, 'vehicle')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์เข้าถึงรายงานนี้</div>;
+  }
+  return <PrintVehicleDaily />;
+}
+
 // ป้องกันหน้า: ต้องล็อกอิน และมีสิทธิ์อ่านโมดูลนั้น
 function Guard({ module, children }) {
   const { profile } = useAuth();
@@ -203,6 +216,7 @@ export default function App() {
           <Route path="/print-leave/:id" element={<PrintLeaveGate />} />
           <Route path="/print-leave-report/:kind" element={<PrintLeaveReportGate />} />
           <Route path="/print-vehicle/:id" element={<PrintVehicleGate />} />
+          <Route path="/print-vehicle-daily" element={<PrintVehicleDailyGate />} />
           <Route path="/print-vehicle-qr" element={<PrintVehicleQrGate />} />
           <Route path="/print-vehicle-report" element={<PrintVehicleReportGate />} />
           <Route path="/*" element={<Shell />} />
