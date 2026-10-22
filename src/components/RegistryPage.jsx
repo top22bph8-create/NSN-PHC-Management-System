@@ -17,7 +17,7 @@ import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } f
 import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
-import { VEHICLE_TYPES, vehicleLabel, asList, numberedText, groupMissions, normalizeMissionDoc, missionLines } from '../lib/vehicleConfig';
+import { VEHICLE_TYPES, getVehicleFleet, vehicleLabel, asList, numberedText, groupMissions, normalizeMissionDoc, missionLines } from '../lib/vehicleConfig';
 import TimeKeypadInput from './TimeKeypadInput';
 import MissionGroupPicker from './MissionGroupPicker';
 
@@ -167,6 +167,30 @@ export default function RegistryPage({ cfg }) {
       if (kind === 'end' && it.status === 'กำลังใช้งาน') openTripEnd(it);
       else if (kind === 'start' && it.status === 'อนุมัติ') openTripStart(it);
     }).catch(() => {});
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  // สแกน QR Code ประจำรถ (?scan=รหัสรถ): เปิดฟอร์มเริ่มเดินทาง/สิ้นสุดการเดินทางของเที่ยวที่ค้างอยู่ของรถคันนั้น
+  useEffect(() => {
+    const fleetId = params.get('scan');
+    if (!isVehicle || !fleetId) return;
+    params.delete('scan');
+    setParams(params, { replace: true });
+    (async () => {
+      try {
+        const fleet = await getVehicleFleet();
+        const car = fleet.find((f) => f.id === fleetId);
+        if (!car) { say({ type: 'error', text: 'ไม่พบรถคันนี้ในทะเบียนยานพาหนะ (QR Code อาจเก่าเกินไป)' }); return; }
+        const label = vehicleLabel(car);
+        const snap = await getDocs(query(collection(db, cfg.key), where('plate', '==', label)));
+        const mine = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const running = mine.find((r) => r.status === 'กำลังใช้งาน');
+        if (running) { openTripEnd(running); return; }
+        const approvedList = mine.filter((r) => r.status === 'อนุมัติ').sort((a, b) => String(a.useDate).localeCompare(String(b.useDate)));
+        const pick = approvedList.find((r) => r.requesterEmail === profile.email) || approvedList[0];
+        if (pick) { openTripStart(pick); return; }
+        if (writable) { say({ type: 'info', text: `${label} ยังไม่มีคำขอที่ได้รับอนุมัติ — เปิดฟอร์มขอใช้รถให้แล้ว` }); openCreateWithPlate(label); }
+        else say({ type: 'error', text: `${label} ยังไม่มีคำขอที่ได้รับอนุมัติ` });
+      } catch { say({ type: 'error', text: 'เปิดจาก QR Code ไม่สำเร็จ กรุณาลองใหม่' }); }
+    })();
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const submitTrip = async () => {
     const { item, kind } = tripModal;
@@ -400,6 +424,10 @@ export default function RegistryPage({ cfg }) {
     // ทะเบียนควบคุมยานพาหนะ: เติมชื่อผู้ขอใช้รถเป็นผู้ที่กำลังล็อกอินอยู่ให้อัตโนมัติ (แก้ไขเป็นคนอื่นได้ถ้าบันทึกแทนกัน)
     if (isVehicle) values.requester = profile.name || profile.email;
     setForm({ values });
+  };
+  const openCreateWithPlate = (plate) => {
+    openCreate();
+    setForm((f) => (f ? { ...f, values: { ...f.values, plate } } : f));
   };
   const openEdit = (it) => {
     const values = {};

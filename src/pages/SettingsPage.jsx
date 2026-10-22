@@ -274,7 +274,10 @@ export default function SettingsPage() {
               จัดการรายชื่อยานพาหนะของหน่วยงาน ประเภทภารกิจ และสถานที่ปลายทางมาตรฐาน ที่จะใช้เป็นช้อยในฟอร์มขอใช้รถ (เฟสถัดไป) — เปลี่ยนที่นี่จุดเดียว มีผลทุกจุดที่ใช้งาน
             </p>
 
-            <h3 className="mb-2 text-sm font-semibold text-slate-700">ทะเบียนยานพาหนะ</h3>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-700">ทะเบียนยานพาหนะ</h3>
+              <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-vehicle-qr`, '_blank')}>🖨️ พิมพ์ป้าย QR Code รถ</button>
+            </div>
             {!fleet ? <Spinner /> : (
               <div className="mb-4 space-y-2">
                 <div className="space-y-1">
