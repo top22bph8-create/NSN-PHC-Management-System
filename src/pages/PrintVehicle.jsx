@@ -26,7 +26,8 @@ function PrintFonts() {
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
       @page { size: A4; margin: 1cm; }
-      .vf-doc { font-family: ${FONT_STACK}; font-size: 16pt; line-height: 1.15; color: #000; }
+      .vf-wrap { width: 190mm; }
+      .vf-doc { display: flex; flex-direction: column; min-height: 266mm; font-family: ${FONT_STACK}; font-size: 16pt; line-height: 1.15; color: #000; }
       .vf-doc .vf-title { font-size: 20pt; font-weight: 700; }
     `}</style>
   );
@@ -140,7 +141,8 @@ export default function PrintVehicle() {
   const dotted = { textDecoration: 'underline dotted', textUnderlineOffset: '4px' };
 
   return (
-    <div className="mx-auto max-w-[800px] bg-white p-6 print:p-0">
+    <div className="overflow-x-auto bg-white p-3 print:overflow-visible print:p-0">
+    <div className="vf-wrap mx-auto bg-white">
       <PrintFonts />
       <div className="mb-2 flex items-center justify-end gap-2 print:hidden">
         <button className="btn btn-outline" onClick={() => window.close()}>ปิดหน้านี้</button>
@@ -154,9 +156,7 @@ export default function PrintVehicle() {
 
         <p className="mt-2">เรียน&nbsp; นายกองค์การบริหารส่วนจังหวัดสกลนคร</p>
         <p className="mt-1" style={{ textIndent: '2.5cm' }}>
-          ข้าพเจ้า <Blank w="14em">{v.requester}</Blank> ตำแหน่ง <Blank w="12em">{position}</Blank>
-          <br />
-          สังกัด{ORG_NAME} กองสาธารณสุข องค์การบริหารส่วนจังหวัดสกลนคร ขออนุญาตใช้{vehicleFull} หมายเลขทะเบียน <b className="font-normal" style={{ textDecoration: 'underline dotted', textUnderlineOffset: '4px' }}>&nbsp;{plateTh}&nbsp;</b>{' '}
+          ข้าพเจ้า&nbsp;&nbsp;{v.requester}&nbsp;&nbsp;&nbsp;ตำแหน่ง&nbsp;{position}&nbsp;&nbsp;สังกัด{ORG_NAME} กองสาธารณสุข องค์การบริหารส่วนจังหวัดสกลนคร ขออนุญาตใช้{vehicleFull} หมายเลขทะเบียน <b className="font-normal" style={{ textDecoration: 'underline dotted', textUnderlineOffset: '4px' }}>&nbsp;{plateTh}&nbsp;</b>{' '}
           เพื่อใช้ปฏิบัติราชการต่างๆและงานที่ได้รับมอบหมาย ในงาน
           {missions.length === 0 && <> <Blank w="14em" /></>}
           {missions.length === 1 && <> {missions[0]}{dest ? ` ณ ${dest}` : ''}</>}
@@ -206,12 +206,12 @@ export default function PrintVehicle() {
         <div className="mt-1 border-b border-dotted border-slate-600">&nbsp;</div>
         <div className="mt-1 border-b border-dotted border-slate-600">&nbsp;</div>
 
-        <div className="mt-2 flex justify-center gap-16 text-lg">
+        <div className="flex justify-center gap-16 text-lg" style={{ marginTop: 'auto', paddingTop: '10mm' }}>
           <b><CheckBox checked={approved} />อนุมัติ</b>
           <b><CheckBox checked={rejected} />ไม่อนุมัติ</b>
         </div>
 
-        <div className="mt-3 text-center">
+        <div className="mt-6 text-center">
           <div>(ลงชื่อ) <Blank w="14em" /></div>
           <div>( {DIRECTOR_NAME} )</div>
           {DIRECTOR_LINES.map((t) => <div key={t}>{t}</div>)}
@@ -220,6 +220,7 @@ export default function PrintVehicle() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
