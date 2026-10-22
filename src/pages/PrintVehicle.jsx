@@ -26,8 +26,8 @@ function PrintFonts() {
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
       @page { size: A4; margin: 1cm; }
-      .vf-doc { font-family: ${FONT_STACK}; font-size: 15pt; line-height: 1.22; color: #000; }
-      .vf-doc .vf-title { font-size: 18pt; font-weight: 700; }
+      .vf-doc { font-family: ${FONT_STACK}; font-size: 16pt; line-height: 1.15; color: #000; }
+      .vf-doc .vf-title { font-size: 20pt; font-weight: 700; }
     `}</style>
   );
 }
@@ -147,16 +147,16 @@ export default function PrintVehicle() {
         <button className="btn btn-primary" onClick={() => window.print()}>พิมพ์ / บันทึกเป็น PDF</button>
       </div>
 
-      <div className="vf-doc">
+      <div className="vf-doc" style={missions.length > 6 ? { fontSize: '14pt' } : missions.length > 3 ? { fontSize: '15pt' } : undefined}>
         <div className="text-right">แบบ ๓</div>
         <div className="vf-title mt-1 text-center">แบบขออนุญาตใช้{vehicleWord} (ส่วนกลาง)</div>
         <div className="mt-2 text-right"><DateFill iso={requestIso} /></div>
 
         <p className="mt-2">เรียน&nbsp; นายกองค์การบริหารส่วนจังหวัดสกลนคร</p>
-        <p className="mt-1" style={{ textIndent: '2.5em' }}>
+        <p className="mt-1" style={{ textIndent: '2.5cm' }}>
           ข้าพเจ้า <Blank w="14em">{v.requester}</Blank> ตำแหน่ง <Blank w="12em">{position}</Blank>
           <br />
-          {ORG_NAME} ขออนุญาตใช้{vehicleFull} หมายเลขทะเบียน <Blank w="2em"><span className="px-2">{plateTh}</span></Blank>{' '}
+          สังกัด{ORG_NAME} กองสาธารณสุข องค์การบริหารส่วนจังหวัดสกลนคร ขออนุญาตใช้{vehicleFull} หมายเลขทะเบียน <b className="font-normal" style={{ textDecoration: 'underline dotted', textUnderlineOffset: '4px' }}>&nbsp;{plateTh}&nbsp;</b>{' '}
           เพื่อใช้ปฏิบัติราชการต่างๆและงานที่ได้รับมอบหมาย ในงาน
           {missions.length === 0 && <> <Blank w="14em" /></>}
           {missions.length === 1 && <> {missions[0]}{dest ? ` ณ ${dest}` : ''}</>}
@@ -171,27 +171,27 @@ export default function PrintVehicle() {
             {dest && <p className="pl-12">ณ {dest}</p>}
           </>
         )}
-        <p style={{ textIndent: '2.5em' }}>
+        <p style={{ textIndent: '2.5cm' }}>
           โดยจะตรวจสอบพร้อมดูแลให้มีสภาพพร้อมใช้งาน และจะเก็บรักษา{vehicleWord}ไว้ในที่ปลอดภัย
         </p>
         <p className="whitespace-nowrap text-center">
           ตั้งแต่ <DateTight iso={fromIso} /> ถึง <DateTight iso={toIso} />
         </p>
 
-        <div className="mt-3 text-center">
+        <div className="mt-9 text-center">
           <div>(ลงชื่อ) <Blank w="13em" /> ผู้ขออนุญาต</div>
           <div>( {v.requester} )</div>
           <div>ตำแหน่ง {position || <Blank w="14em" />}</div>
         </div>
 
         {/* ความเห็นของหัวหน้าเจ้าหน้าที่พัสดุ (เกษียณหนังสือ) */}
-        <div className="mt-3">
+        <div className="mt-6">
           <div>ความเห็นของหัวหน้าเจ้าหน้าที่พัสดุ</div>
           <div>เรียน&nbsp; นายกองค์การบริหารส่วนจังหวัดสกลนคร</div>
-          <div style={{ fontSize: '13.5pt', lineHeight: 1.3 }}>
+          <div style={{ fontSize: '16pt', lineHeight: 1.15 }}>
             <span style={dotted}>{opinion}</span>
           </div>
-          <div className="border-b border-dotted border-slate-600" style={{ fontSize: '14pt', lineHeight: 1.3 }}>&nbsp;</div>
+          <div className="border-b border-dotted border-slate-600" style={{ fontSize: '16pt', lineHeight: 1.15 }}>&nbsp;</div>
           <div className="mt-2 inline-block text-center" style={{ minWidth: '50%' }}>
             <div>(ลงชื่อ) <Blank w="10em" /></div>
             <div>( {SUPPLY_HEAD.name} )</div>
@@ -200,8 +200,8 @@ export default function PrintVehicle() {
           </div>
         </div>
 
-        <p className="mt-2">
-          คำสั่งของผู้มีอำนาจให้ใช้{vehicleFull} หมายเลขทะเบียน <Blank w="2em"><span className="px-2">{plateTh}</span></Blank>
+        <p className="mt-3">
+          คำสั่งของผู้มีอำนาจให้ใช้{vehicleFull} หมายเลขทะเบียน <b className="font-normal" style={{ textDecoration: 'underline dotted', textUnderlineOffset: '4px' }}>&nbsp;{plateTh}&nbsp;</b>
         </p>
         <div className="mt-1 border-b border-dotted border-slate-600">&nbsp;</div>
         <div className="mt-1 border-b border-dotted border-slate-600">&nbsp;</div>
