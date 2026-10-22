@@ -366,6 +366,9 @@ async function handleVehiclePostback(ev) {
   if (!channelAccessToken) return;
   const reply = (text) => replyToken && replyLine(channelAccessToken, replyToken, text);
 
+  // ปุ่ม "ยืนยันเลขไมล์และเริ่มเดินทาง" ที่คนขับกดในไลน์กลุ่มงานรถ (ไม่จำกัดเฉพาะผู้อำนวยการ)
+  if (action === 'tripstart') { await handleVehicleTripStart(vehicleId, reply); return; }
+
   // ผู้มีสิทธิ์กดอนุมัติการใช้รถ: ผู้อำนวยการเท่านั้น (LINE User ID เดียวกับที่ตั้งไว้สำหรับอนุมัติใบลา ในหน้า "ตั้งค่าระบบ")
   if (!directorUserId) {
     await reply('⚠️ ยังไม่ได้ตั้งค่า LINE ID ของผู้อำนวยการในระบบ กรุณาแจ้งผู้ดูแลระบบให้ตั้งค่าในหน้า "ตั้งค่าระบบ" ก่อน');
@@ -391,6 +394,104 @@ async function handleVehiclePostback(ev) {
   await ref.update({ status: newStatus, decidedBy: by, decidedAt: bangkokDateStr() });
   // การเขียนนี้จะไปสั่งให้ onVehicleUpdated ทำงานต่อ (ส่งผลพิจารณา + ลิงก์พิมพ์แบบ 3 เข้ากลุ่ม)
   await reply(newStatus === 'อนุมัติ' ? `✅ อนุมัติการใช้รถของ ${cur.requester} เรียบร้อยแล้ว` : `❌ ไม่อนุมัติการใช้รถของ ${cur.requester} เรียบร้อยแล้ว`);
+}
+
+
+// เลขไมล์ครั้งล่าสุดของรถยนต์คันนั้น (ยกยอด): เลขไมล์เมื่อกลับสูงสุดของเที่ยวที่เสร็จสิ้นแล้ว ถ้ายังไม่เคยมีเที่ยว ใช้เลขไมล์เริ่มต้นที่ตั้งไว้ในตั้งค่าระบบ
+// คืน null ถ้าไม่ใช่รถยนต์ หรือไม่มีข้อมูลเลขไมล์เลย
+async function previousOdometer(v) {
+  if (!String(v.plate || '').startsWith('รถยนต์ราชการ')) return null;
+  let best = null;
+  const done = await db.collection('vehicle').where('plate', '==', v.plate).where('status', '==', 'เสร็จสิ้น').get();
+  done.forEach((d) => {
+    const raw = d.data().odoEnd;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return;
+    const n = Number(raw);
+    if (!Number.isNaN(n) && (best === null || n > best)) best = n;
+  });
+  if (best !== null) return best;
+  const fleetSnap = await db.doc('settings/vehicleFleet').get();
+  const list = fleetSnap.exists && Array.isArray(fleetSnap.data().list) ? fleetSnap.data().list : [];
+  const hit = list.find((f) => `${f.type}${f.name ? ` ${f.name}` : ''} หมายเลขทะเบียน ${f.plate}` === v.plate);
+  if (hit && String(hit.odometer || '').trim() !== '') {
+    const n = Number(hit.odometer);
+    if (!Number.isNaN(n)) return n;
+  }
+  return null;
+}
+
+const vehicleWebUrl = (id, kind) => `${HOSTING_URL}/#/vehicle?trip=${id}&kind=${kind}`;
+const fmtKm = (n) => Number(n).toLocaleString('th-TH');
+
+// การ์ดหลัง ผอ. อนุมัติ: คนขับตรวจเลขไมล์ที่ยกยอดมา แล้วกดยืนยันเพื่อเริ่มเดินทาง (หรือไปแก้เลขไมล์ที่เว็บถ้าไม่ตรง)
+async function buildVehicleStartFlex(id, v) {
+  const isCar = String(v.plate || '').startsWith('รถยนต์ราชการ');
+  const prev = await previousOdometer(v);
+  const lines = vehicleSummaryLines(v);
+  const body = [
+    { type: 'text', text: '✅ ผอ. อนุมัติให้ใช้รถแล้ว', weight: 'bold', size: 'md', wrap: true, color: '#15803d' },
+    ...lines.map((t) => ({ type: 'text', text: t, wrap: true, size: 'sm' })),
+  ];
+  const footer = [];
+  if (isCar && prev !== null) {
+    body.push({ type: 'separator', margin: 'md' });
+    body.push({ type: 'text', text: `เลขไมล์ครั้งล่าสุด (ยกยอด): ${fmtKm(prev)} กม.`, wrap: true, size: 'md', weight: 'bold', margin: 'md' });
+    body.push({ type: 'text', text: 'คนขับกรุณาตรวจสอบเลขไมล์หน้าปัดรถให้ตรงกับยอดนี้ ก่อนกดเริ่มเดินทาง', wrap: true, size: 'xs', color: '#64748b' });
+    footer.push({ type: 'button', style: 'primary', color: '#16a34a', height: 'sm', action: { type: 'postback', label: '✅ เลขไมล์ตรง · เริ่มเดินทาง', data: `action=tripstart&vehicleId=${id}`, displayText: `ยืนยันเลขไมล์ ${fmtKm(prev)} กม. และเริ่มเดินทาง` } });
+    footer.push({ type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: '✏️ เลขไมล์ไม่ตรง · แก้ที่เว็บ', uri: vehicleWebUrl(id, 'start') } });
+  } else if (isCar) {
+    body.push({ type: 'text', text: 'ยังไม่มีเลขไมล์ยกยอดของรถคันนี้ กรุณาลงเลขไมล์ก่อนเดินทางที่เว็บ', wrap: true, size: 'sm', color: '#b45309', margin: 'md' });
+    footer.push({ type: 'button', style: 'primary', height: 'sm', action: { type: 'uri', label: '🚗 ลงเลขไมล์/เริ่มเดินทาง', uri: vehicleWebUrl(id, 'start') } });
+  } else {
+    footer.push({ type: 'button', style: 'primary', color: '#16a34a', height: 'sm', action: { type: 'postback', label: '🏍️ เริ่มเดินทาง', data: `action=tripstart&vehicleId=${id}`, displayText: 'เริ่มเดินทาง' } });
+  }
+  return {
+    type: 'flex',
+    altText: `✅ อนุมัติแล้ว กรุณายืนยันเลขไมล์และเริ่มเดินทาง\n${lines.join('\n')}`,
+    contents: { type: 'bubble', body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: body }, footer: { type: 'box', layout: 'vertical', spacing: 'sm', contents: footer } },
+  };
+}
+
+// การ์ดหลังเริ่มเดินทางแล้ว: เตือนให้ลงเลขไมล์ทุกครั้งเมื่อกลับถึง รพ.สต.
+function buildVehicleEndReminderFlex(id, v) {
+  const text = 'เมื่อเดินทางกลับถึง รพ.สต.บ้านหนองสนม อย่าลืมลงเลขไมล์รถทุกครั้งหลังเสร็จสิ้นภารกิจ';
+  const isCar = String(v.plate || '').startsWith('รถยนต์ราชการ');
+  return {
+    type: 'flex',
+    altText: `🚗 เริ่มเดินทางแล้ว — ${text}`,
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '🚗 เริ่มเดินทางแล้ว', weight: 'bold', size: 'md', color: '#0369a1' },
+          { type: 'text', text: `${v.requester || ''} · ${v.plate || ''}`, wrap: true, size: 'sm' },
+          { type: 'text', text: `ออกเดินทาง ${v.timeOut || '-'} น.${isCar && v.odoStart ? ` · เลขไมล์ก่อนเดินทาง ${fmtKm(v.odoStart)} กม.` : ''}`, wrap: true, size: 'sm' },
+          { type: 'separator', margin: 'md' },
+          { type: 'text', text: `⚠️ ${text}`, wrap: true, size: 'sm', weight: 'bold', color: '#b45309', margin: 'md' },
+        ],
+      },
+      footer: { type: 'box', layout: 'vertical', contents: [{ type: 'button', style: 'primary', height: 'sm', action: { type: 'uri', label: '🏁 ลงเลขไมล์เมื่อกลับถึง', uri: vehicleWebUrl(id, 'end') } }] },
+    },
+  };
+}
+
+// คนขับกดเริ่มเดินทางในไลน์: บันทึกเวลาออก + เลขไมล์ที่ยกยอด (รถยนต์) แล้วให้ onVehicleUpdated ส่งการ์ดเตือนลงเลขไมล์ตอนกลับ
+async function handleVehicleTripStart(vehicleId, reply) {
+  const ref = db.doc(`vehicle/${vehicleId}`);
+  const snap = await ref.get();
+  if (!snap.exists) { await reply('ไม่พบคำขอใช้รถนี้ในระบบแล้ว'); return; }
+  const cur = snap.data();
+  if (cur.status !== 'อนุมัติ') {
+    await reply(cur.status === 'กำลังใช้งาน' ? 'เที่ยวนี้เริ่มเดินทางไปแล้ว' : `ไม่สามารถเริ่มเดินทางได้ (สถานะปัจจุบัน: ${cur.status})`);
+    return;
+  }
+  const isCar = String(cur.plate || '').startsWith('รถยนต์ราชการ');
+  const prev = isCar ? await previousOdometer(cur) : null;
+  if (isCar && prev === null) { await reply('ยังไม่มีเลขไมล์ยกยอดของรถคันนี้ กรุณาลงเลขไมล์ก่อนเดินทางที่เว็บ'); return; }
+  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString();
+  await ref.update({ status: 'กำลังใช้งาน', timeOut: `${bkk.slice(0, 10)} ${bkk.slice(11, 16)}`, odoStart: isCar ? String(prev) : '' });
+  await reply('🚗 บันทึกการเริ่มเดินทางเรียบร้อยแล้ว');
 }
 
 async function pushVehicleApprovalCard(id, v) {
@@ -427,6 +528,14 @@ exports.onVehicleUpdated = onDocumentUpdated('vehicle/{id}', async (event) => {
     let text = `${icon} ผลการพิจารณาขออนุญาตใช้รถ\n${vehicleSummaryLines(after).join('\n')}\nผล: ${after.status}${after.decidedBy ? ` (โดย ${after.decidedBy})` : ''}${after.decidedNote ? `\nหมายเหตุ: ${after.decidedNote}` : ''}`;
     if (after.status === 'อนุมัติ') text += `\n\n🖨️ พิมพ์แบบ 3 ขออนุญาตใช้รถ (เปิดแล้วกด "พิมพ์ / บันทึกเป็น PDF"):\n${printVehicleUrl(id)}`;
     await sendLine(channelAccessToken, vehicleTargetId, text);
+    // อนุมัติแล้ว: ส่งการ์ดให้คนขับตรวจเลขไมล์ยกยอดและกดเริ่มเดินทาง
+    if (after.status === 'อนุมัติ') await pushLine(channelAccessToken, vehicleTargetId, [await buildVehicleStartFlex(id, after)]);
+    return;
+  }
+  // เริ่มเดินทางแล้ว (จากไลน์หรือเว็บ): เตือนให้ลงเลขไมล์เมื่อกลับถึง
+  if (after.status === 'กำลังใช้งาน') {
+    if (!events.vehicleDecide) return;
+    await pushLine(channelAccessToken, vehicleTargetId, [buildVehicleEndReminderFlex(id, after)]);
   }
 });
 

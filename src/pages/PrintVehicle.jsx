@@ -26,7 +26,7 @@ function PrintFonts() {
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunItalic}') format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
       @font-face { font-family: 'TH SarabunIT๙'; src: url('${thSarabunBoldItalic}') format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
       @page { size: A4; margin: 1cm; }
-      .vf-doc { font-family: ${FONT_STACK}; font-size: 16pt; line-height: 1.3; color: #000; }
+      .vf-doc { font-family: ${FONT_STACK}; font-size: 15pt; line-height: 1.22; color: #000; }
       .vf-doc .vf-title { font-size: 18pt; font-weight: 700; }
     `}</style>
   );
@@ -71,6 +71,26 @@ function parsePlate(label = '') {
   return { isCar, name, plate };
 }
 
+const TH_DIGITS = '๐๑๒๓๔๕๖๗๘๙';
+const toThaiDigits = (t) => String(t).replace(/\d/g, (d) => TH_DIGITS[d]);
+// จัดรูปแบบเลขทะเบียนเป็น "บษ ๗๘๖๗ สกลนคร" (อักษรนำ/ตัวเลข/จังหวัด เว้นวรรค และใช้เลขไทย) — ถ้าอ่านรูปแบบไม่ได้ใช้ข้อความเดิมแปลงเป็นเลขไทย
+function formatPlate(raw = '') {
+  const m = String(raw).trim().match(/^(\d*)\s*([ก-ฮ]+)\s*(\d+)\s*(.*)$/);
+  if (!m) return toThaiDigits(String(raw).trim());
+  const [, lead, letters, digits, province] = m;
+  return toThaiDigits(`${lead}${letters} ${digits}${province ? ` ${province.trim()}` : ''}`);
+}
+
+// ตัวแทนที่ใช้ในประโยคเกษียณหนังสือ
+const SUPPLY_HEAD = { name: 'นางสาวสุนิศา  ดาบพลหาร', position: 'นักวิชาการสาธารณสุขชำนาญการ', role: 'หัวหน้าเจ้าหน้าที่พัสดุ' };
+
+// "ตั้งแต่ วันที่ .. เดือน .. พ.ศ. .. ถึง วันที่ .. เดือน .. พ.ศ. .." แบบกระชับ จัดกึ่งกลางบรรทัดเดียว
+const DateTight = ({ iso, prefix = 'วันที่' }) => {
+  const p = dateParts(iso);
+  const U = ({ children }) => <span className="px-1" style={{ textDecoration: 'underline dotted', textUnderlineOffset: '4px' }}>{children || '\u00A0\u00A0\u00A0'}</span>;
+  return <span>{prefix}<U>{p?.d}</U>เดือน<U>{p?.m}</U>พ.ศ.<U>{p?.y}</U></span>;
+};
+
 export default function PrintVehicle() {
   const { id } = useParams();
   const [v, setV] = useState(undefined);
@@ -102,13 +122,22 @@ export default function PrintVehicle() {
   if (v === undefined) return <p className="p-8 text-center text-slate-500">กำลังโหลดข้อมูล...</p>;
   if (v === null) return <div className="p-8 text-center text-slate-600">ไม่พบคำขอใช้รถนี้ หรือไม่มีสิทธิ์เข้าถึง</div>;
 
-  const { isCar, name: carName, plate } = parsePlate(v.plate);
+  const { isCar, plate: rawPlate } = parsePlate(v.plate);
+  const plateTh = formatPlate(rawPlate);
   const missions = missionLines(v);
   const requestIso = tsToIso(v.createdAt) || v.useDate;
   const fromIso = v.useDate;
   const toIso = v.useDate;
   const approved = ['อนุมัติ', 'กำลังใช้งาน', 'เสร็จสิ้น'].includes(v.status);
+  const rejected = v.status === 'ไม่อนุมัติ';
   const vehicleWord = isCar ? 'รถยนต์' : 'รถจักรยานยนต์';
+  const vehicleFull = isCar ? 'รถยนต์ราชการส่วนกลาง' : 'รถจักรยานยนต์ราชการส่วนกลาง';
+  const destText = String(v.destination || '').replace(/^ณ\s*/, '').trim();
+  const dest = destText ? `${destText}${v.village ? ` (${v.village})` : ''}` : '';
+  const missionInline = missions.length <= 1 ? (missions[0] || '') : missions.map((m, i) => `${i + 1}. ${m}`).join('  ');
+  // ประโยคเกษียณหนังสือของหัวหน้าเจ้าหน้าที่พัสดุ (เติมอัตโนมัติจากคำขอ)
+  const opinion = `${v.requester || ''} ขออนุญาตใช้${vehicleFull} หมายเลขทะเบียน ${plateTh}${missionInline ? ` เพื่อ ${missionInline}` : ''}${dest ? ` ณ ${dest}` : ''}${v.driver ? ` โดยมี ${v.driver} เป็นพนักงานขับ${vehicleFull}` : ''}`;
+  const dotted = { textDecoration: 'underline dotted', textUnderlineOffset: '4px' };
 
   return (
     <div className="mx-auto max-w-[800px] bg-white p-6 print:p-0">
@@ -125,42 +154,69 @@ export default function PrintVehicle() {
 
         <p className="mt-2">เรียน&nbsp; นายกองค์การบริหารส่วนจังหวัดสกลนคร</p>
         <p className="mt-1" style={{ textIndent: '2.5em' }}>
-          ข้าพเจ้า <Blank w="14em">{v.requester}</Blank> ตำแหน่ง <Blank w="12em">{position}</Blank> {ORG_NAME} ขออนุญาตใช้
-          {isCar ? <>รถ<Blank w="5em">{carName}</Blank>ส่วนกลาง</> : 'รถจักรยานยนต์ส่วนกลาง'} หมายเลขทะเบียน <Blank w="9em">{plate}</Blank>{' '}
-          เพื่อใช้ปฏิบัติราชการต่างๆและงานที่ได้รับมอบหมาย ในงาน{missions.length === 0 && <> <Blank w="14em" /></>}
+          ข้าพเจ้า <Blank w="14em">{v.requester}</Blank> ตำแหน่ง <Blank w="12em">{position}</Blank>
+          <br />
+          {ORG_NAME} ขออนุญาตใช้{vehicleFull} หมายเลขทะเบียน <Blank w="2em"><span className="px-2">{plateTh}</span></Blank>{' '}
+          เพื่อใช้ปฏิบัติราชการต่างๆและงานที่ได้รับมอบหมาย ในงาน
+          {missions.length === 0 && <> <Blank w="14em" /></>}
+          {missions.length === 1 && <> {missions[0]}{dest ? ` ณ ${dest}` : ''}</>}
         </p>
-        {missions.length > 0 && (
-          <ol className="my-0.5 pl-12" style={{ listStyle: 'none' }}>
-            {missions.map((m, i) => (
-              <li key={m} className="flex gap-2"><span className="w-6 shrink-0 text-right">{i + 1}.</span><span>{m}</span></li>
-            ))}
-          </ol>
+        {missions.length > 1 && (
+          <>
+            <ol className="my-0.5 pl-12" style={{ listStyle: 'none' }}>
+              {missions.map((m, i) => (
+                <li key={m} className="flex gap-2"><span className="w-6 shrink-0 text-right">{i + 1}.</span><span>{m}</span></li>
+              ))}
+            </ol>
+            {dest && <p className="pl-12">ณ {dest}</p>}
+          </>
         )}
-        {v.destination && <p style={{ textIndent: '2.5em' }}>ณ {v.destination}{v.village ? ` (${v.village})` : ''}</p>}
         <p style={{ textIndent: '2.5em' }}>
-          โดยจะตรวจสอบพร้อมดูแลให้มีสภาพพร้อมใช้งาน และจะเก็บรักษา{vehicleWord}ไว้ในที่ปลอดภัย ตั้งแต่ <DateFill iso={fromIso} /> ถึง <DateFill iso={toIso} prefix="วันที่" />
+          โดยจะตรวจสอบพร้อมดูแลให้มีสภาพพร้อมใช้งาน และจะเก็บรักษา{vehicleWord}ไว้ในที่ปลอดภัย
+        </p>
+        <p className="whitespace-nowrap text-center">
+          ตั้งแต่ <DateTight iso={fromIso} /> ถึง <DateTight iso={toIso} />
         </p>
 
-        <div className="mt-4 text-center">
+        <div className="mt-3 text-center">
           <div>(ลงชื่อ) <Blank w="13em" /> ผู้ขออนุญาต</div>
           <div>( {v.requester} )</div>
           <div>ตำแหน่ง {position || <Blank w="14em" />}</div>
         </div>
 
-        <p className="mt-5">
-          คำสั่งของผู้มีอำนาจให้ใช้{isCar ? <>รถ<Blank w="4em">{carName}</Blank>ส่วนกลาง</> : 'รถจักรยานยนต์ส่วนกลาง'} หมายเลขทะเบียน <Blank w="12em">{plate}</Blank>
+        {/* ความเห็นของหัวหน้าเจ้าหน้าที่พัสดุ (เกษียณหนังสือ) */}
+        <div className="mt-3">
+          <div>ความเห็นของหัวหน้าเจ้าหน้าที่พัสดุ</div>
+          <div>เรียน&nbsp; นายกองค์การบริหารส่วนจังหวัดสกลนคร</div>
+          <div style={{ fontSize: '13.5pt', lineHeight: 1.3 }}>
+            <span style={dotted}>{opinion}</span>
+          </div>
+          <div className="border-b border-dotted border-slate-600" style={{ fontSize: '14pt', lineHeight: 1.3 }}>&nbsp;</div>
+          <div className="mt-2 inline-block text-center" style={{ minWidth: '50%' }}>
+            <div>(ลงชื่อ) <Blank w="10em" /></div>
+            <div>( {SUPPLY_HEAD.name} )</div>
+            <div>{SUPPLY_HEAD.position}</div>
+            <div className="mt-1">{SUPPLY_HEAD.role}</div>
+          </div>
+        </div>
+
+        <p className="mt-2">
+          คำสั่งของผู้มีอำนาจให้ใช้{vehicleFull} หมายเลขทะเบียน <Blank w="2em"><span className="px-2">{plateTh}</span></Blank>
         </p>
         <div className="mt-1 border-b border-dotted border-slate-600">&nbsp;</div>
         <div className="mt-1 border-b border-dotted border-slate-600">&nbsp;</div>
 
-        <div className="mt-6 text-center text-lg"><b><CheckBox checked={approved} />อนุมัติ</b></div>
+        <div className="mt-2 flex justify-center gap-16 text-lg">
+          <b><CheckBox checked={approved} />อนุมัติ</b>
+          <b><CheckBox checked={rejected} />ไม่อนุมัติ</b>
+        </div>
 
-        <div className="mt-6 text-center">
+        <div className="mt-3 text-center">
           <div>(ลงชื่อ) <Blank w="14em" /></div>
           <div>( {DIRECTOR_NAME} )</div>
           {DIRECTOR_LINES.map((t) => <div key={t}>{t}</div>)}
-          {approved && v.decidedBy && (
-            <div className="mt-2 text-sm text-slate-500" style={{ fontSize: '12pt' }}>อนุมัติในระบบโดย {v.decidedBy}{v.decidedAt ? ` เมื่อวันที่ ${dateParts(v.decidedAt) ? `${dateParts(v.decidedAt).d} ${dateParts(v.decidedAt).m} ${dateParts(v.decidedAt).y}` : v.decidedAt}` : ''}</div>
+          {(approved || rejected) && v.decidedBy && (
+            <div className="mt-1 text-sm text-slate-500" style={{ fontSize: '12pt' }}>{rejected ? 'ไม่อนุมัติ' : 'อนุมัติ'}ในระบบโดย {v.decidedBy}{v.decidedAt ? ` เมื่อวันที่ ${dateParts(v.decidedAt) ? `${dateParts(v.decidedAt).d} ${dateParts(v.decidedAt).m} ${dateParts(v.decidedAt).y}` : v.decidedAt}` : ''}</div>
           )}
         </div>
       </div>

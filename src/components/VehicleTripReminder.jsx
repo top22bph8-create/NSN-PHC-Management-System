@@ -72,7 +72,7 @@ export default function VehicleTripReminder() {
         ) : (
           <p className="rounded-xl bg-amber-50 p-3 text-amber-900">
             ออกเดินทางแล้วเมื่อ {it.timeOut || '-'}{it.odoStart ? ` (เลขไมล์ก่อนเดินทาง ${Number(it.odoStart).toLocaleString('th-TH')} กม.)` : ''}
-            — เมื่อกลับถึงแล้ว กรุณาลงเวลามาถึงและเลขไมล์เมื่อถึงเพื่อปิดเที่ยวนี้
+            — <b>เมื่อเดินทางกลับถึง รพ.สต.บ้านหนองสนม อย่าลืมลงเลขไมล์รถทุกครั้งหลังเสร็จสิ้นภารกิจ</b>
           </p>
         )}
       </div>
