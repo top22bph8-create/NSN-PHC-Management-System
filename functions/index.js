@@ -28,11 +28,12 @@ const db = getFirestore();
 // URL ของเว็บที่เผยแพร่จริง (GitHub Pages) — ใช้สร้างลิงก์พิมพ์ใบลาที่ส่งเข้าไลน์
 const HOSTING_URL = 'https://top22bph8-create.github.io/NSN-PHC-Management-System';
 const printLeaveUrl = (id) => `${HOSTING_URL}/#/print-leave/${id}`;
+const printVehicleUrl = (id) => `${HOSTING_URL}/#/print-vehicle/${id}`;
 
 // ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
 // เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
 // ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
-const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true };
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true, vehicleSubmit: true, vehicleDecide: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -48,6 +49,10 @@ async function getLineSettings() {
     events: { ...DEFAULT_LINE_EVENTS, ...(meta.events || {}) },
     // LINE User ID ของผู้อำนวยการ — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ใช่ข้อมูลลับ อ่านได้ปกติ)
     directorUserId: meta.directorUserId || '',
+    // ระบบขออนุญาตใช้รถ: ใช้ไลน์กลุ่มแยกต่างหาก (vehicleTargetId เก็บใน settings/lineNotify เขียนได้ฝ่ายเดียวเหมือน targetId)
+    // ผู้กดอนุมัติในไลน์ได้ = ผู้อำนวยการ + หัวหน้าเจ้าหน้าที่พัสดุ (ใครคนใดคนหนึ่งกดก็ได้ ขั้นเดียว)
+    vehicleTargetId: cred.vehicleTargetId || '',
+    supplyHeadUserId: meta.supplyHeadUserId || '',
   };
 }
 
@@ -216,7 +221,9 @@ exports.lineWebhook = onRequest(async (req, res) => {
     // จัดการปุ่มอนุมัติ/ไม่อนุมัติ แยกจากส่วนตรวจจับ Target ID ด้านบน
     for (const ev of events) {
       if (ev.type !== 'postback') continue;
-      await handleLeavePostback(ev);
+      const pd = new URLSearchParams((ev.postback && ev.postback.data) || '');
+      if (pd.get('vehicleId')) await handleVehiclePostback(ev);
+      else await handleLeavePostback(ev);
     }
   } catch (e) {
     console.error('lineWebhook error:', e);
@@ -303,6 +310,124 @@ exports.onLeaveUpdated = onDocumentUpdated('leaves/{id}', async (event) => {
       text += `\n\n🖨️ พิมพ์ใบลา (เปิดแล้วกด "พิมพ์ / บันทึกเป็น PDF"):\n${printLeaveUrl(id)}`;
     }
     await sendLine(channelAccessToken, targetId, text);
+  }
+});
+
+// ===== ระบบขออนุญาตใช้ยานพาหนะราชการ: การ์ดอนุมัติในไลน์กลุ่มแยกสำหรับงานรถ =====
+const asList = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [String(v)] : []);
+
+function vehicleSummaryLines(v) {
+  const missions = asList(v.missionType);
+  const missionText = missions.length ? missions.map((m, i) => `${i + 1}. ${m}`).join('\n') : '-';
+  const period = v.useEndDate && v.useEndDate !== v.useDate ? `${v.useDate} ถึง ${v.useEndDate}` : v.useDate;
+  return [
+    `ผู้ขอ: ${v.requester || '-'}`,
+    `รถ: ${v.plate || '-'}`,
+    `วันที่ใช้: ${period || '-'}${v.wantDeparture ? ` (ออกเดินทาง ${v.wantDeparture})` : ''}`,
+    `ภารกิจ:\n${missionText}`,
+    `ปลายทาง: ${v.destination || '-'}`,
+    `เหตุผล: ${v.purpose || '-'}`,
+  ];
+}
+
+function buildVehicleApprovalFlex(id, v) {
+  const lines = vehicleSummaryLines(v);
+  return {
+    type: 'flex',
+    altText: `🚗 มีคำขออนุญาตใช้รถใหม่\n${lines.join('\n')}\n\nสถานะ: รออนุมัติ`,
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '🚗 มีคำขออนุญาตใช้รถใหม่', weight: 'bold', size: 'md', wrap: true },
+          ...lines.map((t) => ({ type: 'text', text: t, wrap: true, size: 'sm' })),
+          { type: 'text', text: 'สถานะ: รออนุมัติ', wrap: true, size: 'sm', weight: 'bold', color: '#b45309' },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'button', style: 'primary', color: '#16a34a', height: 'sm', action: { type: 'postback', label: '✅ อนุมัติ', data: `action=approve&vehicleId=${id}`, displayText: `อนุมัติการใช้รถของ ${v.requester}` } },
+          { type: 'button', style: 'primary', color: '#dc2626', height: 'sm', action: { type: 'postback', label: '❌ ไม่อนุมัติ', data: `action=reject&vehicleId=${id}`, displayText: `ไม่อนุมัติการใช้รถของ ${v.requester}` } },
+        ],
+      },
+    },
+  };
+}
+
+async function handleVehiclePostback(ev) {
+  const params = new URLSearchParams((ev.postback && ev.postback.data) || '');
+  const action = params.get('action');
+  const vehicleId = params.get('vehicleId');
+  const replyToken = ev.replyToken;
+  if (!action || !vehicleId) return;
+
+  const { channelAccessToken, directorUserId, supplyHeadUserId } = await getLineSettings();
+  if (!channelAccessToken) return;
+  const reply = (text) => replyToken && replyLine(channelAccessToken, replyToken, text);
+
+  const senderId = (ev.source || {}).userId;
+  // ผู้มีสิทธิ์กดอนุมัติการใช้รถ: ผู้อำนวยการ หรือหัวหน้าเจ้าหน้าที่พัสดุ (ตั้งค่าได้ในหน้า "ตั้งค่าระบบ")
+  let by = '';
+  if (senderId && senderId === directorUserId) by = 'ผู้อำนวยการ (ผ่านไลน์)';
+  else if (senderId && senderId === supplyHeadUserId) by = 'หัวหน้าเจ้าหน้าที่พัสดุ (ผ่านไลน์)';
+  if (!by) {
+    await reply((!directorUserId && !supplyHeadUserId)
+      ? '⚠️ ยังไม่ได้ตั้งค่า LINE ID ผู้อนุมัติการใช้รถในระบบ กรุณาแจ้งผู้ดูแลระบบให้ตั้งค่าในหน้า "ตั้งค่าระบบ" ก่อน'
+      : '⚠️ ขออภัย ปุ่มนี้ใช้ได้เฉพาะผู้อำนวยการและหัวหน้าเจ้าหน้าที่พัสดุเท่านั้น');
+    return;
+  }
+
+  const ref = db.doc(`vehicle/${vehicleId}`);
+  const snap = await ref.get();
+  if (!snap.exists) { await reply('ไม่พบคำขอใช้รถนี้ในระบบแล้ว (อาจถูกลบไปก่อนหน้านี้)'); return; }
+  const cur = snap.data();
+  if (cur.status !== 'รออนุมัติ') {
+    await reply(`คำขอนี้ถูกพิจารณาไปแล้วก่อนหน้านี้ (สถานะปัจจุบัน: ${cur.status}${cur.decidedBy ? ` โดย ${cur.decidedBy}` : ''})`);
+    return;
+  }
+  const newStatus = action === 'approve' ? 'อนุมัติ' : 'ไม่อนุมัติ';
+  // ฟิลด์เหมือนที่ปุ่มอนุมัติบนเว็บบันทึก (RegistryPage.jsx submitVehicleAction) — decidedAt เป็นวันที่ YYYY-MM-DD ตามเวลาไทย
+  await ref.update({ status: newStatus, decidedBy: by, decidedAt: bangkokDateStr() });
+  // การเขียนนี้จะไปสั่งให้ onVehicleUpdated ทำงานต่อ (ส่งผลพิจารณา + ลิงก์พิมพ์แบบ 3 เข้ากลุ่ม)
+  await reply(newStatus === 'อนุมัติ' ? `✅ อนุมัติการใช้รถของ ${cur.requester} เรียบร้อยแล้ว` : `❌ ไม่อนุมัติการใช้รถของ ${cur.requester} เรียบร้อยแล้ว`);
+}
+
+async function pushVehicleApprovalCard(id, v) {
+  const { channelAccessToken, vehicleTargetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !vehicleTargetId || !enabled || !events.vehicleSubmit) return;
+  await pushLine(channelAccessToken, vehicleTargetId, [buildVehicleApprovalFlex(id, v)]);
+}
+
+// คำขอใช้รถใหม่ที่ส่งเข้าสถานะ "รออนุมัติ" ทันที — ส่งการ์ดพร้อมปุ่มอนุมัติ/ไม่อนุมัติเข้าไลน์กลุ่มงานรถ
+exports.onVehicleCreated = onDocumentCreated('vehicle/{id}', async (event) => {
+  const v = event.data.data();
+  if (v.status !== 'รออนุมัติ') return;
+  await pushVehicleApprovalCard(event.params.id, v);
+});
+
+// สถานะเปลี่ยน: ฉบับร่าง -> รออนุมัติ (ส่งการ์ดขออนุมัติ) / อนุมัติ / ไม่อนุมัติ / ยกเลิก (แจ้งผลเข้ากลุ่ม ไม่ว่าจะเปลี่ยนจากเว็บหรือปุ่มในไลน์)
+exports.onVehicleUpdated = onDocumentUpdated('vehicle/{id}', async (event) => {
+  const id = event.params.id;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  if (before.status === after.status) return;
+  if (after.status === 'รออนุมัติ') { await pushVehicleApprovalCard(id, after); return; }
+  const { channelAccessToken, vehicleTargetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !vehicleTargetId || !enabled) return;
+
+  if (after.status === 'ยกเลิก') {
+    if (!events.cancel) return;
+    await sendLine(channelAccessToken, vehicleTargetId, `🚫 ยกเลิกคำขอใช้รถ\nผู้ขอ: ${after.requester}\nรถ: ${after.plate}\nวันที่: ${after.useDate}${after.decidedNote ? `\nเหตุผล: ${after.decidedNote}` : ''}`);
+    return;
+  }
+  if (after.status === 'อนุมัติ' || after.status === 'ไม่อนุมัติ') {
+    if (!events.vehicleDecide) return;
+    const icon = after.status === 'อนุมัติ' ? '✅' : '❌';
+    let text = `${icon} ผลการพิจารณาขออนุญาตใช้รถ\n${vehicleSummaryLines(after).join('\n')}\nผล: ${after.status}${after.decidedBy ? ` (โดย ${after.decidedBy})` : ''}${after.decidedNote ? `\nหมายเหตุ: ${after.decidedNote}` : ''}`;
+    if (after.status === 'อนุมัติ') text += `\n\n🖨️ พิมพ์แบบ 3 ขออนุญาตใช้รถ (เปิดแล้วกด "พิมพ์ / บันทึกเป็น PDF"):\n${printVehicleUrl(id)}`;
+    await sendLine(channelAccessToken, vehicleTargetId, text);
   }
 });
 

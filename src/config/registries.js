@@ -92,32 +92,58 @@ export const REGISTRIES = {
     statusField: 'status',
     doneStatus: 'เสร็จสิ้น',
     groupField: 'plate',
+    // สถานะทั้งชุดตามสเปกระบบขออนุญาตใช้ยานพาหนะราชการ (เฟส 2) — "ขออนุมัติ" คือค่าเดิมก่อนเวอร์ชัน 73 เก็บสีไว้ให้ยังแสดงผลถูกต้อง
+    // (ไม่ลบ/ย้ายข้อมูลเก่า) แต่รายการใหม่ใช้ "รออนุมัติ" แทน (คำเดียวกัน ความหมายเดียวกัน แค่เปลี่ยนคำ) "อนุมัติ"/"ไม่อนุมัติ"/"ยกเลิก" เปลี่ยนได้
+    // ผ่านปุ่มเฉพาะใน RegistryPage.jsx เท่านั้น (ไม่อยู่ในช้อยของช่องสถานะในฟอร์มแก้ไขทั่วไปด้านล่าง) เพื่อไม่ให้ผู้ไม่มีสิทธิ์กดอนุมัติเองได้
     statusColors: {
+      'ฉบับร่าง': 'bg-slate-200 text-slate-600',
       'ขออนุมัติ': 'bg-amber-100 text-amber-800',
-      'กำลังใช้งาน': 'bg-blue-100 text-blue-800',
+      'รออนุมัติ': 'bg-amber-100 text-amber-800',
+      'อนุมัติ': 'bg-blue-100 text-blue-800',
+      'ไม่อนุมัติ': 'bg-red-100 text-red-800',
+      'ยกเลิก': 'bg-slate-200 text-slate-500',
+      'กำลังใช้งาน': 'bg-sky-100 text-sky-800',
       'เสร็จสิ้น': 'bg-emerald-100 text-emerald-800',
     },
     fields: [
       { key: 'tripNo', label: 'เลขที่ใช้รถ', type: 'text', auto: true, list: true, search: true },
-      { key: 'useDate', label: 'วันที่ใช้รถ', type: 'date', required: true, list: true },
+      { key: 'useDate', label: 'วันที่ขอใช้รถ', type: 'date', required: true, list: true },
+      { key: 'useEndDate', label: 'ใช้รถถึงวันที่ (เว้นว่าง = วันเดียวกับวันที่ขอใช้รถ)', type: 'date' },
+      { key: 'wantDeparture', label: 'วันที่/เวลาที่ต้องการออกเดินทาง', type: 'text', required: true, list: true },
+      // เติมชื่อผู้ขอใช้รถเป็นผู้ที่กำลังล็อกอินอยู่ให้อัตโนมัติตอนเพิ่มรายการใหม่ (ดู openCreate ใน RegistryPage.jsx) แก้ไขเป็นคนอื่นได้ถ้าบันทึกแทนกัน
+      { key: 'requester', label: 'ชื่อผู้ขอใช้รถ', type: 'text', required: true, list: true, search: true },
+      { key: 'supervisor', label: 'ผู้ควบคุมการเดินทาง/ผู้รับผิดชอบภารกิจ', type: 'select-users' },
       // เดิมเป็นช่องพิมพ์ทะเบียนรถเอง เปลี่ยนเป็นช้อยเลือกประเภทรถ+ทะเบียนจากทะเบียนยานพาหนะกลาง (ตั้งค่าได้ที่หน้า "ตั้งค่าระบบ")
       // เพื่อลดการพิมพ์ผิด/ทะเบียนไม่ตรงกัน — คีย์ยังใช้ชื่อเดิม 'plate' ไว้ (ใช้เป็น groupField อยู่ด้วย) ข้อมูลเก่าที่เคยพิมพ์แบบอิสระไว้จะยังแสดงผลได้ตามปกติ
       // optionsFrom: 'vehicleFleet' ให้ RegistryPage.jsx ดึงช้อยจาก settings/vehicleFleet แบบสด (real-time) แทนรายการตายตัว
-      { key: 'plate', label: 'ประเภทรถ', type: 'select', required: true, list: true, search: true, optionsFrom: 'vehicleFleet' },
-      { key: 'purpose', label: 'ภารกิจ/จุดหมาย', type: 'textarea', required: true, list: true, search: true },
-      { key: 'requester', label: 'ผู้ขอใช้รถ', type: 'text', list: true, search: true },
+      { key: 'plate', label: 'ยานพาหนะที่ต้องการใช้ (ประเภทรถ)', type: 'select', required: true, list: true, search: true, optionsFrom: 'vehicleFleet' },
+      { key: 'driver', label: 'พนักงานขับรถ (ถ้ามี)', type: 'select-users', search: true },
+      { key: 'missionType', label: 'ภารกิจ/จุดหมาย (ติ๊กเลือกได้หลายข้อ)', type: 'multi-check', required: true, list: true, optionsFrom: 'vehicleMissionTypes' },
+      { key: 'origin', label: 'สถานที่ต้นทาง', type: 'text', default: 'รพ.สต.บ้านหนองสนม' },
+      { key: 'destination', label: 'สถานที่ปลายทาง', type: 'select-other', required: true, list: true, search: true, optionsFrom: 'vehicleDestinations' },
+      { key: 'village', label: 'หมู่บ้านและหมู่ที่ (ถ้ามี)', type: 'text' },
+      { key: 'companions', label: 'รายชื่อผู้ร่วมเดินทาง (ถ้ามี)', type: 'textarea' },
+      { key: 'purpose', label: 'เหตุผลในการขอใช้รถ', type: 'textarea', required: true, list: true, search: true },
+      { key: 'details', label: 'รายละเอียดเพิ่มเติม', type: 'textarea' },
       { key: 'unit', label: 'กลุ่มงาน', type: 'select', options: UNITS },
-      { key: 'driver', label: 'ผู้ขับรถ', type: 'text', search: true },
-      { key: 'timeOut', label: 'เวลาออก', type: 'text' },
-      { key: 'timeIn', label: 'เวลากลับ', type: 'text' },
-      { key: 'odoStart', label: 'เลขไมล์เริ่มต้น', type: 'text' },
-      { key: 'odoEnd', label: 'เลขไมล์สิ้นสุด', type: 'text' },
       { key: 'fuelCost', label: 'ค่าน้ำมัน (บาท)', type: 'text' },
-      { key: 'status', label: 'สถานะ', type: 'select', options: ['ขออนุมัติ', 'กำลังใช้งาน', 'เสร็จสิ้น'], default: 'ขออนุมัติ', list: true },
-      { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
+      // ช้อยในช่องสถานะทั่วไปนี้เหลือแค่ "ฉบับร่าง"/"รออนุมัติ" เท่านั้นโดยตั้งใจ — สถานะที่เหลือทั้งหมด (อนุมัติ/ไม่อนุมัติ/ยกเลิก/กำลังใช้งาน/เสร็จสิ้น)
+      // เปลี่ยนได้ผ่านปุ่มเฉพาะ (อนุมัติ/ไม่อนุมัติ/ยกเลิกคำขอ/เริ่มเดินทาง/สิ้นสุดการเดินทาง) เท่านั้น เพื่อบังคับให้ข้อมูลที่เกี่ยวข้อง (ผู้อนุมัติ/เลขไมล์ ฯลฯ) ถูกบันทึกไปด้วยเสมอ
+      { key: 'status', label: 'สถานะ', type: 'select', options: ['ฉบับร่าง', 'รออนุมัติ'], default: 'รออนุมัติ', list: true },
+      // ฟิลด์ auto ด้านล่างทั้งหมด ระบบกรอกให้เองผ่านปุ่มเฉพาะเท่านั้น (อนุมัติ/ไม่อนุมัติ/ยกเลิก/เริ่มเดินทาง/สิ้นสุดการเดินทาง) ไม่ได้อยู่ในฟอร์มเพิ่ม/แก้ไขทั่วไป
+      { key: 'decidedBy', label: 'ผู้อนุมัติ/ไม่อนุมัติ/ยกเลิก', type: 'text', auto: true },
+      { key: 'decidedAt', label: 'วันที่พิจารณา', type: 'date', auto: true },
+      { key: 'decidedNote', label: 'เหตุผล (กรณีไม่อนุมัติ/ยกเลิก)', type: 'textarea', auto: true },
+      { key: 'timeOut', label: 'วันและเวลาออกเดินทางจริง', type: 'text', auto: true },
+      { key: 'odoStart', label: 'เลขไมล์ก่อนเดินทาง', type: 'text', auto: true },
+      { key: 'timeIn', label: 'วันและเวลากลับถึงหน่วยงาน', type: 'text', auto: true },
+      { key: 'odoEnd', label: 'เลขไมล์เมื่อกลับ', type: 'text', auto: true },
+      { key: 'distance', label: 'ระยะทางรวม (กม.)', type: 'text', auto: true },
+      { key: 'tripResult', label: 'ผลการปฏิบัติงาน', type: 'textarea', auto: true },
+      { key: 'note', label: 'หมายเหตุหรือเหตุขัดข้อง', type: 'textarea' },
     ],
     reportColor: '4FA8E0',
-    reportColumns: ['tripNo', 'useDate', 'plate', 'driver', 'purpose', 'requester', 'status'],
+    reportColumns: ['tripNo', 'useDate', 'plate', 'driver', 'missionType', 'destination', 'purpose', 'requester', 'status'],
   },
   duty: {
     key: 'duty',

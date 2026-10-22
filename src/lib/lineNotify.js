@@ -10,7 +10,7 @@ import { db } from '../firebase';
 // ระบบนี้จึงเปลี่ยนมาใช้ LINE Messaging API แทน (ต้องมี LINE Official Account ของตัวเอง + Channel Access Token
 // และต้องรู้ Target ID ของกลุ่ม/ผู้ใช้ปลายทางที่จะส่งเข้าไป) — ดูขั้นตอนเตรียมทั้งหมดใน README หัวข้อ "แจ้งเตือนไลน์"
 // เหตุผลที่ต้องมี Cloud Function คั่นกลาง: LINE Messaging API ไม่อนุญาตให้เว็บเบราว์เซอร์เรียกตรง (ติด CORS)
-export const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true };
+export const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true, vehicleSubmit: true, vehicleDecide: true };
 
 export async function getLineMeta() {
   const s = await getDoc(doc(db, 'settings', 'lineNotifyMeta'));
@@ -23,18 +23,19 @@ export async function getLineMeta() {
 
 // บันทึก Channel Access Token และ/หรือ Target ID ใหม่ (ใช้ merge เพื่อแก้ทีละช่องได้ โดยไม่ต้องอ่านค่าเดิมกลับมาก่อน
 // เพราะกฎความปลอดภัยห้ามอ่านเอกสารนี้แม้แต่ Super Admin) — เว้นช่องไหนว่างไว้ = ไม่แตะค่าเดิมของช่องนั้น
-export async function saveLineCredentials({ channelAccessToken, targetId }) {
+export async function saveLineCredentials({ channelAccessToken, targetId, vehicleTargetId }) {
   const patch = { updatedAt: serverTimestamp() };
   if (channelAccessToken) patch.channelAccessToken = channelAccessToken;
   if (targetId) patch.targetId = targetId;
+  // ไลน์กลุ่มแยกสำหรับระบบขออนุญาตใช้รถ (การ์ดอนุมัติ/ผลพิจารณาของงานรถส่งเข้ากลุ่มนี้ ไม่ปนกับกลุ่มหลัก)
+  if (vehicleTargetId) patch.vehicleTargetId = vehicleTargetId;
   if (Object.keys(patch).length > 1) await setDoc(doc(db, 'settings', 'lineNotify'), patch, { merge: true });
 }
 
 // บันทึกสถานะเปิด/ปิด และเหตุการณ์ที่จะแจ้งเตือน (แก้ได้อิสระจาก Token/Target ID)
 export async function saveLineMeta({ enabled, events }) {
-  const s = await getDoc(doc(db, 'settings', 'lineNotifyMeta'));
-  const directorUserId = s.exists() ? s.data().directorUserId || '' : '';
-  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events }, directorUserId });
+  // merge:true เพื่อไม่ทับ directorUserId / supplyHeadUserId ที่ตั้งไว้แยกต่างหาก
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events } }, { merge: true });
 }
 
 // บันทึก LINE User ID ของ "ผู้อำนวยการ" — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ลับ อ่านได้ปกติ
@@ -52,4 +53,9 @@ export async function getLineWebhookLog() {
   return Object.entries(targets)
     .map(([id, v]) => ({ id, ...v }))
     .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+}
+
+// บันทึก LINE User ID ของ "หัวหน้าเจ้าหน้าที่พัสดุ" — ผู้อนุมัติการใช้รถทางไลน์ร่วมกับผู้อำนวยการ (ใครคนใดคนหนึ่งกดก็ได้)
+export async function saveLineSupplyHeadId(supplyHeadUserId) {
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { supplyHeadUserId }, { merge: true });
 }

@@ -25,7 +25,9 @@ export const normalizeRole = (role) => (role === 'super_admin' || role === 'pend
 export const ACCESS = {
   incoming: { read: ALL, write: ALL },
   outgoing: { read: ALL, write: ALL },
-  vehicle: { read: ALL, write: ALL },
+  // อนุมัติ/ไม่อนุมัติ/ยกเลิกคำขอใช้รถ จำกัดเฉพาะ Super Admin เท่านั้น (ระบบขออนุญาตใช้ยานพาหนะราชการ เฟส 2) — ผู้ใช้งานทั่วไปบันทึกคำขอได้ (write)
+  // แต่เปลี่ยนสถานะเป็น "อนุมัติ" เองไม่ได้ ต้องตรงกับ RegistryPage.jsx (canApproveVehicle) ที่ใช้ permission นี้
+  vehicle: { read: ALL, write: ALL, approve: ['super_admin'] },
   duty: { read: ALL, write: ALL },
   homevisit: { read: ALL, write: ALL },
   // ทำเนียบบุคลากร (ฐานข้อมูลบุคคล/ประวัติราชการ) — Super Admin เท่านั้นที่แก้ไขได้ ดูได้ทุกคน

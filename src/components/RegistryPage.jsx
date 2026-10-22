@@ -6,7 +6,7 @@ import { ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Pl
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
-import { canWrite } from '../lib/roles';
+import { can, canWrite } from '../lib/roles';
 import { diffFields, writeAudit } from '../lib/audit';
 import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, insertRegNumbered, parseRegNumber, formatNumber, getNumbering, ORG_DOC_CODE } from '../lib/numbering';
 import { exportCsv } from '../lib/exportFile';
@@ -17,13 +17,13 @@ import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } f
 import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
-import { vehicleLabel } from '../lib/vehicleConfig';
+import { VEHICLE_TYPES, vehicleLabel, asList, numberedText } from '../lib/vehicleConfig';
 
 const emptyForm = (cfg) => {
   const f = {};
   cfg.fields.forEach((x) => {
     if (x.auto) return;
-    f[x.key] = x.default ?? (x.key === cfg.dateField ? todayStr() : '');
+    f[x.key] = x.default ?? (x.type === 'multi-check' ? [] : x.key === cfg.dateField ? todayStr() : '');
   });
   return f;
 };
@@ -79,6 +79,78 @@ export default function RegistryPage({ cfg }) {
   // ฎีกาที่ไม่ได้ลงยอด "ภาษีหัก ณ ที่จ่าย" ไว้ (เว้นว่าง/เป็น 0) ถือว่าไม่มีภาษีต้องนำส่ง — แสดงสถานะ "ไม่มียอดหัก" สีเขียวแทน
   // และไม่ต้องมีปุ่มกด "ส่งสรรพากร" ให้กด (มีแต่ปุ่ม "ชำระเช็ค" เท่านั้น) ตามที่ ผอ. แจ้ง
   const hasNoTax = (it) => !(Number(it?.taxWithheld) > 0);
+  // ===== ทะเบียนควบคุมยานพาหนะ (ระบบขออนุญาตใช้ยานพาหนะราชการ เฟส 2): แยกสิทธิ์ผู้อนุมัติออกจากผู้บันทึกคำขออย่างชัดเจน =====
+  // อนุมัติ/ไม่อนุมัติ/ยกเลิก (โดยผู้มีอำนาจ) ทำผ่านปุ่มเฉพาะด้านล่างเท่านั้น (ไม่ใช่ช่องสถานะในฟอร์มแก้ไขทั่วไป ซึ่งไม่มีช้อย "อนุมัติ" ให้เลือกได้เอง)
+  // ผู้บันทึกคำขอเองยกเลิกคำขอของตัวเองได้เช่นกัน ถ้ายังไม่ถูกพิจารณา (เหมือนการยกเลิกใบลาของตัวเองในทะเบียนควบคุมวันลา)
+  const isVehicle = cfg.key === 'vehicle';
+  const canApproveVehicle = isVehicle && can(profile.role, 'vehicle', 'approve');
+  const canCancelVehicle = (it) => isVehicle && writable && (canApproveVehicle || it.requesterEmail === profile.email) && ['ฉบับร่าง', 'รออนุมัติ'].includes(it.status);
+  const [vehicleAction, setVehicleAction] = useState(null); // { item, kind: 'approve' | 'reject' | 'cancel' }
+  const [vehicleActionNote, setVehicleActionNote] = useState('');
+  const [vehicleActionSaving, setVehicleActionSaving] = useState(false);
+  const openVehicleAction = (it, kind) => { setVehicleActionNote(''); setVehicleAction({ item: it, kind }); };
+  const submitVehicleAction = async () => {
+    const { item, kind } = vehicleAction;
+    if (kind !== 'approve' && !vehicleActionNote.trim()) { say({ type: 'error', text: 'กรุณาระบุเหตุผล' }); return; }
+    const after = {
+      status: kind === 'approve' ? 'อนุมัติ' : kind === 'reject' ? 'ไม่อนุมัติ' : 'ยกเลิก',
+      decidedBy: profile.name || profile.email,
+      decidedAt: todayStr(),
+      decidedNote: kind === 'approve' ? '' : vehicleActionNote.trim(),
+    };
+    setVehicleActionSaving(true);
+    try {
+      await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
+      say({ type: 'ok', text: kind === 'approve' ? 'อนุมัติคำขอใช้รถแล้ว' : kind === 'reject' ? 'บันทึกไม่อนุมัติแล้ว' : 'ยกเลิกคำขอใช้รถแล้ว' });
+      setVehicleAction(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setVehicleActionSaving(false);
+    }
+  };
+  // เฟส 3: เริ่มเดินทาง / สิ้นสุดการเดินทาง — ทำได้เฉพาะคำขอที่ "อนุมัติ" แล้วเท่านั้น (ห้ามเริ่มเดินทางในรายการที่ยังไม่อนุมัติตามสเปก)
+  // ปุ่มจะหายไปหลังกดแล้ว (สถานะเปลี่ยนเป็นกำลังใช้งาน/เสร็จสิ้นทันที) จึงกันการกดบันทึกเที่ยวเดิมซ้ำโดยไม่ตั้งใจไปในตัว
+  // รถยนต์ราชการเท่านั้นที่บันทึกเลขไมล์ (รถจักรยานยนต์ซ่อนช่องนี้ตามสเปก — ตรวจจากคำว่า "รถยนต์ราชการ" ที่ขึ้นต้นข้อความช้อย "ประเภทรถ")
+  const isCarTrip = (it) => String(it?.plate || '').startsWith(VEHICLE_TYPES[0]);
+  const [tripModal, setTripModal] = useState(null); // { item, kind: 'start' | 'end' }
+  const [tripForm, setTripForm] = useState({});
+  const [tripSaving, setTripSaving] = useState(false);
+  const openTripStart = (it) => { setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}`, odoStart: it.odoStart || '' }); setTripModal({ item: it, kind: 'start' }); };
+  const openTripEnd = (it) => { setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, odoEnd: '', tripResult: '', note: it.note || '' }); setTripModal({ item: it, kind: 'end' }); };
+  const submitTrip = async () => {
+    const { item, kind } = tripModal;
+    let after;
+    if (kind === 'start') {
+      if (!String(tripForm.timeOut || '').trim()) { say({ type: 'error', text: 'กรุณากรอกวันและเวลาออกเดินทาง' }); return; }
+      if (isCarTrip(item) && !String(tripForm.odoStart || '').trim()) { say({ type: 'error', text: 'กรุณากรอกเลขไมล์ก่อนเดินทาง' }); return; }
+      after = { status: 'กำลังใช้งาน', timeOut: tripForm.timeOut.trim(), odoStart: isCarTrip(item) ? String(tripForm.odoStart).trim() : '' };
+    } else {
+      if (!String(tripForm.timeIn || '').trim()) { say({ type: 'error', text: 'กรุณากรอกวันและเวลากลับถึงหน่วยงาน' }); return; }
+      if (isCarTrip(item)) {
+        if (!String(tripForm.odoEnd || '').trim()) { say({ type: 'error', text: 'กรุณากรอกเลขไมล์เมื่อกลับ' }); return; }
+        if (Number(tripForm.odoEnd) < Number(item.odoStart || 0)) { say({ type: 'error', text: 'เลขไมล์เมื่อกลับต้องไม่น้อยกว่าเลขไมล์ก่อนเดินทาง' }); return; }
+      }
+      const distance = isCarTrip(item) && String(item.odoStart || '').trim() ? String(Number(tripForm.odoEnd) - Number(item.odoStart)) : '';
+      after = {
+        status: 'เสร็จสิ้น', timeIn: tripForm.timeIn.trim(),
+        odoEnd: isCarTrip(item) ? String(tripForm.odoEnd).trim() : '', distance,
+        tripResult: String(tripForm.tripResult || '').trim(), note: String(tripForm.note || '').trim(),
+      };
+    }
+    setTripSaving(true);
+    try {
+      await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
+      await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
+      say({ type: 'ok', text: kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : 'บันทึกสิ้นสุดการเดินทางแล้ว' });
+      setTripModal(null);
+    } catch (err) {
+      say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally {
+      setTripSaving(false);
+    }
+  };
   const [payAction, setPayAction] = useState(null); // { item, kind: 'cheque' | 'tax' } — รายการที่กำลังจะบันทึกการชำระ
   const [payActionDate, setPayActionDate] = useState('');
   const [payActionSaving, setPayActionSaving] = useState(false);
@@ -211,7 +283,7 @@ export default function RegistryPage({ cfg }) {
   const viewItem = items?.find((x) => x.id === viewId) || null;
   const listFields = cfg.fields.filter((f) => f.list);
 
-  const display = (f, v) => (f.type === 'date' ? fmtDate(v) : v || '-');
+  const display = (f, v) => (f.type === 'date' ? fmtDate(v) : f.type === 'multi-check' ? numberedText(v) || '-' : v || '-');
 
   // เลขที่หนังสือส่งหลัก (insertSeq = 0) ในปีงบประมาณนี้ ใหม่สุดก่อน สำหรับตัวเลือก "แทรกเลขที่ย้อนหลัง"
   const outgoingBases = useMemo(
@@ -274,11 +346,14 @@ export default function RegistryPage({ cfg }) {
 
   const openCreate = () => {
     setErrors({}); setInsertMode(false); setInsertBase(''); setGenInsertMode(false); setGenInsertBase(''); setJustCreated(null); setOtherOpen({}); setOtherActive({});
-    setForm({ values: emptyForm(cfg) });
+    const values = emptyForm(cfg);
+    // ทะเบียนควบคุมยานพาหนะ: เติมชื่อผู้ขอใช้รถเป็นผู้ที่กำลังล็อกอินอยู่ให้อัตโนมัติ (แก้ไขเป็นคนอื่นได้ถ้าบันทึกแทนกัน)
+    if (isVehicle) values.requester = profile.name || profile.email;
+    setForm({ values });
   };
   const openEdit = (it) => {
     const values = {};
-    cfg.fields.forEach((f) => { if (!f.auto) values[f.key] = it[f.key] ?? ''; });
+    cfg.fields.forEach((f) => { if (!f.auto) values[f.key] = f.type === 'multi-check' ? asList(it[f.key]) : (it[f.key] ?? ''); });
     setErrors({});
     setViewId(null);
     setOtherOpen({});
@@ -291,7 +366,7 @@ export default function RegistryPage({ cfg }) {
     cfg.fields.forEach((f) => {
       if (f.auto) return;
       if (!fieldVisible(f, values)) return; // ฟิลด์ที่ซ่อนอยู่ (showIf ไม่ตรงเงื่อนไข) ไม่ต้องตรวจ required
-      if (f.required && !String(values[f.key] || '').trim()) e[f.key] = `กรุณากรอก${f.label}`;
+      if (f.required && (f.type === 'multi-check' ? asList(values[f.key]).length === 0 : !String(values[f.key] || '').trim())) e[f.key] = `กรุณากรอก${f.label}`;
     });
     return e;
   };
@@ -319,6 +394,10 @@ export default function RegistryPage({ cfg }) {
     if (isDeeka && !form.id) {
       values.chequeStatus = 'ค้างจ่าย';
       values.taxStatus = 'ค้างส่ง';
+    }
+    // คำขอใช้รถใหม่: บันทึกอีเมลผู้ขอไว้ (ไม่ได้อยู่ในฟอร์มที่แก้ไขเองได้) ใช้เช็กสิทธิ์ "ยกเลิกคำขอของตัวเอง" ภายหลัง
+    if (isVehicle && !form.id) {
+      values.requesterEmail = profile.email;
     }
     const e = validate(values);
     setErrors(e);
@@ -624,7 +703,7 @@ export default function RegistryPage({ cfg }) {
   const exportRows = () =>
     filtered.map((it) => {
       const r = {};
-      cfg.fields.forEach((f) => { r[f.label] = f.type === 'date' ? fmtDate(it[f.key]).replace('-', '') : it[f.key] || ''; });
+      cfg.fields.forEach((f) => { r[f.label] = f.type === 'date' ? fmtDate(it[f.key]).replace('-', '') : f.type === 'multi-check' ? asList(it[f.key]).join(' | ') : it[f.key] || ''; });
       r['จำนวนไฟล์แนบ'] = (it.attachments || []).length;
       return r;
     });
@@ -674,6 +753,9 @@ export default function RegistryPage({ cfg }) {
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={openReportPdf} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> PDF</button>
             {writable && isStockLedger && (
               <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockIn}><Plus className="h-4 w-4" /> เพิ่มเล่มเข้าคลัง</button>
+            )}
+            {isVehicle && (
+              <Link to="/vehicle-report" className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25"><FileSpreadsheet className="h-4 w-4" /> รายงานผู้บริหาร</Link>
             )}
             {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> {cfg.addLabel || `เพิ่ม${cfg.noun}`}</button>}
           </div>
@@ -806,6 +888,7 @@ export default function RegistryPage({ cfg }) {
                     {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
                     {isLoan && <th className="px-3 py-2 text-center font-semibold">กำหนดส่งใช้ / การคืนเงินยืม</th>}
                     {isDeeka && <th className="px-3 py-2 text-center font-semibold">การชำระเช็ค / ส่งภาษีสรรพากร</th>}
+                    {isVehicle && <th className="px-3 py-2 text-center font-semibold">การอนุมัติ</th>}
                     <th className="px-3 py-2 text-center font-semibold">ไฟล์</th>
                   </tr>
                 </thead>
@@ -878,6 +961,36 @@ export default function RegistryPage({ cfg }) {
                                 </>
                               )}
                             </div>
+                          </div>
+                        </td>
+                      )}
+                      {isVehicle && (
+                        <td className="px-3 py-2 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col items-center gap-1">
+                            {it.decidedBy && ['อนุมัติ', 'ไม่อนุมัติ', 'ยกเลิก'].includes(it.status) && (
+                              <span className="text-xs text-slate-500">{it.status === 'อนุมัติ' ? 'อนุมัติโดย' : it.status === 'ไม่อนุมัติ' ? 'ไม่อนุมัติโดย' : 'ยกเลิกโดย'} {it.decidedBy} {fmtDate(it.decidedAt)}</span>
+                            )}
+                            <div className="flex flex-wrap justify-center gap-1">
+                              {canApproveVehicle && it.status === 'รออนุมัติ' && (
+                                <>
+                                  <button className="btn btn-outline !py-1 !px-2 text-xs text-emerald-700" onClick={() => openVehicleAction(it, 'approve')}>อนุมัติ</button>
+                                  <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openVehicleAction(it, 'reject')}>ไม่อนุมัติ</button>
+                                </>
+                              )}
+                              {canCancelVehicle(it) && (
+                                <button className="btn btn-outline !py-1 !px-2 text-xs text-slate-600" onClick={() => openVehicleAction(it, 'cancel')}>ยกเลิกคำขอ</button>
+                              )}
+                              <button className="btn btn-outline !py-1 !px-2 text-xs text-slate-700" title="พิมพ์แบบ 3 ขออนุญาตใช้รถ (PDF)" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-vehicle/${it.id}`, '_blank')}><Printer className="h-3.5 w-3.5" /> พิมพ์แบบ 3</button>
+                              {writable && it.status === 'อนุมัติ' && (
+                                <button className="btn btn-outline !py-1 !px-2 text-xs text-sky-700" onClick={() => openTripStart(it)}>เริ่มเดินทาง</button>
+                              )}
+                              {writable && it.status === 'กำลังใช้งาน' && (
+                                <button className="btn btn-outline !py-1 !px-2 text-xs text-emerald-700" onClick={() => openTripEnd(it)}>สิ้นสุดการเดินทาง</button>
+                              )}
+                            </div>
+                            {it.status === 'เสร็จสิ้น' && it.timeOut && (
+                              <span className="text-xs text-slate-500">{it.timeOut} → {it.timeIn}{it.distance && ` · ${it.distance} กม.`}</span>
+                            )}
                           </div>
                         </td>
                       )}
@@ -1013,6 +1126,25 @@ export default function RegistryPage({ cfg }) {
                 <label htmlFor={`f-${f.key}`} className="mb-1 block text-sm font-medium text-slate-600">{f.label}{f.required && <span className="text-red-600"> *</span>}</label>
                 {f.type === 'textarea' ? (
                   <textarea id={`f-${f.key}`} rows={3} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
+                ) : f.type === 'multi-check' ? (
+                  (() => {
+                    const opts = f.optionsFrom ? dynOptionLabels(f.optionsFrom) : f.options || [];
+                    const cur = asList(form.values[f.key]);
+                    // ค่าเก่าที่ไม่อยู่ในรายการช้อยปัจจุบันแล้ว (เช่น ถูกปิดใช้งาน) ยังโชว์ให้เห็นและติ๊กออกได้
+                    const all = [...opts, ...cur.filter((c) => !opts.includes(c))];
+                    const toggle = (o) => setForm({ ...form, values: { ...form.values, [f.key]: cur.includes(o) ? cur.filter((c) => c !== o) : all.filter((c) => c === o || cur.includes(c)) } });
+                    return (
+                      <div id={`f-${f.key}`} className="grid gap-1 rounded-lg border border-slate-200 p-2 sm:grid-cols-2">
+                        {all.map((o) => (
+                          <label key={o} className="flex items-start gap-2 rounded px-1 py-0.5 text-sm hover:bg-slate-50">
+                            <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={cur.includes(o)} onChange={() => toggle(o)} />
+                            <span>{o}</span>
+                          </label>
+                        ))}
+                        {all.length === 0 && <span className="text-sm text-slate-400">ยังไม่มีรายการ (เพิ่มได้ที่เมนูตั้งค่าระบบ)</span>}
+                      </div>
+                    );
+                  })()
                 ) : f.type === 'select' ? (
                   <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
                     <option value="">-- เลือก --</option>
@@ -1020,8 +1152,9 @@ export default function RegistryPage({ cfg }) {
                   </select>
                 ) : f.type === 'select-other' ? (
                   (() => {
+                    const opts = f.optionsFrom ? dynOptionLabels(f.optionsFrom) : f.options;
                     const raw = form.values[f.key] || '';
-                    const isFixed = f.options.includes(raw);
+                    const isFixed = opts.includes(raw);
                     // active = กำลังอยู่ในโหมด "อื่นๆ" — เก็บเป็น state แยกต่างหาก เพราะพอเลือก "อื่นๆ" ค่าฟิลด์จริงจะถูกเคลียร์เป็นค่าว่างทันที
                     // (ถ้าอิงจากค่าฟิลด์อย่างเดียว พอค่าว่าง ตัวเลือกจะเด้งกลับไปเป็น "-- เลือก --" ทุกครั้ง)
                     const active = otherActive[f.key] || (!isFixed && !!raw);
@@ -1044,7 +1177,7 @@ export default function RegistryPage({ cfg }) {
                           }}
                         >
                           <option value="">-- เลือก --</option>
-                          {f.options.map((o) => <option key={o}>{o}</option>)}
+                          {opts.map((o) => <option key={o}>{o}</option>)}
                           <option value="อื่นๆ">อื่นๆ (ระบุ)</option>
                         </select>
                         {active && !inputOpen && (
@@ -1111,6 +1244,24 @@ export default function RegistryPage({ cfg }) {
               )}
               {isDeeka && !hasNoTax(viewItem) && viewItem.taxStatus !== 'ส่งสรรพากรแล้ว' && (
                 <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'tax')}>ส่งภาษีสรรพากร</button>
+              )}
+              {canApproveVehicle && viewItem.status === 'รออนุมัติ' && (
+                <>
+                  <button className="btn btn-outline text-emerald-700" onClick={() => openVehicleAction(viewItem, 'approve')}>อนุมัติ</button>
+                  <button className="btn btn-outline text-red-700" onClick={() => openVehicleAction(viewItem, 'reject')}>ไม่อนุมัติ</button>
+                </>
+              )}
+              {isVehicle && (
+                <button className="btn btn-outline" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-vehicle/${viewItem.id}`, '_blank')}><Printer className="h-4 w-4" /> พิมพ์แบบ 3</button>
+              )}
+              {canCancelVehicle(viewItem) && (
+                <button className="btn btn-outline text-slate-600" onClick={() => openVehicleAction(viewItem, 'cancel')}>ยกเลิกคำขอ</button>
+              )}
+              {writable && viewItem.status === 'อนุมัติ' && (
+                <button className="btn btn-outline text-sky-700" onClick={() => openTripStart(viewItem)}>เริ่มเดินทาง</button>
+              )}
+              {writable && viewItem.status === 'กำลังใช้งาน' && (
+                <button className="btn btn-outline text-emerald-700" onClick={() => openTripEnd(viewItem)}>สิ้นสุดการเดินทาง</button>
               )}
               <button className="btn btn-primary" onClick={() => openEdit(viewItem)}><Pencil className="h-4 w-4" /> แก้ไข</button>
             </>
@@ -1223,6 +1374,88 @@ export default function RegistryPage({ cfg }) {
               <label className="mb-1 block text-sm font-medium text-slate-600">{payAction.kind === 'cheque' ? 'วันที่จ่ายเช็ค' : 'วันที่ส่งภาษีสรรพากร'}</label>
               <ThaiDateInput value={payActionDate} onChange={setPayActionDate} />
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนควบคุมยานพาหนะ: ป๊อปอัพอนุมัติ/ไม่อนุมัติ/ยกเลิกคำขอใช้รถ (ใช้ modal เดียวกันสลับข้อความตาม vehicleAction.kind) */}
+      {vehicleAction && (
+        <Modal
+          title={`${vehicleAction.kind === 'approve' ? 'อนุมัติคำขอใช้รถ' : vehicleAction.kind === 'reject' ? 'ไม่อนุมัติคำขอใช้รถ' : 'ยกเลิกคำขอใช้รถ'} — ${vehicleAction.item[cfg.numberField]}`}
+          onClose={() => !vehicleActionSaving && setVehicleAction(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={vehicleActionSaving} onClick={() => setVehicleAction(null)}>ปิด</button>
+              <button className={vehicleAction.kind === 'approve' ? 'btn btn-green' : 'btn btn-outline text-red-700'} disabled={vehicleActionSaving} onClick={submitVehicleAction}>
+                {vehicleActionSaving && <Loader2 className="h-4 w-4 animate-spin" />} ยืนยัน{vehicleAction.kind === 'approve' ? 'อนุมัติ' : vehicleAction.kind === 'reject' ? 'ไม่อนุมัติ' : 'ยกเลิกคำขอ'}
+              </button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <p className="text-sm text-slate-600">
+              ภารกิจ: {vehicleAction.item.purpose} · ผู้ขอใช้รถ: {vehicleAction.item.requester} · วันที่ใช้รถ: {fmtDate(vehicleAction.item.useDate)}
+            </p>
+            {vehicleAction.kind !== 'approve' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">เหตุผล{vehicleAction.kind === 'reject' ? 'ที่ไม่อนุมัติ' : 'ที่ยกเลิก'} <span className="text-red-600">*</span></label>
+                <textarea rows={3} className="input" value={vehicleActionNote} onChange={(e) => setVehicleActionNote(e.target.value)} autoFocus />
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* ทะเบียนควบคุมยานพาหนะ (เฟส 3): ป๊อปอัพเริ่มเดินทาง / สิ้นสุดการเดินทาง */}
+      {tripModal && (
+        <Modal
+          title={`${tripModal.kind === 'start' ? 'เริ่มเดินทาง' : 'สิ้นสุดการเดินทาง'} — ${tripModal.item[cfg.numberField]}`}
+          onClose={() => !tripSaving && setTripModal(null)}
+          footer={
+            <>
+              <button className="btn btn-outline" disabled={tripSaving} onClick={() => setTripModal(null)}>ยกเลิก</button>
+              <button className="btn btn-green" disabled={tripSaving} onClick={submitTrip}>{tripSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            {tripModal.kind === 'start' ? (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-600">วันและเวลาออกเดินทางจริง <span className="text-red-600">*</span></label>
+                  <input className="input" value={tripForm.timeOut || ''} onChange={(e) => setTripForm({ ...tripForm, timeOut: e.target.value })} autoFocus />
+                </div>
+                {isCarTrip(tripModal.item) && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-600">เลขไมล์ก่อนเดินทาง <span className="text-red-600">*</span></label>
+                    <input className="input" inputMode="numeric" value={tripForm.odoStart || ''} onChange={(e) => setTripForm({ ...tripForm, odoStart: e.target.value })} />
+                  </div>
+                )}
+                <p className="text-sm text-slate-500">ผู้ขับรถ: {tripModal.item.driver || '-'} · ยานพาหนะ: {tripModal.item.plate}</p>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-600">วันและเวลากลับถึงหน่วยงาน <span className="text-red-600">*</span></label>
+                  <input className="input" value={tripForm.timeIn || ''} onChange={(e) => setTripForm({ ...tripForm, timeIn: e.target.value })} autoFocus />
+                </div>
+                {isCarTrip(tripModal.item) && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-600">เลขไมล์เมื่อกลับ <span className="text-red-600">*</span></label>
+                    <input className="input" inputMode="numeric" value={tripForm.odoEnd || ''} onChange={(e) => setTripForm({ ...tripForm, odoEnd: e.target.value })} />
+                    <p className="mt-1 text-xs text-slate-400">เลขไมล์ก่อนเดินทาง: {tripModal.item.odoStart || '-'} — ระยะทางรวมคำนวณให้อัตโนมัติ</p>
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-600">ผลการปฏิบัติงาน</label>
+                  <textarea rows={2} className="input" value={tripForm.tripResult || ''} onChange={(e) => setTripForm({ ...tripForm, tripResult: e.target.value })} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-600">หมายเหตุหรือเหตุขัดข้อง</label>
+                  <textarea rows={2} className="input" value={tripForm.note || ''} onChange={(e) => setTripForm({ ...tripForm, note: e.target.value })} />
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}

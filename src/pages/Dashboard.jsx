@@ -35,7 +35,7 @@ const CARDS = [
   // ทางเข้าหน้ารวม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" (ฎีกาเบิกจ่าย/คำสั่ง/ประกาศ/สัญญายืมเงิน ฯลฯ) — ย้ายมาอันดับ 3 ถัดจากหนังสือส่งตามคำขอ เปิดได้ทุกบทบาท ไม่มีช่อง module จึงไม่ต้องตรวจสิทธิ์
   { key: 'registries', label: 'ทะเบียนประกอบฎีกาและทะเบียนต่างๆ', emoji: '📚', desc: 'ฎีกาเบิกจ่าย คำสั่ง ประกาศ สัญญายืมเงิน และอีก 5 ทะเบียน', icon: BookOpenCheck, path: '/registries', module: null, tone: 'from-mint-400 to-mint-600' },
   { key: 'leave', label: 'ทะเบียนควบคุมวันลา', emoji: '🗓️', desc: 'ยื่นใบลา อนุมัติ ตรวจสอบวันลาคงเหลือ', icon: CalendarDays, path: '/leave', module: 'leave', tone: 'from-cyan-500 to-brand-700' },
-  { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', desc: 'บันทึกการใช้รถ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle', tone: 'from-indigo-500 to-brand-800' },
+  { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', desc: 'ขออนุญาตใช้รถ อนุมัติ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle', tone: 'from-indigo-500 to-brand-800' },
 ];
 
 const ACTION = { create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', login: 'เข้าสู่ระบบ', export: 'ส่งออก', settings: 'ตั้งค่า' };

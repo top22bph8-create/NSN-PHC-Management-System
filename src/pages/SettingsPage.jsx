@@ -9,7 +9,7 @@ import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/leave';
 import ThaiDateInput from '../components/ThaiDateInput';
-import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
+import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta, saveLineSupplyHeadId } from '../lib/lineNotify';
 import {
   DEFAULT_DESTINATIONS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, VEHICLE_STATUSES, VEHICLE_TYPES,
   getDestinations, getMissionTypes, getVehicleFleet, vehicleLabel,
@@ -31,6 +31,7 @@ export default function SettingsPage() {
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
+  const [lineVehicleTargetId, setLineVehicleTargetId] = useState('');
   const [lineTargets, setLineTargets] = useState([]);
   const [lineTargetsError, setLineTargetsError] = useState('');
   const [error, setError] = useState('');
@@ -66,11 +67,12 @@ export default function SettingsPage() {
       await saveLineMeta(lineMeta);
       const tokenChanged = !!lineToken.trim();
       const targetChanged = !!lineTargetId.trim();
-      if (tokenChanged || targetChanged) {
-        await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim() });
-        setLineToken(''); setLineTargetId('');
+      const vehicleTargetChanged = !!lineVehicleTargetId.trim();
+      if (tokenChanged || targetChanged || vehicleTargetChanged) {
+        await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim() });
+        setLineToken(''); setLineTargetId(''); setLineVehicleTargetId('');
       }
-      await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged } });
+      await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged, vehicleTargetChanged } });
       const fleetV = (fleet || []).map((v, i) => ({ ...v, id: v.id || `v${Date.now()}_${i}` }));
       await setDoc(doc(db, 'settings', 'vehicleFleet'), { list: fleetV, updatedAt: serverTimestamp() });
       const missionV = missionTypes || [];
@@ -195,6 +197,19 @@ export default function SettingsPage() {
                   <span className="font-medium text-amber-700">ยังไม่ได้ตั้งค่า — ให้ผู้อำนวยการพิมพ์ข้อความคุยกับบอทแบบส่วนตัว (1:1) 1 ครั้ง แล้วกด "ตั้งเป็นผู้อำนวยการ" ที่รายการด้านล่าง</span>
                 )}
               </p>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineVehicleTargetId">Target ID ไลน์กลุ่ม "ขออนุญาตใช้รถ" (แยกจากกลุ่มหลักด้านบน)</label>
+                <input id="lineVehicleTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineVehicleTargetId} onChange={(e) => setLineVehicleTargetId(e.target.value)} />
+                <p className="mt-1 text-xs text-slate-500">คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการ และหัวหน้าเจ้าหน้าที่พัสดุที่ตั้งไว้ — ใครคนใดคนหนึ่งกดก็ได้) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง</p>
+              </div>
+              <p className="text-sm text-slate-600">
+                LINE หัวหน้าเจ้าหน้าที่พัสดุ (สำหรับปุ่มอนุมัติการใช้รถ):{' '}
+                {lineMeta.supplyHeadUserId ? (
+                  <span className="font-medium text-emerald-700">ตั้งค่าแล้ว ({lineMeta.supplyHeadUserId})</span>
+                ) : (
+                  <span className="font-medium text-amber-700">ยังไม่ได้ตั้งค่า — ให้หัวหน้าเจ้าหน้าที่พัสดุพิมพ์ข้อความคุยกับบอทแบบส่วนตัว (1:1) 1 ครั้ง แล้วกด "ตั้งเป็นหัวหน้าพัสดุ" ที่รายการด้านล่าง</span>
+                )}
+              </p>
               <div className="rounded-lg border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
                 {lineTargetsError ? (
@@ -218,17 +233,31 @@ export default function SettingsPage() {
                             {lineMeta.directorUserId && t.id === lineMeta.directorUserId && (
                               <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">ผู้อำนวยการ</span>
                             )}
+                            {lineMeta.supplyHeadUserId && t.id === lineMeta.supplyHeadUserId && (
+                              <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-800">หัวหน้าพัสดุ</span>
+                            )}
                           </div>
                           <div className="truncate text-xs text-slate-500">ข้อความล่าสุด: {t.lastMessage}</div>
                         </div>
                         <div className="flex shrink-0 gap-1.5">
                           <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้ Target ID นี้</button>
+                          {t.type !== 'รายบุคคล' && (
+                            <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineVehicleTargetId(t.id)}>ใช้เป็นกลุ่มงานรถ</button>
+                          )}
                           {t.type === 'รายบุคคล' && (
                             <button
                               type="button" className="btn btn-outline !py-1 text-xs"
                               onClick={async () => { await saveLineDirectorId(t.id); setLineMeta({ ...lineMeta, directorUserId: t.id }); say('ตั้งเป็นผู้อำนวยการแล้ว'); }}
                             >
                               ตั้งเป็นผู้อำนวยการ
+                            </button>
+                          )}
+                          {t.type === 'รายบุคคล' && (
+                            <button
+                              type="button" className="btn btn-outline !py-1 text-xs"
+                              onClick={async () => { await saveLineSupplyHeadId(t.id); setLineMeta({ ...lineMeta, supplyHeadUserId: t.id }); say('ตั้งเป็นหัวหน้าพัสดุแล้ว'); }}
+                            >
+                              ตั้งเป็นหัวหน้าพัสดุ
                             </button>
                           )}
                         </div>
@@ -250,6 +279,8 @@ export default function SettingsPage() {
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanOverdue} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanOverdue: e.target.checked } })} /> เงินยืมเกินกำหนดส่งใช้ (ทุกวัน 06:00 น.)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.birthday} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, birthday: e.target.checked } })} /> 🎉 วันเกิดบุคลากร (ทุกวัน 06:00 น.)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.taxOverdueReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, taxOverdueReminder: e.target.checked } })} /> ภาษีหัก ณ ที่จ่ายค้างส่งสรรพากร (แจ้งเวลา 08:30 น. ของวันก่อนสิ้นเดือน 3 วันทำการ)</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.vehicleSubmit} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, vehicleSubmit: e.target.checked } })} /> 🚗 เมื่อมีคำขอใช้รถใหม่ (กลุ่มงานรถ)</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.vehicleDecide} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, vehicleDecide: e.target.checked } })} /> 🚗 เมื่ออนุมัติ/ไม่อนุมัติการใช้รถ</label>
               </div>
             </div>
           </div>

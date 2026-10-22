@@ -72,3 +72,15 @@ export async function getDestinations() {
   const list = s.exists() && Array.isArray(s.data().list) ? s.data().list : DEFAULT_DESTINATIONS;
   return list;
 }
+
+// ภารกิจ (ประเภทภารกิจ) เลือกได้หลายข้อ เก็บเป็นอาร์เรย์ของข้อความ — รายการเก่าที่เคยเก็บเป็นข้อความเดี่ยวยังอ่านได้ปกติ (แปลงเป็นอาร์เรย์ 1 ช่อง)
+export const asList = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [String(v)] : []);
+// ข้อความสำหรับตาราง/Excel: คั่นด้วยเครื่องหมายจุลภาค
+export const listText = (v) => asList(v).join(', ');
+// ข้อความเรียงเป็นข้อๆ ขึ้นบรรทัดใหม่ สำหรับหน้ารายละเอียด/รายงาน (ข้อมูลน้อยกว่า 2 ข้อไม่ใส่เลขลำดับ)
+export const numberedText = (v) => {
+  const l = asList(v);
+  if (l.length === 0) return '';
+  if (l.length === 1) return l[0];
+  return l.map((x, i) => `${i + 1}. ${x}`).join('\n');
+};

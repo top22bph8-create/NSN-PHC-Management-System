@@ -12,6 +12,8 @@ import PrintReport from './pages/PrintReport';
 import PrintLeave from './pages/PrintLeave';
 import PrintLeaveReport from './pages/PrintLeaveReport';
 import PrintPersonnel from './pages/PrintPersonnel';
+import PrintVehicleReport from './pages/PrintVehicleReport';
+import PrintVehicle from './pages/PrintVehicle';
 import Dashboard from './pages/Dashboard';
 import GlobalSearch from './pages/GlobalSearch';
 import ComingSoon from './pages/ComingSoon';
@@ -20,6 +22,7 @@ import UserAccounts from './pages/UserAccounts';
 import Leave from './pages/Leave';
 import Assignments from './pages/Assignments';
 import RegistriesHub from './pages/RegistriesHub';
+import VehicleReport from './pages/VehicleReport';
 import Backup from './pages/Backup';
 import Account from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
@@ -110,6 +113,30 @@ function PrintLeaveReportGate() {
   );
 }
 
+// เกตหน้าพิมพ์รายงานผู้บริหาร (ระบบขออนุญาตใช้ยานพาหนะราชการ): ต้องล็อกอินและมีสิทธิ์อ่านโมดูลยานพาหนะก่อนจึงเห็นรายงาน
+function PrintVehicleReportGate() {
+  const { loading, user, profile, problem, error } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Login />;
+  if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (!canRead(profile.role, 'vehicle')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์เข้าถึงรายงานนี้</div>;
+  }
+  return <PrintVehicleReport />;
+}
+
+// เกตหน้าพิมพ์แบบ 3 ขออนุญาตใช้รถ: ต้องล็อกอินและมีสิทธิ์อ่านโมดูลยานพาหนะก่อนจึงเห็นแบบฟอร์ม
+function PrintVehicleGate() {
+  const { loading, user, profile, problem, error } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Login />;
+  if (problem || !profile) return <Blocked problem={problem} error={error} />;
+  if (!canRead(profile.role, 'vehicle')) {
+    return <div className="p-8 text-center text-slate-600">คุณไม่มีสิทธิ์เข้าถึงแบบฟอร์มนี้</div>;
+  }
+  return <PrintVehicle />;
+}
+
 // ป้องกันหน้า: ต้องล็อกอิน และมีสิทธิ์อ่านโมดูลนั้น
 function Guard({ module, children }) {
   const { profile } = useAuth();
@@ -139,6 +166,7 @@ function Shell() {
           <Route path="leave-reports" element={<Navigate to="/leave" replace />} />
           <Route path="assignments" element={<Guard module="assignments"><Assignments /></Guard>} />
           <Route path="registries" element={<RegistriesHub />} />
+          <Route path="vehicle-report" element={<Guard module="vehicle"><VehicleReport /></Guard>} />
           <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
           <Route path="account" element={<Account />} />
           <Route path="users" element={<Guard module="users"><UserAccounts /></Guard>} />
@@ -161,6 +189,8 @@ export default function App() {
           <Route path="/print-personnel" element={<PrintPersonnelGate />} />
           <Route path="/print-leave/:id" element={<PrintLeaveGate />} />
           <Route path="/print-leave-report/:kind" element={<PrintLeaveReportGate />} />
+          <Route path="/print-vehicle/:id" element={<PrintVehicleGate />} />
+          <Route path="/print-vehicle-report" element={<PrintVehicleReportGate />} />
           <Route path="/*" element={<Shell />} />
         </Routes>
       </AuthProvider>
