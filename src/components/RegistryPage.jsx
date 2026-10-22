@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { addDoc, collection, doc, deleteDoc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, doc, deleteDoc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import { ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Loader2, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { db, storage } from '../firebase';
@@ -17,7 +17,9 @@ import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } f
 import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
-import { VEHICLE_TYPES, vehicleLabel, asList, numberedText } from '../lib/vehicleConfig';
+import { VEHICLE_TYPES, vehicleLabel, asList, numberedText, groupMissions, normalizeMissionDoc, missionLines } from '../lib/vehicleConfig';
+import TimeKeypadInput from './TimeKeypadInput';
+import MissionGroupPicker from './MissionGroupPicker';
 
 const emptyForm = (cfg) => {
   const f = {};
@@ -117,8 +119,55 @@ export default function RegistryPage({ cfg }) {
   const [tripModal, setTripModal] = useState(null); // { item, kind: 'start' | 'end' }
   const [tripForm, setTripForm] = useState({});
   const [tripSaving, setTripSaving] = useState(false);
-  const openTripStart = (it) => { setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}`, odoStart: it.odoStart || '' }); setTripModal({ item: it, kind: 'start' }); };
-  const openTripEnd = (it) => { setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, odoEnd: '', tripResult: '', note: it.note || '' }); setTripModal({ item: it, kind: 'end' }); };
+  // เลขไมล์ครั้งก่อนของรถคันนี้: ค่ามากสุดของ "เลขไมล์เมื่อกลับ" จากเที่ยวที่เสร็จสิ้นแล้วทุกปีงบประมาณ ถ้ายังไม่เคยมีเที่ยวเสร็จสิ้น ใช้ "เลขไมล์เริ่มต้น" ที่ตั้งไว้ในหน้าตั้งค่าระบบ
+  // (คำนวณจากข้อมูลเที่ยว ไม่ต้องเขียนกลับไปที่หน้าตั้งค่า เพราะหน้านั้นแก้ได้เฉพาะ Super Admin)
+  const [tripPrev, setTripPrev] = useState(null); // { odo: number|null, source: string }
+  const loadPrevOdo = async (it) => {
+    setTripPrev(null);
+    if (!isCarTrip(it)) return null;
+    let best = null;
+    try {
+      const snap = await getDocs(query(collection(db, cfg.key), where('plate', '==', it.plate)));
+      snap.docs.forEach((d) => {
+        const x = d.data();
+        if (d.id === it.id || x.status !== 'เสร็จสิ้น' || String(x.odoEnd || '').trim() === '') return;
+        const n = Number(x.odoEnd);
+        if (!Number.isNaN(n) && (best === null || n > best)) best = n;
+      });
+    } catch { /* ใช้ค่าเริ่มต้นแทน */ }
+    if (best !== null) { setTripPrev({ odo: best, source: 'จากเที่ยวล่าสุดที่บันทึกไว้' }); return best; }
+    const fv = (dynOptions.vehicleFleet || []).find((v) => vehicleLabel(v) === it.plate);
+    const n = fv && String(fv.odometer || '').trim() !== '' ? Number(fv.odometer) : null;
+    setTripPrev({ odo: n, source: n !== null ? 'เลขไมล์เริ่มต้นที่ตั้งไว้ในตั้งค่าระบบ' : '' });
+    return n;
+  };
+  // วัน+เวลา ของเที่ยวจริงเก็บเป็นข้อความ "YYYY-MM-DD HH:MM" เหมือนเดิม แต่หน้าจอแยกเป็น ช่องวันที่ + แป้นกดเวลา
+  const splitDT = (str) => { const m = String(str || '').match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})/); return m ? { d: m[1], t: m[2].padStart(5, '0') } : { d: todayStr(), t: '' }; };
+  const joinDT = (d, t) => (d && t ? `${d} ${t}` : '');
+  const openTripStart = (it) => {
+    setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}`, odoStart: it.odoStart || '' });
+    setTripModal({ item: it, kind: 'start' });
+    loadPrevOdo(it).then((n) => { if (n !== null) setTripForm((f) => ({ ...f, odoStart: f.odoStart || String(n) })); });
+  };
+  const openTripEnd = (it) => {
+    setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, odoEnd: '', tripResult: '', note: it.note || '' });
+    setTripModal({ item: it, kind: 'end' });
+    loadPrevOdo(it);
+  };
+  // เปิดหน้าลงเลขไมล์จากป๊อปอัพเตือน (?trip=รหัส&kind=start|end) — ดึงเอกสารตรงๆ เพราะเที่ยวอาจอยู่คนละปีงบประมาณกับที่เปิดดูอยู่
+  useEffect(() => {
+    const id = params.get('trip');
+    const kind = params.get('kind');
+    if (!isVehicle || !id) return;
+    params.delete('trip'); params.delete('kind');
+    setParams(params, { replace: true });
+    getDoc(doc(db, cfg.key, id)).then((s) => {
+      if (!s.exists()) return;
+      const it = { id: s.id, ...s.data() };
+      if (kind === 'end' && it.status === 'กำลังใช้งาน') openTripEnd(it);
+      else if (kind === 'start' && it.status === 'อนุมัติ') openTripStart(it);
+    }).catch(() => {});
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const submitTrip = async () => {
     const { item, kind } = tripModal;
     let after;
@@ -143,7 +192,7 @@ export default function RegistryPage({ cfg }) {
     try {
       await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
       await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
-      say({ type: 'ok', text: kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : 'บันทึกสิ้นสุดการเดินทางแล้ว' });
+      say({ type: 'ok', text: kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : `บันทึกสิ้นสุดการเดินทางแล้ว${after.distance ? ` — ระยะทางครั้งนี้ ${Number(after.distance).toLocaleString('th-TH')} กม.` : ''}` });
       setTripModal(null);
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
@@ -186,10 +235,11 @@ export default function RegistryPage({ cfg }) {
   useEffect(() => {
     const unsubs = dynOptionsKeys.map((key) => onSnapshot(doc(db, 'settings', key),
       (s) => {
-        const list = s.exists() && Array.isArray(s.data().list) ? s.data().list : [];
+        // ภารกิจ: รายการที่เคยบันทึกไว้ก่อนมีหมวด (ไม่มี version) ใช้รายการมาตรฐานใหม่แทน (ดู normalizeMissionDoc)
+        const list = key === 'vehicleMissionTypes' ? normalizeMissionDoc(s.exists() ? s.data() : null) : (s.exists() && Array.isArray(s.data().list) ? s.data().list : []);
         setDynOptions((prev) => ({ ...prev, [key]: list }));
       },
-      () => setDynOptions((prev) => ({ ...prev, [key]: [] }))));
+      () => setDynOptions((prev) => ({ ...prev, [key]: key === 'vehicleMissionTypes' ? normalizeMissionDoc(null) : [] }))));
     return () => unsubs.forEach((u) => u());
   }, [dynOptionsKeys.join(',')]);
 
@@ -283,7 +333,7 @@ export default function RegistryPage({ cfg }) {
   const viewItem = items?.find((x) => x.id === viewId) || null;
   const listFields = cfg.fields.filter((f) => f.list);
 
-  const display = (f, v) => (f.type === 'date' ? fmtDate(v) : f.type === 'multi-check' ? numberedText(v) || '-' : v || '-');
+  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : v || '-');
 
   // เลขที่หนังสือส่งหลัก (insertSeq = 0) ในปีงบประมาณนี้ ใหม่สุดก่อน สำหรับตัวเลือก "แทรกเลขที่ย้อนหลัง"
   const outgoingBases = useMemo(
@@ -398,6 +448,11 @@ export default function RegistryPage({ cfg }) {
     // คำขอใช้รถใหม่: บันทึกอีเมลผู้ขอไว้ (ไม่ได้อยู่ในฟอร์มที่แก้ไขเองได้) ใช้เช็กสิทธิ์ "ยกเลิกคำขอของตัวเอง" ภายหลัง
     if (isVehicle && !form.id) {
       values.requesterEmail = profile.email;
+    }
+    // ตำแหน่งของผู้ขอใช้รถ (ที่เลือกจากรายชื่อเจ้าหน้าที่) — เก็บติดไปกับคำขอ เพื่อใช้ออกรายงาน/แบบ 3 โดยไม่ต้องไปค้นทำเนียบทุกครั้ง
+    if (isVehicle) {
+      const who = (people || []).find((p) => p.name === values.requester);
+      if (who) values.requesterPosition = who.position || '';
     }
     const e = validate(values);
     setErrors(e);
@@ -703,7 +758,7 @@ export default function RegistryPage({ cfg }) {
   const exportRows = () =>
     filtered.map((it) => {
       const r = {};
-      cfg.fields.forEach((f) => { r[f.label] = f.type === 'date' ? fmtDate(it[f.key]).replace('-', '') : f.type === 'multi-check' ? asList(it[f.key]).join(' | ') : it[f.key] || ''; });
+      cfg.fields.forEach((f) => { r[f.label] = f.type === 'date' ? fmtDate(it[f.key]).replace('-', '') : f.type === 'multi-check' ? missionLines(it).join(' | ') : it[f.key] || ''; });
       r['จำนวนไฟล์แนบ'] = (it.attachments || []).length;
       return r;
     });
@@ -911,7 +966,7 @@ export default function RegistryPage({ cfg }) {
                               )
                             )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
-                            : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key])}</span>}
+                            : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key], it)}</span>}
                         </td>
                       ))}
                       {isLoan && (
@@ -979,6 +1034,12 @@ export default function RegistryPage({ cfg }) {
                               )}
                               {canCancelVehicle(it) && (
                                 <button className="btn btn-outline !py-1 !px-2 text-xs text-slate-600" onClick={() => openVehicleAction(it, 'cancel')}>ยกเลิกคำขอ</button>
+                              )}
+                              {writable && (
+                                <>
+                                  <button className="btn btn-outline !py-1 !px-2 text-xs text-brand-700" onClick={() => openEdit(it)}><Pencil className="h-3.5 w-3.5" /> แก้ไข</button>
+                                  <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => setToDelete(it)}><Trash2 className="h-3.5 w-3.5" /> ลบ</button>
+                                </>
                               )}
                               <button className="btn btn-outline !py-1 !px-2 text-xs text-slate-700" title="พิมพ์แบบ 3 ขออนุญาตใช้รถ (PDF)" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-vehicle/${it.id}`, '_blank')}><Printer className="h-3.5 w-3.5" /> พิมพ์แบบ 3</button>
                               {writable && it.status === 'อนุมัติ' && (
@@ -1127,24 +1188,9 @@ export default function RegistryPage({ cfg }) {
                 {f.type === 'textarea' ? (
                   <textarea id={`f-${f.key}`} rows={3} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
                 ) : f.type === 'multi-check' ? (
-                  (() => {
-                    const opts = f.optionsFrom ? dynOptionLabels(f.optionsFrom) : f.options || [];
-                    const cur = asList(form.values[f.key]);
-                    // ค่าเก่าที่ไม่อยู่ในรายการช้อยปัจจุบันแล้ว (เช่น ถูกปิดใช้งาน) ยังโชว์ให้เห็นและติ๊กออกได้
-                    const all = [...opts, ...cur.filter((c) => !opts.includes(c))];
-                    const toggle = (o) => setForm({ ...form, values: { ...form.values, [f.key]: cur.includes(o) ? cur.filter((c) => c !== o) : all.filter((c) => c === o || cur.includes(c)) } });
-                    return (
-                      <div id={`f-${f.key}`} className="grid gap-1 rounded-lg border border-slate-200 p-2 sm:grid-cols-2">
-                        {all.map((o) => (
-                          <label key={o} className="flex items-start gap-2 rounded px-1 py-0.5 text-sm hover:bg-slate-50">
-                            <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={cur.includes(o)} onChange={() => toggle(o)} />
-                            <span>{o}</span>
-                          </label>
-                        ))}
-                        {all.length === 0 && <span className="text-sm text-slate-400">ยังไม่มีรายการ (เพิ่มได้ที่เมนูตั้งค่าระบบ)</span>}
-                      </div>
-                    );
-                  })()
+                  <MissionGroupPicker id={`f-${f.key}`} groups={groupMissions(dynOptions[f.optionsFrom] || [])} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
+                ) : f.type === 'time' ? (
+                  <TimeKeypadInput id={`f-${f.key}`} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
                 ) : f.type === 'select' ? (
                   <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
                     <option value="">-- เลือก --</option>
@@ -1198,7 +1244,7 @@ export default function RegistryPage({ cfg }) {
                   <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
                     <option value="">-- เลือก{f.label} --</option>
                     {f.pinnedOption && <option value={f.pinnedOption}>{f.pinnedOption}</option>}
-                    {people.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}
+                    {people.map((p) => <option key={p.email} value={p.name}>{p.name}{p.position && !f.hidePosition ? ` (${p.position})` : ''}</option>)}
                   </select>
                 ) : f.type === 'date' ? (
                   <ThaiDateInput id={`f-${f.key}`} required={f.required} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
@@ -1275,7 +1321,7 @@ export default function RegistryPage({ cfg }) {
                   {f.key === cfg.statusField ? (
                     isLoanOverdue(viewItem) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[viewItem[f.key]]}>{viewItem[f.key]}</Badge>
                   ) : isDeeka && f.key === 'taxStatus' && hasNoTax(viewItem) ? 'ไม่มียอดหัก'
-                  : display(f, viewItem[f.key])}
+                  : display(f, viewItem[f.key], viewItem)}
                 </dd>
               </div>
             ))}
@@ -1394,7 +1440,7 @@ export default function RegistryPage({ cfg }) {
         >
           <div className="grid gap-4">
             <p className="text-sm text-slate-600">
-              ภารกิจ: {vehicleAction.item.purpose} · ผู้ขอใช้รถ: {vehicleAction.item.requester} · วันที่ใช้รถ: {fmtDate(vehicleAction.item.useDate)}
+              ภารกิจ: {missionLines(vehicleAction.item).join(', ') || '-'} · ผู้ขอใช้รถ: {vehicleAction.item.requester} · วันที่ใช้รถ: {fmtDate(vehicleAction.item.useDate)}
             </p>
             {vehicleAction.kind !== 'approve' && (
               <div>
@@ -1423,12 +1469,22 @@ export default function RegistryPage({ cfg }) {
               <>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">วันและเวลาออกเดินทางจริง <span className="text-red-600">*</span></label>
-                  <input className="input" value={tripForm.timeOut || ''} onChange={(e) => setTripForm({ ...tripForm, timeOut: e.target.value })} autoFocus />
+                  <div className="grid grid-cols-2 gap-2">
+                    <ThaiDateInput value={splitDT(tripForm.timeOut).d} onChange={(d) => setTripForm({ ...tripForm, timeOut: joinDT(d, splitDT(tripForm.timeOut).t) })} />
+                    <TimeKeypadInput value={splitDT(tripForm.timeOut).t} onChange={(t) => setTripForm({ ...tripForm, timeOut: joinDT(splitDT(tripForm.timeOut).d, t) })} />
+                  </div>
                 </div>
                 {isCarTrip(tripModal.item) && (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-600">เลขไมล์ก่อนเดินทาง <span className="text-red-600">*</span></label>
-                    <input className="input" inputMode="numeric" value={tripForm.odoStart || ''} onChange={(e) => setTripForm({ ...tripForm, odoStart: e.target.value })} />
+                    <input className="input" inputMode="numeric" value={tripForm.odoStart || ''} onChange={(e) => setTripForm({ ...tripForm, odoStart: e.target.value.replace(/\D/g, '') })} />
+                    <p className="mt-1 text-sm text-slate-600">
+                      เลขไมล์ครั้งก่อน: <b>{tripPrev?.odo != null ? `${tripPrev.odo.toLocaleString('th-TH')} กม.` : 'ยังไม่มีข้อมูล (ตั้งเลขไมล์เริ่มต้นได้ที่เมนูตั้งค่าระบบ)'}</b>
+                      {tripPrev?.source && <span className="text-xs text-slate-400"> ({tripPrev.source})</span>}
+                    </p>
+                    {tripPrev?.odo != null && tripForm.odoStart !== '' && Number(tripForm.odoStart) < tripPrev.odo && (
+                      <p className="mt-1 text-sm font-medium text-amber-700">⚠️ เลขไมล์ที่กรอกต่ำกว่าเลขไมล์ครั้งก่อน กรุณาตรวจสอบ</p>
+                    )}
                   </div>
                 )}
                 <p className="text-sm text-slate-500">ผู้ขับรถ: {tripModal.item.driver || '-'} · ยานพาหนะ: {tripModal.item.plate}</p>
@@ -1437,13 +1493,24 @@ export default function RegistryPage({ cfg }) {
               <>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">วันและเวลากลับถึงหน่วยงาน <span className="text-red-600">*</span></label>
-                  <input className="input" value={tripForm.timeIn || ''} onChange={(e) => setTripForm({ ...tripForm, timeIn: e.target.value })} autoFocus />
+                  <div className="grid grid-cols-2 gap-2">
+                    <ThaiDateInput value={splitDT(tripForm.timeIn).d} onChange={(d) => setTripForm({ ...tripForm, timeIn: joinDT(d, splitDT(tripForm.timeIn).t) })} />
+                    <TimeKeypadInput value={splitDT(tripForm.timeIn).t} onChange={(t) => setTripForm({ ...tripForm, timeIn: joinDT(splitDT(tripForm.timeIn).d, t) })} />
+                  </div>
                 </div>
                 {isCarTrip(tripModal.item) && (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-600">เลขไมล์เมื่อกลับ <span className="text-red-600">*</span></label>
-                    <input className="input" inputMode="numeric" value={tripForm.odoEnd || ''} onChange={(e) => setTripForm({ ...tripForm, odoEnd: e.target.value })} />
-                    <p className="mt-1 text-xs text-slate-400">เลขไมล์ก่อนเดินทาง: {tripModal.item.odoStart || '-'} — ระยะทางรวมคำนวณให้อัตโนมัติ</p>
+                    <input className="input" inputMode="numeric" value={tripForm.odoEnd || ''} onChange={(e) => setTripForm({ ...tripForm, odoEnd: e.target.value.replace(/\D/g, '') })} />
+                    <div className="mt-2 rounded-xl bg-slate-50 p-2 text-sm text-slate-700">
+                      <div>เลขไมล์ครั้งก่อน: <b>{tripPrev?.odo != null ? `${tripPrev.odo.toLocaleString('th-TH')} กม.` : '-'}</b></div>
+                      <div>เลขไมล์ก่อนเดินทางครั้งนี้: <b>{tripModal.item.odoStart ? `${Number(tripModal.item.odoStart).toLocaleString('th-TH')} กม.` : '-'}</b></div>
+                      {String(tripForm.odoEnd || '') !== '' && tripModal.item.odoStart && (
+                        Number(tripForm.odoEnd) >= Number(tripModal.item.odoStart)
+                          ? <div className="mt-1 text-base font-bold text-emerald-700">ระยะทางครั้งนี้: {(Number(tripForm.odoEnd) - Number(tripModal.item.odoStart)).toLocaleString('th-TH')} กม.</div>
+                          : <div className="mt-1 font-medium text-red-600">เลขไมล์เมื่อกลับต้องไม่น้อยกว่าเลขไมล์ก่อนเดินทาง</div>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div>

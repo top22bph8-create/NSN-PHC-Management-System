@@ -4,7 +4,8 @@ import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
 import { fmtDate } from '../lib/thai';
-import { asList, numberedText } from '../lib/vehicleConfig';
+import { asList, missionLines, numberedText, getVehicleFleet } from '../lib/vehicleConfig';
+import { fetchAllCompletedTrips, mileageSummary } from '../lib/vehicleMileage';
 import { ORG_SHORT, ORG_UNDER } from '../config/brand';
 import Logo from '../components/Logo';
 
@@ -19,6 +20,12 @@ export default function PrintVehicleReport() {
   const missionType = params.get('missionType') || '';
   const driver = params.get('driver') || '';
   const [rows, setRows] = useState(null);
+  const [fleet, setFleet] = useState([]);
+  const [allDone, setAllDone] = useState(null);
+  useEffect(() => {
+    getVehicleFleet().then(setFleet).catch(() => setFleet([]));
+    fetchAllCompletedTrips().then(setAllDone).catch(() => setAllDone([]));
+  }, []);
 
   useEffect(() => {
     if (!from || !to) return;
@@ -32,6 +39,8 @@ export default function PrintVehicleReport() {
     && (!missionType || asList(r.missionType).includes(missionType))
     && (!driver || r.driver === driver)), [rows, plate, missionType, driver]);
 
+  const mileage = useMemo(() => mileageSummary(fleet, allDone || [], filtered), [fleet, allDone, filtered]);
+
   const stats = useMemo(() => {
     const travelled = filtered.filter((r) => ['กำลังใช้งาน', 'เสร็จสิ้น'].includes(r.status));
     const distanceEntries = filtered.filter((r) => r.status === 'เสร็จสิ้น' && String(r.distance || '').trim() !== '');
@@ -42,8 +51,8 @@ export default function PrintVehicleReport() {
   }, [filtered]);
 
   useEffect(() => {
-    if (rows) setTimeout(() => window.print(), 400);
-  }, [rows]);
+    if (rows && allDone) setTimeout(() => window.print(), 400);
+  }, [rows, allDone]);
 
   const color = `#${cfg.reportColor || '4FA8E0'}`;
 
@@ -75,17 +84,32 @@ export default function PrintVehicleReport() {
           </div>
           <p className="mb-2 text-xs text-slate-400">* ระยะทางรวมคำนวณจากเลขไมล์จริงของเที่ยวที่บันทึก "เสร็จสิ้น" แล้วเท่านั้น ({stats.distanceEntries.length} เที่ยว) ไม่มีตัวเลขประมาณการปนอยู่</p>
 
+          {mileage.length > 0 && (
+            <table className="mb-3 w-full border-collapse text-sm">
+              <thead><tr>{['ยานพาหนะ (รถยนต์)', 'เลขไมล์เริ่มต้น', 'เลขไมล์ล่าสุด', 'จำนวนเที่ยว', 'ระยะทางรวม (กม.)'].map((l) => (
+                <th key={l} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{l}</th>))}</tr></thead>
+              <tbody>{mileage.map((m) => (
+                <tr key={m.label}>
+                  <td className="border border-slate-300 px-2 py-1">{m.label}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-center">{m.base != null ? m.base.toLocaleString('th-TH') : '-'}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-center font-semibold">{m.latest != null ? m.latest.toLocaleString('th-TH') : '-'}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-center">{m.trips}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-center">{m.distance ? m.distance.toLocaleString('th-TH') : '-'}</td>
+                </tr>))}</tbody>
+            </table>
+          )}
+
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                {['เลขที่', 'วันที่', 'ผู้ขอใช้รถ', 'ยานพาหนะ', 'ผู้ขับรถ', 'ภารกิจ', 'ปลายทาง', 'สถานะ', 'ระยะทาง (กม.)'].map((l) => (
+                {['เลขที่', 'วันที่', 'ผู้ขอใช้รถ', 'ยานพาหนะ', 'ผู้ขับรถ', 'ภารกิจ', 'ปลายทาง', 'สถานะ', 'ออก–กลับจริง', 'เลขไมล์ ก่อน→กลับ', 'ระยะทาง (กม.)'].map((l) => (
                   <th key={l} className="border border-slate-400 px-2 py-1.5 font-semibold" style={{ background: '#e8f4fc' }}>{l}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="border border-slate-400 p-4 text-center text-slate-400">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td></tr>
+                <tr><td colSpan={11} className="border border-slate-400 p-4 text-center text-slate-400">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id}>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.tripNo}</td>
@@ -93,9 +117,11 @@ export default function PrintVehicleReport() {
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.requester}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.plate}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.driver || '-'}</td>
-                  <td className="whitespace-pre-line border border-slate-300 px-2 py-1 align-top">{numberedText(r.missionType) || '-'}</td>
+                  <td className="whitespace-pre-line border border-slate-300 px-2 py-1 align-top">{numberedText(missionLines(r)) || '-'}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.destination || '-'}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.status}</td>
+                  <td className="border border-slate-300 px-2 py-1 align-top">{r.timeOut ? `${r.timeOut} → ${r.timeIn || '-'}` : '-'}</td>
+                  <td className="border border-slate-300 px-2 py-1 align-top">{r.odoStart ? `${r.odoStart} → ${r.odoEnd || '-'}` : '-'}</td>
                   <td className="border border-slate-300 px-2 py-1 align-top">{r.distance || '-'}</td>
                 </tr>
               ))}

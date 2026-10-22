@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { thMonths } from '../lib/thai';
-import { VEHICLE_TYPES, asList } from '../lib/vehicleConfig';
+import { VEHICLE_TYPES, missionLines } from '../lib/vehicleConfig';
 import thSarabunRegular from '../assets/fonts/THSarabunIT9-Regular.ttf';
 import thSarabunItalic from '../assets/fonts/THSarabunIT9-Italic.ttf';
 import thSarabunBoldItalic from '../assets/fonts/THSarabunIT9-BoldItalic.ttf';
@@ -82,7 +82,9 @@ export default function PrintVehicle() {
         if (!s.exists()) { setV(null); return; }
         const data = { id: s.id, ...s.data() };
         // ตำแหน่งผู้ขอ: ดึงจากทำเนียบบุคลากรตามอีเมลที่บันทึกไว้ตอนยื่นคำขอ (ถ้าหาไม่เจอเว้นเป็นเส้นประให้เขียนเอง)
-        if (data.requesterEmail) {
+        // ตำแหน่งผู้ขอ: ใช้ที่เก็บไว้กับคำขอ (ตอนเลือกชื่อ) ก่อน ถ้าไม่มี (คำขอเก่า) ค่อยค้นจากทำเนียบตามอีเมล
+        if (data.requesterPosition) setPosition(data.requesterPosition);
+        else if (data.requesterEmail) {
           try {
             const u = await getDoc(doc(db, 'users', String(data.requesterEmail).toLowerCase()));
             if (u.exists()) setPosition(u.data().position || '');
@@ -101,10 +103,10 @@ export default function PrintVehicle() {
   if (v === null) return <div className="p-8 text-center text-slate-600">ไม่พบคำขอใช้รถนี้ หรือไม่มีสิทธิ์เข้าถึง</div>;
 
   const { isCar, name: carName, plate } = parsePlate(v.plate);
-  const missions = asList(v.missionType);
+  const missions = missionLines(v);
   const requestIso = tsToIso(v.createdAt) || v.useDate;
   const fromIso = v.useDate;
-  const toIso = v.useEndDate || v.useDate;
+  const toIso = v.useDate;
   const approved = ['อนุมัติ', 'กำลังใช้งาน', 'เสร็จสิ้น'].includes(v.status);
   const vehicleWord = isCar ? 'รถยนต์' : 'รถจักรยานยนต์';
 

@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { Download, FileSpreadsheet, Printer } from 'lucide-react';
 import { db } from '../firebase';
-import { asList, getDestinations, getMissionTypes, getVehicleFleet, listText, numberedText, vehicleLabel } from '../lib/vehicleConfig';
+import { asList, getDestinations, getMissionTypes, getVehicleFleet, listText, numberedText, missionLines, vehicleLabel } from '../lib/vehicleConfig';
 import { exportXlsx } from '../lib/exportFile';
 import { fmtDate, todayStr } from '../lib/thai';
 import { Badge, EmptyState, ErrorState, Spinner } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { REGISTRIES } from '../config/registries';
+import { fetchAllCompletedTrips, mileageSummary } from '../lib/vehicleMileage';
 
 const addDaysStr = (dateStr, days) => {
   const d = new Date(`${dateStr}T00:00:00`);
@@ -32,7 +33,9 @@ export default function VehicleReport() {
 
   useEffect(() => { getVehicleFleet().then(setFleet).catch(() => setFleet([])); }, []);
   useEffect(() => { getMissionTypes().then(setMissionTypes).catch(() => setMissionTypes([])); }, []);
+  const [allDone, setAllDone] = useState([]);
   useEffect(() => { getDestinations().catch(() => {}); }, []);
+  useEffect(() => { fetchAllCompletedTrips().then(setAllDone).catch(() => setAllDone([])); }, []);
 
   useEffect(() => {
     if (!from || !to) return;
@@ -50,6 +53,8 @@ export default function VehicleReport() {
     (!plateFilter || r.plate === plateFilter)
     && (!missionFilter || asList(r.missionType).includes(missionFilter))
     && (!driverFilter || r.driver === driverFilter)), [rows, plateFilter, missionFilter, driverFilter]);
+
+  const mileage = useMemo(() => mileageSummary(fleet, allDone, filtered), [fleet, allDone, filtered]);
 
   const stats = useMemo(() => {
     const totalRequests = filtered.length;
@@ -83,11 +88,16 @@ export default function VehicleReport() {
 
   const exportHistory = () => exportXlsx(
     filtered.map((r) => ({
-      เลขที่: r.tripNo, วันที่ขอใช้รถ: fmtDate(r.useDate), ผู้ขอใช้รถ: r.requester, ยานพาหนะ: r.plate,
-      ผู้ขับรถ: r.driver || '-', ภารกิจ: numberedText(r.missionType).replace(/\n/g, ' ') || '-', ปลายทาง: r.destination || '-',
-      เหตุผล: r.purpose, สถานะ: r.status, ระยะทาง: r.distance || '-',
+      เลขที่: r.tripNo, วันที่ขอใช้รถ: fmtDate(r.useDate), ผู้ขอใช้รถ: r.requester, ตำแหน่ง: r.requesterPosition || '-', ยานพาหนะ: r.plate,
+      ผู้ขับรถ: r.driver || '-', ภารกิจ: numberedText(missionLines(r)).replace(/\n/g, ' ') || '-', ปลายทาง: r.destination || '-',
+      สถานะ: r.status, ออกเดินทางจริง: r.timeOut || '-', กลับถึง: r.timeIn || '-',
+      เลขไมล์ก่อนเดินทาง: r.odoStart || '-', เลขไมล์เมื่อกลับ: r.odoEnd || '-', ระยะทางกม: r.distance || '-',
     })),
     'ประวัติการใช้รถ', `รายงานผู้บริหาร-ยานพาหนะ-${from}-ถึง-${to}`,
+  );
+  const exportMileage = () => exportXlsx(
+    mileage.map((m) => ({ ยานพาหนะ: m.label, เลขไมล์เริ่มต้น: m.base ?? '-', เลขไมล์ล่าสุด: m.latest ?? '-', จำนวนเที่ยว: m.trips, ระยะทางรวมกม: m.distance })),
+    'สรุปเลขไมล์รายคัน', `สรุปเลขไมล์-${from}-ถึง-${to}`,
   );
 
   const printUrl = () => {
@@ -103,6 +113,7 @@ export default function VehicleReport() {
         actions={
           <div className="flex flex-wrap gap-2">
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={exportHistory} disabled={!filtered.length}><FileSpreadsheet className="h-4 w-4" /> Excel</button>
+            <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={exportMileage} disabled={!mileage.length}><FileSpreadsheet className="h-4 w-4" /> Excel เลขไมล์</button>
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={() => window.open(printUrl(), '_blank')}><Printer className="h-4 w-4" /> พิมพ์สรุป</button>
           </div>
         }
@@ -183,7 +194,7 @@ export default function VehicleReport() {
               {stats.pending.length === 0 ? <EmptyState title="ไม่มีรายการรออนุมัติ" /> : (
                 <div className="space-y-1.5">
                   {stats.pending.map((r) => (
-                    <div key={r.id} className="rounded-lg bg-amber-50 px-3 py-1.5 text-sm"><b>{r.tripNo}</b> · {fmtDate(r.useDate)} · {r.requester} · {r.purpose}</div>
+                    <div key={r.id} className="rounded-lg bg-amber-50 px-3 py-1.5 text-sm"><b>{r.tripNo}</b> · {fmtDate(r.useDate)} · {r.requester} · {numberedText(missionLines(r)).replace(/\n/g, ' ')}</div>
                   ))}
                 </div>
               )}
@@ -200,15 +211,36 @@ export default function VehicleReport() {
             </div>
           </div>
 
+          <div className="card mb-4 overflow-x-auto p-4">
+            <h3 className="mb-1 font-semibold">สรุปเลขไมล์รถยนต์รายคัน</h3>
+            <p className="mb-2 text-xs text-slate-400">เลขไมล์ล่าสุดนับจากเที่ยวที่เสร็จสิ้นทุกช่วงเวลา ส่วนจำนวนเที่ยว/ระยะทางรวมนับเฉพาะช่วงวันที่ที่เลือก (ระยะทางจากเลขไมล์ที่บันทึกจริงเท่านั้น)</p>
+            {mileage.length === 0 ? <EmptyState title="ไม่มีรถยนต์ในทะเบียนยานพาหนะ" /> : (
+              <table className="w-full min-w-[600px] text-left text-sm">
+                <thead className="text-slate-500"><tr><th className="py-1">ยานพาหนะ</th><th className="py-1 text-center">เลขไมล์เริ่มต้น</th><th className="py-1 text-center">เลขไมล์ล่าสุด</th><th className="py-1 text-center">จำนวนเที่ยว</th><th className="py-1 text-center">ระยะทางรวม (กม.)</th></tr></thead>
+                <tbody>
+                  {mileage.map((m) => (
+                    <tr key={m.label} className="border-t border-slate-100">
+                      <td className="py-1.5">{m.label}</td>
+                      <td className="py-1.5 text-center">{m.base != null ? m.base.toLocaleString('th-TH') : '-'}</td>
+                      <td className="py-1.5 text-center font-semibold">{m.latest != null ? m.latest.toLocaleString('th-TH') : '-'}</td>
+                      <td className="py-1.5 text-center">{m.trips}</td>
+                      <td className="py-1.5 text-center">{m.distance ? m.distance.toLocaleString('th-TH') : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
           <div className="card overflow-x-auto p-4">
             <h3 className="mb-2 font-semibold">ประวัติการใช้รถย้อนหลัง</h3>
             {filtered.length === 0 ? <EmptyState title="ไม่พบรายการที่ตรงกับเงื่อนไข" /> : (
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1100px] text-left text-sm">
                 <thead className="bg-brand-50 text-slate-600">
                   <tr>
                     <th className="px-2 py-2">เลขที่</th><th className="px-2 py-2">วันที่</th><th className="px-2 py-2">ผู้ขอใช้รถ</th>
                     <th className="px-2 py-2">ยานพาหนะ</th><th className="px-2 py-2">ภารกิจ</th><th className="px-2 py-2">ปลายทาง</th>
-                    <th className="px-2 py-2 text-center">สถานะ</th><th className="px-2 py-2 text-center">ระยะทาง</th>
+                    <th className="px-2 py-2 text-center">สถานะ</th><th className="px-2 py-2">ออก–กลับจริง</th><th className="px-2 py-2 text-center">เลขไมล์ ก่อน→กลับ</th><th className="px-2 py-2 text-center">ระยะทาง</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -218,9 +250,11 @@ export default function VehicleReport() {
                       <td className="px-2 py-1.5">{fmtDate(r.useDate)}</td>
                       <td className="px-2 py-1.5">{r.requester}</td>
                       <td className="px-2 py-1.5">{r.plate}</td>
-                      <td className="whitespace-pre-line px-2 py-1.5">{numberedText(r.missionType) || '-'}</td>
+                      <td className="whitespace-pre-line px-2 py-1.5">{numberedText(missionLines(r)) || '-'}</td>
                       <td className="px-2 py-1.5">{r.destination || '-'}</td>
                       <td className="px-2 py-1.5 text-center"><Badge className={cfg.statusColors[r.status]}>{r.status}</Badge></td>
+                      <td className="px-2 py-1.5 text-xs">{r.timeOut ? `${r.timeOut} → ${r.timeIn || '-'}` : '-'}</td>
+                      <td className="px-2 py-1.5 text-center">{r.odoStart ? `${r.odoStart} → ${r.odoEnd || '-'}` : '-'}</td>
                       <td className="px-2 py-1.5 text-center">{r.distance || '-'}</td>
                     </tr>
                   ))}

@@ -316,16 +316,16 @@ exports.onLeaveUpdated = onDocumentUpdated('leaves/{id}', async (event) => {
 const asList = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [String(v)] : []);
 
 function vehicleSummaryLines(v) {
-  const missions = asList(v.missionType);
+  // ภารกิจที่ติ๊กไว้ (ข้อ "ภารกิจอื่น ๆ" แสดงรายละเอียดที่ผู้ขอพิมพ์ไว้แทน) — ใช้เป็นเหตุผลในการขอใช้รถด้วย
+  const missions = asList(v.missionType).map((m) => (m.startsWith('ภารกิจอื่น ๆ') && v.missionOther ? `ภารกิจอื่น ๆ: ${v.missionOther}` : m));
   const missionText = missions.length ? missions.map((m, i) => `${i + 1}. ${m}`).join('\n') : '-';
-  const period = v.useEndDate && v.useEndDate !== v.useDate ? `${v.useDate} ถึง ${v.useEndDate}` : v.useDate;
   return [
-    `ผู้ขอ: ${v.requester || '-'}`,
+    `ผู้ขอ/ผู้รับผิดชอบ: ${v.requester || '-'}${v.requesterPosition ? ` (${v.requesterPosition})` : ''}`,
     `รถ: ${v.plate || '-'}`,
-    `วันที่ใช้: ${period || '-'}${v.wantDeparture ? ` (ออกเดินทาง ${v.wantDeparture})` : ''}`,
+    `คนขับ: ${v.driver || '-'}`,
+    `วันที่ใช้: ${v.useDate || '-'}${v.wantDeparture ? ` ออกเดินทาง ${v.wantDeparture} น.` : ''}`,
     `ภารกิจ:\n${missionText}`,
     `ปลายทาง: ${v.destination || '-'}`,
-    `เหตุผล: ${v.purpose || '-'}`,
   ];
 }
 

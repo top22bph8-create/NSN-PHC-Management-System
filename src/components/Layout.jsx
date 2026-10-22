@@ -8,6 +8,7 @@ import { ORG_SHORT, SYSTEM_NAME_EN } from '../config/brand';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { usernameOf } from '../lib/accounts';
 import Logo from './Logo';
+import VehicleTripReminder from './VehicleTripReminder';
 
 export default function Layout() {
   const { profile, logout } = useAuth();
@@ -112,6 +113,7 @@ export default function Layout() {
       </header>
 
       <main className="pb-20 lg:pb-6" key={loc.pathname}><Outlet /></main>
+      <VehicleTripReminder />
 
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-brand-200 bg-white/95 backdrop-blur lg:hidden" aria-label="เมนูลัด">

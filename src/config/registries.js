@@ -1,5 +1,5 @@
 // นิยามทะเบียน: เพิ่มทะเบียนใหม่ได้โดยเพิ่มค่าในไฟล์นี้ ไม่ต้องเขียนหน้าใหม่
-const UNITS = ['ธุรการ', 'การเงินและบัญชี', 'พัสดุ', 'ส่งเสริมป้องกันควบคุมโรค', 'เวชปฏิบัติครอบครัว', 'ผู้อำนวยการ'];
+import { VEHICLE_DRIVERS } from '../lib/vehicleConfig';
 
 // ตำแหน่งผู้อำนวยการ รพ.สต. — ใช้เป็นช้อยตรึงไว้ (pinned) และค่าเริ่มต้นของช่อง "ถึง" ในทะเบียนหนังสือรับ
 export const DIRECTOR_TITLE = 'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
@@ -108,25 +108,20 @@ export const REGISTRIES = {
     fields: [
       { key: 'tripNo', label: 'เลขที่ใช้รถ', type: 'text', auto: true, list: true, search: true },
       { key: 'useDate', label: 'วันที่ขอใช้รถ', type: 'date', required: true, list: true },
-      { key: 'useEndDate', label: 'ใช้รถถึงวันที่ (เว้นว่าง = วันเดียวกับวันที่ขอใช้รถ)', type: 'date' },
-      { key: 'wantDeparture', label: 'วันที่/เวลาที่ต้องการออกเดินทาง', type: 'text', required: true, list: true },
+      { key: 'wantDeparture', label: 'เวลาที่ต้องการออกเดินทาง', type: 'time', required: true, list: true },
       // เติมชื่อผู้ขอใช้รถเป็นผู้ที่กำลังล็อกอินอยู่ให้อัตโนมัติตอนเพิ่มรายการใหม่ (ดู openCreate ใน RegistryPage.jsx) แก้ไขเป็นคนอื่นได้ถ้าบันทึกแทนกัน
-      { key: 'requester', label: 'ชื่อผู้ขอใช้รถ', type: 'text', required: true, list: true, search: true },
-      { key: 'supervisor', label: 'ผู้ควบคุมการเดินทาง/ผู้รับผิดชอบภารกิจ', type: 'select-users' },
+      { key: 'requester', label: 'ชื่อผู้ขอใช้รถ / ผู้รับผิดชอบภารกิจ', type: 'select-users', hidePosition: true, required: true, list: true, search: true },
       // เดิมเป็นช่องพิมพ์ทะเบียนรถเอง เปลี่ยนเป็นช้อยเลือกประเภทรถ+ทะเบียนจากทะเบียนยานพาหนะกลาง (ตั้งค่าได้ที่หน้า "ตั้งค่าระบบ")
       // เพื่อลดการพิมพ์ผิด/ทะเบียนไม่ตรงกัน — คีย์ยังใช้ชื่อเดิม 'plate' ไว้ (ใช้เป็น groupField อยู่ด้วย) ข้อมูลเก่าที่เคยพิมพ์แบบอิสระไว้จะยังแสดงผลได้ตามปกติ
       // optionsFrom: 'vehicleFleet' ให้ RegistryPage.jsx ดึงช้อยจาก settings/vehicleFleet แบบสด (real-time) แทนรายการตายตัว
       { key: 'plate', label: 'ยานพาหนะที่ต้องการใช้ (ประเภทรถ)', type: 'select', required: true, list: true, search: true, optionsFrom: 'vehicleFleet' },
-      { key: 'driver', label: 'พนักงานขับรถ (ถ้ามี)', type: 'select-users', search: true },
-      { key: 'missionType', label: 'ภารกิจ/จุดหมาย (ติ๊กเลือกได้หลายข้อ)', type: 'multi-check', required: true, list: true, optionsFrom: 'vehicleMissionTypes' },
+      { key: 'driver', label: 'พนักงานขับรถ (ผู้มีสิทธิ์ขับรถตามคำสั่ง)', type: 'select', options: VEHICLE_DRIVERS, search: true },
+      { key: 'missionType', label: 'ภารกิจ/จุดหมาย (ติ๊กเลือกได้หลายข้อ)', type: 'multi-check', required: true, list: true, search: true, optionsFrom: 'vehicleMissionTypes' },
+      // ช่องระบุรายละเอียดจะโผล่เมื่อติ๊ก "ภารกิจอื่น ๆ (ระบุรายละเอียดเพิ่มเติม)" เท่านั้น
+      { key: 'missionOther', label: 'ระบุภารกิจอื่น ๆ', type: 'text', showIf: (v) => (Array.isArray(v.missionType) ? v.missionType : []).some((m) => String(m).startsWith('ภารกิจอื่น ๆ')) },
       { key: 'origin', label: 'สถานที่ต้นทาง', type: 'text', default: 'รพ.สต.บ้านหนองสนม' },
       { key: 'destination', label: 'สถานที่ปลายทาง', type: 'select-other', required: true, list: true, search: true, optionsFrom: 'vehicleDestinations' },
       { key: 'village', label: 'หมู่บ้านและหมู่ที่ (ถ้ามี)', type: 'text' },
-      { key: 'companions', label: 'รายชื่อผู้ร่วมเดินทาง (ถ้ามี)', type: 'textarea' },
-      { key: 'purpose', label: 'เหตุผลในการขอใช้รถ', type: 'textarea', required: true, list: true, search: true },
-      { key: 'details', label: 'รายละเอียดเพิ่มเติม', type: 'textarea' },
-      { key: 'unit', label: 'กลุ่มงาน', type: 'select', options: UNITS },
-      { key: 'fuelCost', label: 'ค่าน้ำมัน (บาท)', type: 'text' },
       // ช้อยในช่องสถานะทั่วไปนี้เหลือแค่ "ฉบับร่าง"/"รออนุมัติ" เท่านั้นโดยตั้งใจ — สถานะที่เหลือทั้งหมด (อนุมัติ/ไม่อนุมัติ/ยกเลิก/กำลังใช้งาน/เสร็จสิ้น)
       // เปลี่ยนได้ผ่านปุ่มเฉพาะ (อนุมัติ/ไม่อนุมัติ/ยกเลิกคำขอ/เริ่มเดินทาง/สิ้นสุดการเดินทาง) เท่านั้น เพื่อบังคับให้ข้อมูลที่เกี่ยวข้อง (ผู้อนุมัติ/เลขไมล์ ฯลฯ) ถูกบันทึกไปด้วยเสมอ
       { key: 'status', label: 'สถานะ', type: 'select', options: ['ฉบับร่าง', 'รออนุมัติ'], default: 'รออนุมัติ', list: true },
@@ -140,10 +135,10 @@ export const REGISTRIES = {
       { key: 'odoEnd', label: 'เลขไมล์เมื่อกลับ', type: 'text', auto: true },
       { key: 'distance', label: 'ระยะทางรวม (กม.)', type: 'text', auto: true },
       { key: 'tripResult', label: 'ผลการปฏิบัติงาน', type: 'textarea', auto: true },
-      { key: 'note', label: 'หมายเหตุหรือเหตุขัดข้อง', type: 'textarea' },
+      { key: 'note', label: 'หมายเหตุหรือเหตุขัดข้อง', type: 'textarea', auto: true },
     ],
     reportColor: '4FA8E0',
-    reportColumns: ['tripNo', 'useDate', 'plate', 'driver', 'missionType', 'destination', 'purpose', 'requester', 'status'],
+    reportColumns: ['tripNo', 'useDate', 'plate', 'driver', 'missionType', 'destination', 'requester', 'status'],
   },
   duty: {
     key: 'duty',

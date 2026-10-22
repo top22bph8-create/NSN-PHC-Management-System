@@ -11,7 +11,7 @@ import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/l
 import ThaiDateInput from '../components/ThaiDateInput';
 import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
 import {
-  DEFAULT_DESTINATIONS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, VEHICLE_STATUSES, VEHICLE_TYPES,
+  DEFAULT_DESTINATIONS, DEFAULT_MISSION_GROUPS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, MISSION_LIST_VERSION, VEHICLE_STATUSES, VEHICLE_TYPES,
   getDestinations, getMissionTypes, getVehicleFleet, vehicleLabel,
 } from '../lib/vehicleConfig';
 import { Settings } from 'lucide-react';
@@ -26,6 +26,7 @@ export default function SettingsPage() {
   const [newVehicle, setNewVehicle] = useState({ type: VEHICLE_TYPES[0], name: '', plate: '', owner: 'รพ.สต.บ้านหนองสนม', caretaker: '', status: 'พร้อมใช้งาน', odometer: '', note: '' });
   const [missionTypes, setMissionTypes] = useState(null);
   const [newMission, setNewMission] = useState('');
+  const [newMissionGroup, setNewMissionGroup] = useState(Object.keys(DEFAULT_MISSION_GROUPS)[0]);
   const [destinations, setDestinations] = useState(null);
   const [newDest, setNewDest] = useState('');
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
@@ -76,7 +77,7 @@ export default function SettingsPage() {
       const fleetV = (fleet || []).map((v, i) => ({ ...v, id: v.id || `v${Date.now()}_${i}` }));
       await setDoc(doc(db, 'settings', 'vehicleFleet'), { list: fleetV, updatedAt: serverTimestamp() });
       const missionV = missionTypes || [];
-      await setDoc(doc(db, 'settings', 'vehicleMissionTypes'), { list: missionV, updatedAt: serverTimestamp() });
+      await setDoc(doc(db, 'settings', 'vehicleMissionTypes'), { list: missionV, version: MISSION_LIST_VERSION, updatedAt: serverTimestamp() });
       const destV = destinations || [];
       await setDoc(doc(db, 'settings', 'vehicleDestinations'), { list: destV, updatedAt: serverTimestamp() });
       await writeAudit({ action: 'settings', module: 'settings', docId: 'vehicleConfig', label: 'ระบบขออนุญาตใช้ยานพาหนะราชการ (ทะเบียนรถ/ประเภทภารกิจ/สถานที่)', after: { fleetCount: fleetV.length, missionCount: missionV.length, destCount: destV.length } });
@@ -283,6 +284,12 @@ export default function SettingsPage() {
                         {vehicleLabel(v)}
                         <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${v.status === 'พร้อมใช้งาน' ? 'bg-emerald-100 text-emerald-800' : v.status === 'ไม่พร้อมใช้งาน' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-800'}`}>{v.status}</span>
                         {v.caretaker && <span className="ml-2 text-xs text-slate-500">ผู้รับผิดชอบ: {v.caretaker}</span>}
+                        {/* เลขไมล์เริ่มต้น (ตั้งครั้งแรกก่อนใช้งาน) — หลังมีเที่ยวที่ "เสร็จสิ้น" ระบบใช้เลขไมล์เมื่อกลับของเที่ยวล่าสุดเป็น "เลขไมล์ครั้งก่อน" แทนค่านี้อัตโนมัติ */}
+                        {String(v.type || '').startsWith(VEHICLE_TYPES[0]) && (
+                          <label className="ml-2 inline-flex items-center gap-1 text-xs text-slate-600">เลขไมล์เริ่มต้น
+                            <input inputMode="numeric" className="input !w-28 !py-0.5" value={v.odometer || ''} onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, odometer: e.target.value.replace(/\D/g, '') } : x)))} />
+                          </label>
+                        )}
                       </span>
                       <button type="button" className="text-red-500 hover:text-red-700" onClick={() => setFleet(fleet.filter((_, j) => j !== i))} aria-label={`ลบ ${vehicleLabel(v)}`}><Trash2 className="h-4 w-4" /></button>
                     </div>
@@ -334,14 +341,17 @@ export default function SettingsPage() {
             <h3 className="mb-2 text-sm font-semibold text-slate-700">ประเภทภารกิจ</h3>
             {!missionTypes ? <Spinner /> : (
               <div className="mb-4 space-y-2">
-                <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                <div className="max-h-96 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
                   {missionTypes.map((m, i) => (
                     <div key={m.id || i} className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm ${m.active === false ? 'bg-slate-100 text-slate-400' : 'bg-slate-50'}`}>
                       <input
-                        className="flex-1 bg-transparent outline-none"
+                        className="min-w-0 flex-1 bg-transparent outline-none"
                         value={m.label}
                         onChange={(e) => setMissionTypes(missionTypes.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
                       />
+                      <select className="max-w-[10rem] rounded border border-slate-200 bg-white px-1 py-0.5 text-xs" value={m.group || ''} onChange={(e) => setMissionTypes(missionTypes.map((x, j) => (j === i ? { ...x, group: e.target.value } : x)))} aria-label="หมวดภารกิจ">
+                        {[...new Set([...Object.keys(DEFAULT_MISSION_GROUPS), ...missionTypes.map((x) => x.group).filter(Boolean)])].map((g) => <option key={g}>{g}</option>)}
+                      </select>
                       <button type="button" className="text-xs text-brand-700 underline" onClick={() => setMissionTypes(missionTypes.map((x, j) => (j === i ? { ...x, active: x.active === false } : x)))}>
                         {m.active === false ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
                       </button>
@@ -350,11 +360,16 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1"><label className="mb-1 block text-xs text-slate-600">เพิ่มประเภทภารกิจใหม่</label><input className="input" value={newMission} onChange={(e) => setNewMission(e.target.value)} /></div>
+                  <div><label className="mb-1 block text-xs text-slate-600">หมวด</label>
+                    <select className="input" value={newMissionGroup} onChange={(e) => setNewMissionGroup(e.target.value)}>
+                      {Object.keys(DEFAULT_MISSION_GROUPS).map((g) => <option key={g}>{g}</option>)}
+                    </select>
+                  </div>
                   <button
                     type="button" className="btn btn-outline"
                     onClick={() => {
                       if (!newMission.trim()) return;
-                      setMissionTypes([...missionTypes, { id: `m${Date.now()}`, label: newMission.trim(), active: true }]);
+                      setMissionTypes([...missionTypes, { id: `m${Date.now()}`, label: newMission.trim(), group: newMissionGroup, active: true }]);
                       setNewMission('');
                     }}
                   ><Plus className="h-4 w-4" /> เพิ่ม</button>
