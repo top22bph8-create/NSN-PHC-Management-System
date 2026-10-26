@@ -485,6 +485,9 @@ export const REGISTRIES = {
       { key: 'ssoAmount', label: 'หักจ่ายประกันสังคม', type: 'number', list: true },
       { key: 'amount', label: 'มูลค่าตั้งเบิกตามฎีกา', type: 'computed', computeFrom: ['payAmount', 'taxWithheld', 'ssoAmount'], list: true },
       { key: 'chequeNo', label: 'เลขที่เช็ค (จ่ายตามฎีกา)', type: 'text', list: true, search: true },
+      // วิธีการจ่ายเช็ค (ช้อย) — เลือก "อื่นๆ" แล้วช่องพิมพ์วิธีจ่ายจะขึ้นมาให้อัตโนมัติ
+      { key: 'payMethod', label: 'วิธีการจ่ายเช็ค', type: 'select', options: ['จ่ายโดย Corporate ธกส.', 'จ่ายโดย Corporate ธนาคารกรุงไทย', 'จ่ายโดยเช็คแก่ผู้รับเช็ค', 'โอนจ่ายโดยเช็ค', 'จ่ายเงินสด', 'อื่นๆ'], list: true },
+      { key: 'payMethodOther', label: 'ระบุวิธีการจ่าย (อื่นๆ)', type: 'text', showIf: (v) => v.payMethod === 'อื่นๆ' },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
       // สถานะการจ่ายเช็ค และสถานะการส่งภาษีหัก ณ ที่จ่ายให้สรรพากร — แยกกันคนละสถานะ คนละปุ่มกด ("ชำระ") ในหน้าทะเบียน (ดู isDeeka ใน RegistryPage.jsx)
       // auto: true = ไม่ให้กรอกเองในฟอร์มเพิ่ม/แก้ไขทั่วไป ตั้งค่าได้ผ่านปุ่มกดท้ายแถวเท่านั้น เพื่อบังคับให้ต้องเลือกวันที่ชำระ/วันที่ส่งทุกครั้ง
@@ -493,12 +496,12 @@ export const REGISTRIES = {
       { key: 'taxStatus', label: 'สถานะส่งภาษีหัก ณ ที่จ่าย', type: 'select', auto: true, options: ['ค้างส่ง', 'ส่งสรรพากรแล้ว'], default: 'ค้างส่ง', list: true },
       { key: 'taxPaidDate', label: 'วันที่ส่งภาษีสรรพากร', type: 'date', auto: true },
       { key: 'taxChequeNo', label: 'เลขที่เช็คส่งภาษี', type: 'text', auto: true },
-      { key: 'ssoStatus', label: 'สถานะจ่ายประกันสังคม', type: 'select', auto: true, options: ['ค้างจ่าย', 'จ่ายแล้ว'], default: 'ค้างจ่าย', list: true },
+      { key: 'ssoStatus', label: 'สถานะจ่ายประกันสังคม', type: 'select', auto: true, options: ['ค้างจ่าย', 'จ่ายแล้ว'], default: 'ค้างจ่าย' },
       { key: 'ssoPaidDate', label: 'วันที่จ่ายประกันสังคม', type: 'date', auto: true },
       { key: 'ssoChequeNo', label: 'เลขที่เช็คจ่ายประกันสังคม', type: 'text', auto: true },
     ],
     reportColor: 'B48EAD',
-    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoChequeNo'],
+    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'payMethod', 'payMethodOther', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoChequeNo'],
   },
   // ทะเบียนใหม่ตามแบบฟอร์มตัวอย่างที่ส่งมา — เลขที่เกียรติบัตรไม่เติมศูนย์หน้า (numberDigits: 1) เช่น 1/2569, 2/2569 ...
   'reg-certificate': {

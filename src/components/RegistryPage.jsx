@@ -33,6 +33,12 @@ const emptyForm = (cfg) => {
 
 // หน้าทะเบียนแบบกำหนดด้วย config: เพิ่ม แก้ไข ค้นหา ดูรายละเอียด แนบไฟล์ ลบ Export
 // สรุปยอดทะเบียนคุมฎีกาเบิกจ่าย: ยอดรวมของรายการที่กรองอยู่ (เลือกเดือนด้านบนเพื่อดูรายเดือน) + ตารางสรุปรายเดือนทั้งปีงบประมาณ พร้อมยอดรวมทั้งปี
+// แสดงตัวเลขเงินมีเครื่องหมายจุลภาคคั่นหลักพัน และทศนิยม 2 ตำแหน่งเมื่อมีเศษ (เช่น 12,345 / 12,345.50)
+export const fmtMoney = (v) => {
+  const n = Number(v);
+  if (v === '' || v === null || v === undefined || Number.isNaN(n)) return '';
+  return n.toLocaleString('th-TH', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+};
 const num = (v) => Number(v) || 0;
 const money = (n) => n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const FY_MONTH_ORDER = ['10', '11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09'];
@@ -42,40 +48,49 @@ function sumDeeka(list) {
     return { n: a.n + 1, pay: a.pay + pay, tax: a.tax + tax, sso: a.sso + sso, total: a.total + (String(it.amount ?? '').trim() !== '' ? num(it.amount) : pay + tax + sso) };
   }, { n: 0, pay: 0, tax: 0, sso: 0, total: 0 });
 }
-function DeekaSummary({ items, filtered, month, fy }) {
+function DeekaSummary({ items, filtered, month, yearBE, fy }) {
   const [open, setOpen] = useState(false);
   const cur = sumDeeka(filtered);
   const rows = FY_MONTH_ORDER.map((mm) => ({ mm, s: sumDeeka(items.filter((it) => String(it.deekaDate || '').slice(5, 7) === mm)) })).filter((r) => r.s.n > 0);
   const all = sumDeeka(items);
-  const cell = 'px-2 py-1.5 text-right';
+  const cell = 'px-3 py-2 text-right tabular-nums';
+  const cards = [
+    { label: 'ยอดจ่ายเช็ค', v: cur.pay, grad: 'from-sky-500 to-blue-600', icon: '💳' },
+    { label: 'ภาษีหัก ณ ที่จ่าย', v: cur.tax, grad: 'from-amber-400 to-orange-500', icon: '🧾' },
+    { label: 'หักจ่ายประกันสังคม', v: cur.sso, grad: 'from-emerald-500 to-teal-600', icon: '🛡️' },
+    { label: 'มูลค่าตั้งเบิกตามฎีกา', v: cur.total, grad: 'from-fuchsia-500 to-purple-700', icon: '💰' },
+  ];
   return (
-    <div className="card mb-4 p-3">
+    <div className="card mb-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-slate-700">
-          ยอดรวม{month ? ` เดือน${thMonths[Number(month) - 1]}` : 'ตามตัวกรอง'} · {cur.n} ฎีกา
+        <div className="text-lg font-bold text-slate-800">
+          📊 ยอดรวม {month ? `เดือน${thMonths[Number(month) - 1]}` : 'ทุกเดือน'}{yearBE ? ` พ.ศ. ${yearBE}` : ''} <span className="ml-1 rounded-full bg-slate-100 px-3 py-0.5 text-base font-semibold text-slate-600">{cur.n} ฎีกา</span>
         </div>
-        <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setOpen(!open)}>{open ? 'ซ่อนสรุปรายเดือน' : '📅 สรุปรายเดือนทั้งปีงบประมาณ'}</button>
+        <button type="button" className="btn btn-outline !py-1 text-sm" onClick={() => setOpen(!open)}>{open ? 'ซ่อนสรุปรายเดือน' : '📅 สรุปรายเดือนทั้งปีงบประมาณ'}</button>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-        <div className="rounded-lg bg-slate-50 p-2"><div className="text-slate-500">ยอดจ่ายเช็ค</div><div className="font-bold">{money(cur.pay)}</div></div>
-        <div className="rounded-lg bg-slate-50 p-2"><div className="text-slate-500">ภาษีหัก ณ ที่จ่าย</div><div className="font-bold">{money(cur.tax)}</div></div>
-        <div className="rounded-lg bg-slate-50 p-2"><div className="text-slate-500">หักจ่ายประกันสังคม</div><div className="font-bold">{money(cur.sso)}</div></div>
-        <div className="rounded-lg bg-brand-50 p-2"><div className="text-slate-500">มูลค่าตั้งเบิกตามฎีกา</div><div className="font-bold text-brand-800">{money(cur.total)}</div></div>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((c) => (
+          <div key={c.label} className={`rounded-2xl bg-gradient-to-br ${c.grad} p-4 text-white shadow-md`}>
+            <div className="flex items-center justify-between text-base font-medium text-white/90"><span>{c.label}</span><span className="text-2xl">{c.icon}</span></div>
+            <div className="mt-1 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl">{money(c.v)}</div>
+            <div className="text-sm text-white/80">บาท</div>
+          </div>
+        ))}
       </div>
       {open && (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-slate-100 text-slate-600"><tr>
-              <th className="px-2 py-1.5 text-left">เดือน</th><th className={cell}>จำนวนฎีกา</th><th className={cell}>ยอดจ่ายเช็ค</th><th className={cell}>ภาษีหัก ณ ที่จ่าย</th><th className={cell}>ประกันสังคม</th><th className={cell}>มูลค่าตั้งเบิก</th>
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full min-w-[700px] text-base">
+            <thead className="text-white"><tr>
+              <th className="bg-slate-700 px-3 py-2 text-left">เดือน</th><th className="bg-slate-700 px-3 py-2 text-right">จำนวนฎีกา</th><th className="bg-blue-600 px-3 py-2 text-right">ยอดจ่ายเช็ค</th><th className="bg-orange-500 px-3 py-2 text-right">ภาษีหัก ณ ที่จ่าย</th><th className="bg-teal-600 px-3 py-2 text-right">ประกันสังคม</th><th className="bg-purple-700 px-3 py-2 text-right">มูลค่าตั้งเบิก</th>
             </tr></thead>
             <tbody>
               {rows.map(({ mm, s }) => (
-                <tr key={mm} className="border-t border-slate-100">
-                  <td className="px-2 py-1.5">{thMonths[Number(mm) - 1]}</td><td className={cell}>{s.n}</td><td className={cell}>{money(s.pay)}</td><td className={cell}>{money(s.tax)}</td><td className={cell}>{money(s.sso)}</td><td className={`${cell} font-semibold`}>{money(s.total)}</td>
+                <tr key={mm} className="border-t border-slate-200 odd:bg-white even:bg-slate-50">
+                  <td className="px-3 py-2 font-semibold">{thMonths[Number(mm) - 1]}</td><td className={cell}>{s.n}</td><td className={`${cell} text-blue-700`}>{money(s.pay)}</td><td className={`${cell} text-orange-700`}>{money(s.tax)}</td><td className={`${cell} text-teal-700`}>{money(s.sso)}</td><td className={`${cell} font-bold text-purple-800`}>{money(s.total)}</td>
                 </tr>
               ))}
-              <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
-                <td className="px-2 py-1.5">รวมปีงบประมาณ {fy}</td><td className={cell}>{all.n}</td><td className={cell}>{money(all.pay)}</td><td className={cell}>{money(all.tax)}</td><td className={cell}>{money(all.sso)}</td><td className={cell}>{money(all.total)}</td>
+              <tr className="border-t-2 border-slate-400 bg-yellow-50 text-lg font-extrabold">
+                <td className="px-3 py-2.5">รวมปีงบประมาณ {fy}</td><td className={cell}>{all.n}</td><td className={`${cell} text-blue-800`}>{money(all.pay)}</td><td className={`${cell} text-orange-800`}>{money(all.tax)}</td><td className={`${cell} text-teal-800`}>{money(all.sso)}</td><td className={`${cell} text-purple-900`}>{money(all.total)}</td>
               </tr>
             </tbody>
           </table>
@@ -96,6 +111,7 @@ export default function RegistryPage({ cfg }) {
   const [reload, setReload] = useState(0);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
+  const [yearBE, setYearBE] = useState('');
   const [month, setMonth] = useState('');
   const [form, setForm] = useState(null); // null | {id?, values}
   const [errors, setErrors] = useState({});
@@ -403,15 +419,18 @@ export default function RegistryPage({ cfg }) {
     return items.filter((it) => {
       if (status && it[cfg.statusField] !== status) return false;
       if (month && (it[cfg.dateField] || '').slice(5, 7) !== month) return false;
+      if (yearBE && String(Number((it[cfg.dateField] || '').slice(0, 4)) + 543) !== yearBE) return false;
       if (!t) return true;
       return searchKeys.some((k) => String(it[k] || '').toLowerCase().includes(t));
     });
-  }, [items, q, status, month, cfg, searchKeys]);
+  }, [items, q, status, month, yearBE, cfg, searchKeys]);
+  // ปี พ.ศ. ที่มีอยู่ในรายการ (ปีปฏิทินของวันที่เอกสาร) ไว้เป็นตัวเลือกกรอง
+  const yearOptions = useMemo(() => [...new Set((items || []).map((it) => Number((it[cfg.dateField] || '').slice(0, 4))).filter(Boolean).map((y) => String(y + 543)))].sort(), [items, cfg]);
 
   const viewItem = items?.find((x) => x.id === viewId) || null;
   const listFields = cfg.fields.filter((f) => f.list);
 
-  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : f.type === 'odometer' && v ? `${Number(v).toLocaleString('th-TH')} กม.` : v || '-');
+  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : (f.type === 'number' || f.type === 'computed') && fmtMoney(v) !== '' ? fmtMoney(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : f.type === 'odometer' && v ? `${Number(v).toLocaleString('th-TH')} กม.` : v || '-');
 
   // เลขที่หนังสือส่งหลัก (insertSeq = 0) ในปีงบประมาณนี้ ใหม่สุดก่อน สำหรับตัวเลือก "แทรกเลขที่ย้อนหลัง"
   const outgoingBases = useMemo(
@@ -1035,9 +1054,13 @@ export default function RegistryPage({ cfg }) {
           <option value="">ทุกเดือน</option>
           {thMonths.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
         </select>
+        <select className="input" value={yearBE} onChange={(e) => setYearBE(e.target.value)} aria-label="ปี พ.ศ.">
+          <option value="">ทุกปี (พ.ศ.)</option>
+          {yearOptions.map((y) => <option key={y} value={y}>พ.ศ. {y}</option>)}
+        </select>
       </div>
 
-      {isDeeka && items && items.length > 0 && <DeekaSummary items={items} filtered={filtered} month={month} fy={fy} />}
+      {isDeeka && items && items.length > 0 && <DeekaSummary items={items} filtered={filtered} month={month} yearBE={yearBE} fy={fy} />}
 
       <div className="card overflow-hidden">
         {error ? <ErrorState message={error} onRetry={() => setReload((n) => n + 1)} />
@@ -1048,7 +1071,7 @@ export default function RegistryPage({ cfg }) {
             <EmptyState title="ไม่พบรายการที่ตรงกับเงื่อนไข" hint="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left">
+              <table className={`w-full text-left [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${isDeeka ? 'min-w-[1100px]' : 'min-w-[720px]'}`}>
                 <thead className="bg-slate-100 text-sm text-slate-600">
                   <tr>
                     {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
@@ -1060,24 +1083,24 @@ export default function RegistryPage({ cfg }) {
                 </thead>
                 <tbody>
                   {filtered.map((it) => (
-                    <tr key={it.id} className="cursor-pointer border-t border-slate-100 hover:bg-brand-50/60" onClick={() => setViewId(it.id)}>
+                    <tr key={it.id} className="cursor-pointer border-t border-slate-100 odd:bg-white even:bg-slate-50/70 hover:bg-brand-50/60" onClick={() => setViewId(it.id)}>
                       {listFields.map((f) => (
-                        <td key={f.key} className={`px-3 py-2 align-top ${f.key === 'subject' ? 'max-w-xs' : ''}`}>
+                        <td key={f.key} className={`px-3 py-2 align-top ${isDeeka && f.key === 'subject' ? 'min-w-[20rem] text-base leading-relaxed' : f.key === 'subject' ? 'max-w-xs' : ''} ${isDeeka && (f.type === 'number' || f.type === 'computed') ? 'whitespace-nowrap text-right font-semibold tabular-nums' : ''}`}>
                           {f.key === cfg.statusField ? (
                             isLoanOverdue(it) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[it[f.key]]}>{it[f.key]}</Badge>
                           )
                             : isDeeka && f.key === 'chequeStatus' ? (
-                              <Badge className={it.chequeStatus === 'จ่ายแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.chequeStatus || 'ค้างจ่าย'}</Badge>
+                              <Badge className={it.chequeStatus === 'จ่ายแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 font-bold text-red-700'}>{it.chequeStatus || 'ค้างจ่าย'}</Badge>
                             )
                             : isDeeka && f.key === 'taxStatus' ? (
                               hasNoTax(it) ? (
                                 <Badge className="bg-emerald-100 text-emerald-800">ไม่มียอดหัก</Badge>
                               ) : (
-                                <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>{it.taxStatus || 'ค้างส่ง'}</Badge>
+                                <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 font-bold text-red-700'}>{it.taxStatus || 'ค้างส่ง'}</Badge>
                               )
                             )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
-                            : <span className={f.key === 'subject' ? 'line-clamp-2' : ''}>{display(f, it[f.key], it)}</span>}
+                            : <span className={f.key === 'subject' && !isDeeka ? 'line-clamp-2' : f.key === 'subject' ? 'whitespace-pre-wrap' : ''}>{display(f, it[f.key], it)}</span>}
                         </td>
                       ))}
                       {isLoan && (
@@ -1110,7 +1133,7 @@ export default function RegistryPage({ cfg }) {
                                 <span className="text-xs text-emerald-700">จ่ายเช็คแล้ว {fmtDate(it.chequePaidDate)}</span>
                               ) : (
                                 <>
-                                  <span className="text-xs text-amber-700">ค้างจ่ายเช็ค</span>
+                                  <span className="text-xs font-bold text-red-600">ค้างจ่ายเช็ค</span>
                                   {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'cheque')}>ชำระเช็ค</button>}
                                 </>
                               )}
@@ -1122,7 +1145,7 @@ export default function RegistryPage({ cfg }) {
                                 <span className="text-xs text-emerald-700">ส่งสรรพากรแล้ว {fmtDate(it.taxPaidDate)}</span>
                               ) : (
                                 <>
-                                  <span className="text-xs text-amber-700">ค้างส่งภาษี</span>
+                                  <span className="text-xs font-bold text-red-600">ค้างส่งภาษี</span>
                                   {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'tax')}>ส่งสรรพากร</button>}
                                 </>
                               )}
@@ -1133,7 +1156,7 @@ export default function RegistryPage({ cfg }) {
                                   <span className="text-xs text-emerald-700">จ่ายประกันสังคมแล้ว {fmtDate(it.ssoPaidDate)}</span>
                                 ) : (
                                   <>
-                                    <span className="text-xs text-amber-700">ค้างจ่ายประกันสังคม</span>
+                                    <span className="text-xs font-bold text-red-600">ค้างจ่ายประกันสังคม</span>
                                     {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'sso')}>จ่ายประกันสังคม</button>}
                                   </>
                                 )}
@@ -1377,7 +1400,7 @@ export default function RegistryPage({ cfg }) {
                 ) : f.type === 'date' ? (
                   <ThaiDateInput id={`f-${f.key}`} required={f.required} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
                 ) : f.type === 'number' ? (
-                  <input id={`f-${f.key}`} type="number" step="0.01" inputMode="decimal" className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />
+                  <><input id={`f-${f.key}`} type="number" step="0.01" inputMode="decimal" className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })} />{String(form.values[f.key] ?? '').trim() !== '' && <div className="mt-1 text-sm font-semibold text-brand-700">= {fmtMoney(form.values[f.key])} บาท</div>}</>
                 ) : f.type === 'computed' ? (
                   // ฟิลด์คำนวณอัตโนมัติ (เช่น มูลค่าตั้งเบิกตามฎีกา = ยอดจ่ายเช็ค + ภาษีหัก ณ ที่จ่าย) — แสดงผลรวมสดขณะกรอก แก้เองไม่ได้
                   // ถ้ายังไม่ได้กรอกฟิลด์ต้นทางเลย (เช่น รายการเก่าก่อนอัปเดตฟีเจอร์นี้) ให้คงโชว์ค่าที่เคยบันทึกไว้เดิมแทนเลข 0 เพื่อไม่ให้ดูเหมือนค่าหายไป
@@ -1385,7 +1408,7 @@ export default function RegistryPage({ cfg }) {
                   <input id={`f-${f.key}`} type="text" readOnly className="input bg-slate-50 font-semibold text-slate-700"
                     value={
                       f.computeFrom.some((k) => String(form.values[k] ?? '').trim() !== '')
-                        ? f.computeFrom.reduce((s, k) => s + (Number(form.values[k]) || 0), 0).toLocaleString('th-TH')
+                        ? fmtMoney(f.computeFrom.reduce((s, k) => s + (Number(form.values[k]) || 0), 0)) || '0'
                         : (form.values[f.key] || '0')
                     } />
                 ) : (
