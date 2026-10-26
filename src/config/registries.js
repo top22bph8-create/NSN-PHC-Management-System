@@ -497,13 +497,17 @@ export const REGISTRIES = {
       { key: 'chequePaidDate', label: 'วันที่จ่ายเช็ค', type: 'date', auto: true },
       { key: 'taxStatus', label: 'สถานะส่งภาษีหัก ณ ที่จ่าย', type: 'select', auto: true, options: ['ค้างส่ง', 'ส่งสรรพากรแล้ว'], default: 'ค้างส่ง', list: true },
       { key: 'taxPaidDate', label: 'วันที่ส่งภาษีสรรพากร', type: 'date', auto: true },
+      { key: 'taxPayMethod', label: 'วิธีการจ่ายภาษี', type: 'text', auto: true },
+      { key: 'taxPayMethodOther', label: 'ระบุวิธีจ่ายภาษี (อื่นๆ)', type: 'text', auto: true },
       { key: 'taxChequeNo', label: 'เลขที่เช็คส่งภาษี', type: 'text', auto: true },
       { key: 'ssoStatus', label: 'สถานะจ่ายประกันสังคม', type: 'select', auto: true, options: ['ค้างจ่าย', 'จ่ายแล้ว'], default: 'ค้างจ่าย' },
       { key: 'ssoPaidDate', label: 'วันที่จ่ายประกันสังคม', type: 'date', auto: true },
+      { key: 'ssoPayMethod', label: 'วิธีการจ่ายประกันสังคม', type: 'text', auto: true },
+      { key: 'ssoPayMethodOther', label: 'ระบุวิธีจ่ายประกันสังคม (อื่นๆ)', type: 'text', auto: true },
       { key: 'ssoChequeNo', label: 'เลขที่เช็คจ่ายประกันสังคม', type: 'text', auto: true },
     ],
     reportColor: 'B48EAD',
-    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'payMethod', 'payMethodOther', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoChequeNo'],
+    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'payMethod', 'payMethodOther', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxPayMethod', 'taxPayMethodOther', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoPayMethod', 'ssoPayMethodOther', 'ssoChequeNo'],
   },
   // ทะเบียนใหม่ตามแบบฟอร์มตัวอย่างที่ส่งมา — เลขที่เกียรติบัตรไม่เติมศูนย์หน้า (numberDigits: 1) เช่น 1/2569, 2/2569 ...
   'reg-certificate': {

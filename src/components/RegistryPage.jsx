@@ -152,6 +152,12 @@ export default function RegistryPage({ cfg }) {
   // และไม่ต้องมีปุ่มกด "ส่งสรรพากร" ให้กด (มีแต่ปุ่ม "ชำระเช็ค" เท่านั้น) ตามที่ ผอ. แจ้ง
   const hasNoTax = (it) => !(Number(it?.taxWithheld) > 0);
   const hasNoSso = (it) => !(Number(it?.ssoAmount) > 0);
+  // ยอดภาษี/ประกันสังคมที่ยังค้างจ่าย → แสดงตัวเลขสีแดงอ่อน
+  const isUnpaidAmt = (f, it) => isDeeka && it && (
+    (f.key === 'taxWithheld' && Number(it.taxWithheld) > 0 && it.taxStatus !== 'ส่งสรรพากรแล้ว') ||
+    (f.key === 'ssoAmount' && Number(it.ssoAmount) > 0 && it.ssoStatus !== 'จ่ายแล้ว'));
+  const PAY_METHODS = ['จ่ายโดย Corporate ธกส.', 'จ่ายโดย Corporate ธนาคารกรุงไทย', 'จ่ายโดยเช็คแก่ผู้รับเช็ค', 'โอนจ่ายโดยเช็ค', 'จ่ายเงินสด', 'อื่นๆ'];
+  const isChequeMethod = (m) => String(m || '').includes('เช็ค');
   // ===== ทะเบียนควบคุมยานพาหนะ (ระบบขออนุญาตใช้ยานพาหนะราชการ เฟส 2): แยกสิทธิ์ผู้อนุมัติออกจากผู้บันทึกคำขออย่างชัดเจน =====
   // อนุมัติ/ไม่อนุมัติ/ยกเลิก (โดยผู้มีอำนาจ) ทำผ่านปุ่มเฉพาะด้านล่างเท่านั้น (ไม่ใช่ช่องสถานะในฟอร์มแก้ไขทั่วไป ซึ่งไม่มีช้อย "อนุมัติ" ให้เลือกได้เอง)
   // ผู้บันทึกคำขอเองยกเลิกคำขอของตัวเองได้เช่นกัน ถ้ายังไม่ถูกพิจารณา (เหมือนการยกเลิกใบลาของตัวเองในทะเบียนควบคุมวันลา)
@@ -761,16 +767,24 @@ export default function RegistryPage({ cfg }) {
   // ===== ทะเบียนคุมฎีกาเบิกจ่าย: บันทึกการชำระเช็ค / การส่งภาษีหัก ณ ที่จ่ายให้สรรพากร (แยกกันคนละสถานะคนละปุ่ม ใช้ modal เดียวกันสลับตาม kind) =====
   const PAY_CHEQUE_KEY = { cheque: 'chequeNo', tax: 'taxChequeNo', sso: 'ssoChequeNo' };
   const [payActionChequeNo, setPayActionChequeNo] = useState('');
-  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayAction({ item: it, kind }); };
+  const [payActionMethod, setPayActionMethod] = useState('');
+  const [payActionMethodOther, setPayActionMethodOther] = useState('');
+  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayAction({ item: it, kind }); };
   const submitPayAction = async () => {
     if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
     const { item, kind } = payAction;
-    const chequeNo = payActionChequeNo.trim();
+    let chequeNo = payActionChequeNo.trim();
+    const methodOther = payActionMethodOther.trim();
+    if (kind !== 'cheque') {
+      if (!payActionMethod) { say({ type: 'error', text: 'กรุณาเลือกวิธีการจ่าย' }); return; }
+      if (payActionMethod === 'อื่นๆ' && !methodOther) { say({ type: 'error', text: 'กรุณาระบุวิธีการจ่าย' }); return; }
+      if (!isChequeMethod(payActionMethod)) chequeNo = '';
+    }
     const after = kind === 'cheque'
       ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo }
       : kind === 'tax'
-        ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate, taxChequeNo: chequeNo }
-        : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: payActionDate, ssoChequeNo: chequeNo };
+        ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate, taxPayMethod: payActionMethod, taxPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', taxChequeNo: chequeNo }
+        : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: payActionDate, ssoPayMethod: payActionMethod, ssoPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', ssoChequeNo: chequeNo };
     setPayActionSaving(true);
     try {
       await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
@@ -1133,7 +1147,7 @@ export default function RegistryPage({ cfg }) {
                               )
                             )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
-                            : <span className={f.key === 'subject' && !isDeeka ? 'line-clamp-2' : f.key === 'subject' ? 'whitespace-pre-wrap' : ''}>{display(f, it[f.key], it)}</span>}
+                            : <span className={(f.key === 'subject' && !isDeeka ? 'line-clamp-2' : f.key === 'subject' ? 'whitespace-pre-wrap' : '') + (isUnpaidAmt(f, it) ? ' font-semibold text-red-400' : '')}>{display(f, it[f.key], it)}</span>}
                         </td>
                       ))}
                       {isLoan && (
@@ -1509,7 +1523,7 @@ export default function RegistryPage({ cfg }) {
                     isLoanOverdue(viewItem) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[viewItem[f.key]]}>{viewItem[f.key]}</Badge>
                   ) : isDeeka && f.key === 'taxStatus' && hasNoTax(viewItem) ? 'ไม่มียอดหัก'
                   : isDeeka && f.key === 'ssoStatus' && hasNoSso(viewItem) ? 'ไม่มียอดหัก'
-                  : display(f, viewItem[f.key], viewItem)}
+                  : <span className={isUnpaidAmt(f, viewItem) ? 'font-semibold text-red-400' : ''}>{display(f, viewItem[f.key], viewItem)}</span>}
                 </dd>
               </div>
             ))}
@@ -1608,10 +1622,27 @@ export default function RegistryPage({ cfg }) {
               <label className="mb-1 block text-sm font-medium text-slate-600">{payAction.kind === 'cheque' ? 'วันที่จ่ายเช็ค' : payAction.kind === 'tax' ? 'วันที่ส่งภาษีสรรพากร' : 'วันที่จ่ายประกันสังคม'}</label>
               <ThaiDateInput value={payActionDate} onChange={setPayActionDate} />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่เช็ค</label>
-              <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => setPayActionChequeNo(e.target.value)} />
-            </div>
+            {payAction.kind !== 'cheque' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">วิธีการจ่าย <span className="text-red-600">*</span></label>
+                <select className="input" value={payActionMethod} onChange={(e) => setPayActionMethod(e.target.value)}>
+                  <option value="">— เลือกวิธีการจ่าย —</option>
+                  {PAY_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            )}
+            {payAction.kind !== 'cheque' && payActionMethod === 'อื่นๆ' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">ระบุวิธีการจ่าย</label>
+                <input className="input" value={payActionMethodOther} onChange={(e) => setPayActionMethodOther(e.target.value)} />
+              </div>
+            )}
+            {(payAction.kind === 'cheque' || isChequeMethod(payActionMethod)) && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่เช็ค</label>
+                <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => setPayActionChequeNo(e.target.value)} />
+              </div>
+            )}
           </div>
         </Modal>
       )}
