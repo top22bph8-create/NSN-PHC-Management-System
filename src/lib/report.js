@@ -8,6 +8,7 @@ export function cellText(cfg, key, row) {
   const v = row[key];
   if (!f) return v || '';
   if (f.type === 'date') return fmtDate(v);
+  if (key === 'taxStatus' && v === 'ค้างส่ง') return 'ค้างจ่าย';
   return v || '';
 }
 

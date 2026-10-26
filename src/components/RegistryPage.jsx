@@ -442,7 +442,7 @@ export default function RegistryPage({ cfg }) {
   const viewItem = items?.find((x) => x.id === viewId) || null;
   const listFields = cfg.fields.filter((f) => f.list);
 
-  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : (f.type === 'number' || f.type === 'computed') && fmtMoney(v) !== '' ? fmtMoney(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : f.type === 'odometer' && v ? `${Number(v).toLocaleString('th-TH')} กม.` : v || '-');
+  const display = (f, v, item) => (f.type === 'date' ? fmtDate(v) : f.key === 'taxStatus' ? (v === 'ส่งสรรพากรแล้ว' ? 'จ่ายแล้ว' : 'ค้างจ่าย') : (f.type === 'number' || f.type === 'computed') && fmtMoney(v) !== '' ? fmtMoney(v) : f.type === 'multi-check' ? (item ? numberedText(missionLines(item)) : numberedText(v)) || '-' : f.type === 'time' && v ? `${v} น.` : f.type === 'odometer' && v ? `${Number(v).toLocaleString('th-TH')} กม.` : v || '-');
 
   // เลขที่หนังสือส่งหลัก (insertSeq = 0) ในปีงบประมาณนี้ ใหม่สุดก่อน สำหรับตัวเลือก "แทรกเลขที่ย้อนหลัง"
   const outgoingBases = useMemo(
@@ -768,13 +768,65 @@ export default function RegistryPage({ cfg }) {
   const PAY_CHEQUE_KEY = { cheque: 'chequeNo', tax: 'taxChequeNo', sso: 'ssoChequeNo' };
   const [payActionChequeNo, setPayActionChequeNo] = useState('');
   const [payActionMethod, setPayActionMethod] = useState('');
+  // ภาษี/ประกันสังคม: ชำระผ่านการตั้งฎีกาเบิกจ่าย (ระบุเลขฎีกาแล้วระบบตรวจยอด/ชื่ออัตโนมัติ) หรือจ่ายตรง
+  const [payVia, setPayVia] = useState('dika');
+  const [payDikaNo, setPayDikaNo] = useState('');
+  const [payForce, setPayForce] = useState(false);
+  const [payWarn, setPayWarn] = useState('');
+  const KIND_WORDS = { tax: ['ภาษี', 'สรรพากร', 'หัก ณ ที่จ่าย', 'ภงด'], sso: ['ประกันสังคม', 'สปส', 'สมทบ'] };
+  const sameMoney = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
+  const expectedAmt = (it, kind) => Number(kind === 'tax' ? it.taxWithheld : it.ssoAmount) || 0;
+  const matchesKind = (c, kind) => KIND_WORDS[kind].some((w) => String(c.subject || '').includes(w));
+  // ฎีกาที่น่าจะเป็นฎีกาจ่ายภาษี/ประกันสังคมก้อนนี้: ยอดเท่ากัน + ชื่อเรื่องคล้ายกัน (ไม่ใช่รายการเดียวกันเอง)
+  const dikaSuggestions = payAction && payAction.kind !== 'cheque'
+    ? (items || []).filter((c) => c.id !== payAction.item.id && (sameMoney(c.payAmount, expectedAmt(payAction.item, payAction.kind)) || sameMoney(c.amount, expectedAmt(payAction.item, payAction.kind))) && matchesKind(c, payAction.kind))
+    : [];
   const [payActionMethodOther, setPayActionMethodOther] = useState('');
-  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayAction({ item: it, kind }); };
+  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayAction({ item: it, kind }); };
   const submitPayAction = async () => {
     if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
     const { item, kind } = payAction;
     let chequeNo = payActionChequeNo.trim();
     const methodOther = payActionMethodOther.trim();
+    if (kind !== 'cheque' && payVia === 'dika') {
+      const no = payDikaNo.trim();
+      if (!no) { say({ type: 'error', text: 'กรุณาระบุเลขที่ฎีกาที่ใช้ชำระ' }); return; }
+      setPayActionSaving(true);
+      try {
+        const want = expectedAmt(item, kind);
+        const seqNo = (n) => (String(n || '').match(/(\d+)/) || [])[1];
+        let found = (items || []).find((c) => c.id !== item.id && (String(c.dikaRefNo || '').trim() === no || String(c.deekaNo || '') === no));
+        if (!found) {
+          const snap = await getDocs(query(collection(db, cfg.key), where('dikaRefNo', '==', no)));
+          const d = snap.docs.find((x) => x.id !== item.id);
+          if (d) found = { id: d.id, ...d.data() };
+        }
+        const problems = [];
+        if (!found) problems.push(`ไม่พบฎีกาเลขที่ "${no}" ในทะเบียน`);
+        else {
+          if (!sameMoney(found.payAmount, want) && !sameMoney(found.amount, want)) problems.push(`ยอดไม่ตรงกัน: ฎีกานี้ ${fmtMoney(found.payAmount || found.amount)} บาท แต่ยอดหักไว้ ${fmtMoney(want)} บาท`);
+          if (!matchesKind(found, kind)) problems.push(`ชื่อเรื่องของฎีกา "${found.subject || '-'}" ไม่คล้ายกับการจ่าย${kind === 'tax' ? 'ภาษี' : 'ประกันสังคม'}`);
+        }
+        if (problems.length && !payForce) {
+          setPayWarn(problems.join(' / '));
+          setPayActionSaving(false);
+          return;
+        }
+        const dateUse = found?.deekaDate || payActionDate;
+        const afterD = kind === 'tax'
+          ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: dateUse, taxPayMethod: 'ชำระโดยฎีกา', taxPayMethodOther: '', taxPayDika: no, taxPayAmount: String(want), taxChequeNo: String(found?.chequeNo || '') }
+          : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: dateUse, ssoPayMethod: 'ชำระโดยฎีกา', ssoPayMethodOther: '', ssoPayDika: no, ssoPayAmount: String(want), ssoChequeNo: String(found?.chequeNo || '') };
+        await updateDoc(doc(db, cfg.key, item.id), { ...afterD, updatedAt: serverTimestamp(), updatedBy: profile.email });
+        await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after: afterD });
+        say({ type: 'ok', text: `บันทึกการจ่าย${kind === 'tax' ? 'ภาษี' : 'ประกันสังคม'}แล้ว (ตรวจพบฎีกา ${no}${problems.length ? ' — ยืนยันแม้ยอด/ชื่อไม่ตรง' : ' ยอดตรงกัน'})` });
+        setPayAction(null);
+      } catch (err) {
+        say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
+      } finally {
+        setPayActionSaving(false);
+      }
+      return;
+    }
     if (kind !== 'cheque') {
       if (!payActionMethod) { say({ type: 'error', text: 'กรุณาเลือกวิธีการจ่าย' }); return; }
       if (payActionMethod === 'อื่นๆ' && !methodOther) { say({ type: 'error', text: 'กรุณาระบุวิธีการจ่าย' }); return; }
@@ -1143,7 +1195,7 @@ export default function RegistryPage({ cfg }) {
                               hasNoTax(it) ? (
                                 <Badge className="bg-emerald-100 text-emerald-800">ไม่มียอดหัก</Badge>
                               ) : (
-                                <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 font-bold text-red-700'}>{it.taxStatus || 'ค้างส่ง'}</Badge>
+                                <Badge className={it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 font-bold text-red-700'}>{it.taxStatus === 'ส่งสรรพากรแล้ว' ? 'จ่ายแล้ว' : 'ค้างจ่าย'}</Badge>
                               )
                             )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
@@ -1189,10 +1241,10 @@ export default function RegistryPage({ cfg }) {
                               {hasNoTax(it) ? (
                                 <span className="text-xs text-emerald-700">ไม่มียอดหัก</span>
                               ) : it.taxStatus === 'ส่งสรรพากรแล้ว' ? (
-                                <span className="text-xs text-emerald-700">ส่งสรรพากรแล้ว {fmtDate(it.taxPaidDate)}</span>
+                                <span className="text-xs text-emerald-700">จ่ายภาษีแล้ว {fmtDate(it.taxPaidDate)}{it.taxPayDika ? ` · ฎีกา ${it.taxPayDika}` : ''}{it.taxPayAmount ? ` · ${fmtMoney(it.taxPayAmount)}` : ''}</span>
                               ) : (
                                 <>
-                                  <span className="text-xs font-bold text-red-600">ค้างส่งภาษี</span>
+                                  <span className="text-xs font-bold text-red-600">ค้างจ่ายภาษี</span>
                                   {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'tax')}>ส่งสรรพากร</button>}
                                 </>
                               )}
@@ -1200,7 +1252,7 @@ export default function RegistryPage({ cfg }) {
                             {!hasNoSso(it) && (
                               <div className="flex items-center gap-1.5">
                                 {it.ssoStatus === 'จ่ายแล้ว' ? (
-                                  <span className="text-xs text-emerald-700">จ่ายประกันสังคมแล้ว {fmtDate(it.ssoPaidDate)}</span>
+                                  <span className="text-xs text-emerald-700">จ่ายประกันสังคมแล้ว {fmtDate(it.ssoPaidDate)}{it.ssoPayDika ? ` · ฎีกา ${it.ssoPayDika}` : ''}{it.ssoPayAmount ? ` · ${fmtMoney(it.ssoPayAmount)}` : ''}</span>
                                 ) : (
                                   <>
                                     <span className="text-xs font-bold text-red-600">ค้างจ่ายประกันสังคม</span>
@@ -1618,11 +1670,43 @@ export default function RegistryPage({ cfg }) {
           }
         >
           <div className="grid gap-4">
-            <div>
+            {(payAction.kind === 'cheque' || payVia === 'direct') && <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">{payAction.kind === 'cheque' ? 'วันที่จ่ายเช็ค' : payAction.kind === 'tax' ? 'วันที่ส่งภาษีสรรพากร' : 'วันที่จ่ายประกันสังคม'}</label>
               <ThaiDateInput value={payActionDate} onChange={setPayActionDate} />
-            </div>
+            </div>}
             {payAction.kind !== 'cheque' && (
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2"><input type="radio" checked={payVia === 'dika'} onChange={() => setPayVia('dika')} /> ชำระโดยตั้งฎีกาเบิกจ่าย</label>
+                <label className="flex items-center gap-2"><input type="radio" checked={payVia === 'direct'} onChange={() => setPayVia('direct')} /> จ่ายตรง (ระบุวิธีการจ่าย)</label>
+              </div>
+            )}
+            {payAction.kind !== 'cheque' && payVia === 'dika' && (
+              <div className="grid gap-3">
+                <p className="text-sm text-slate-600">ยอดที่หักไว้ <b>{fmtMoney(expectedAmt(payAction.item, payAction.kind))}</b> บาท — ระบุเลขที่ฎีกาที่ตั้งเบิกจ่ายเพื่อชำระ ระบบจะตรวจยอดและชื่อเรื่องให้อัตโนมัติ</p>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่ฎีกาที่ใช้ชำระ (ฎีกาเลขที่) <span className="text-red-600">*</span></label>
+                  <input className="input" value={payDikaNo} onChange={(e) => { setPayDikaNo(e.target.value); setPayWarn(''); setPayForce(false); }} />
+                </div>
+                {dikaSuggestions.length > 0 && (
+                  <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+                    <p className="mb-1 font-medium">พบฎีกาที่ยอดตรงและชื่อคล้ายกัน (กดเพื่อเลือก):</p>
+                    {dikaSuggestions.map((c) => (
+                      <button key={c.id} type="button" className="mb-1 mr-1 rounded-full bg-white px-3 py-1 text-left ring-1 ring-emerald-300 hover:bg-emerald-100"
+                        onClick={() => { setPayDikaNo(String(c.dikaRefNo || '')); setPayWarn(''); setPayForce(false); }}>
+                        ฎีกา {c.dikaRefNo || c.deekaNo} · {String(c.subject || '').slice(0, 40)} · {fmtMoney(c.payAmount || c.amount)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {payWarn && (
+                  <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                    <p>⚠ {payWarn}</p>
+                    <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={payForce} onChange={(e) => setPayForce(e.target.checked)} /> ยืนยันบันทึกว่าชำระแล้ว แม้ตรวจไม่ตรง</label>
+                  </div>
+                )}
+              </div>
+            )}
+            {payAction.kind !== 'cheque' && payVia === 'direct' && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600">วิธีการจ่าย <span className="text-red-600">*</span></label>
                 <select className="input" value={payActionMethod} onChange={(e) => setPayActionMethod(e.target.value)}>
@@ -1631,13 +1715,13 @@ export default function RegistryPage({ cfg }) {
                 </select>
               </div>
             )}
-            {payAction.kind !== 'cheque' && payActionMethod === 'อื่นๆ' && (
+            {payAction.kind !== 'cheque' && payVia === 'direct' && payActionMethod === 'อื่นๆ' && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600">ระบุวิธีการจ่าย</label>
                 <input className="input" value={payActionMethodOther} onChange={(e) => setPayActionMethodOther(e.target.value)} />
               </div>
             )}
-            {(payAction.kind === 'cheque' || isChequeMethod(payActionMethod)) && (
+            {(payAction.kind === 'cheque' || (payVia === 'direct' && isChequeMethod(payActionMethod))) && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่เช็ค</label>
                 <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => setPayActionChequeNo(e.target.value)} />
