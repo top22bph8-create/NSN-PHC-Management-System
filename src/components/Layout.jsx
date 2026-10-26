@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, Car, Home, Inbox, KeyRound, LogOut, Menu, Search, X } from 'lucide-react';
+import { CalendarDays, Car, Home, Inbox, KeyRound, LogOut, Menu, Search, Settings, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
-import { MENU } from '../config/menu';
+import { ADMIN_ITEMS, GROUPS, groupOfPath } from '../config/menu';
 import { ORG_SHORT, SYSTEM_NAME_EN } from '../config/brand';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { usernameOf } from '../lib/accounts';
@@ -17,10 +17,8 @@ export default function Layout() {
   const nav = useNavigate();
   const loc = useLocation();
 
-  const visible = MENU.map((s) => ({
-    ...s,
-    items: s.items.filter((i) => !i.module || canRead(profile.role, i.module)),
-  })).filter((s) => s.items.length);
+  const activeGroup = groupOfPath(loc.pathname);
+  const adminVisible = ADMIN_ITEMS.filter((i) => !i.module || canRead(profile.role, i.module));
 
   const onSearch = (e) => {
     e.preventDefault();
@@ -39,30 +37,33 @@ export default function Layout() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
-        {visible.map((s, idx) => (
-          <div key={s.title} className={`mb-4 ${idx > 0 ? 'border-t border-white/10 pt-3' : ''}`}>
-            {s.main ? (
-              <div className="menu-band-title mb-2">
-                {s.icon && <s.icon className="h-4 w-4" />} {s.title}
-              </div>
-            ) : (
-              <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-300">
-                {s.icon && <s.icon className="h-3.5 w-3.5" />} {s.title}
-              </div>
-            )}
-            {s.items.map((i) => (
-              <NavLink
-                key={i.key} to={i.path} end={i.path === '/'} onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${isActive ? 'border-brand-300 bg-brand-600 font-bold text-white shadow-md' : `border-transparent text-brand-100 hover:bg-white/10 hover:text-white ${s.main ? 'font-semibold' : ''}`}`}
-              >
-                {/* ตัดอิโมจิหน้าหัวข้อออกแล้วตามที่แจ้ง (เดิมมีทั้งไอคอนและอิโมจิซ้อนกันดูรก) เหลือไอคอนเดียว */}
-                <i.icon className="h-5 w-5 shrink-0" />
-                <span className="flex-1">{i.label}</span>
-                {!i.ready && <span className="rounded bg-white/10 px-1.5 text-xs text-brand-200">เร็วๆ นี้</span>}
+        {/* เมนูซ้ายเหลือแค่ทางลัด: หน้าหลัก + 11 กลุ่มงาน + ผู้ดูแลระบบ — รายการงานย่อยทั้งหมดย้ายไปอยู่กลางหน้า Dashboard / หน้ากลุ่มงานแล้ว */}
+        <NavLink to="/" end onClick={() => setOpen(false)}
+          className={({ isActive }) => `mb-2 flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm font-semibold transition ${isActive ? 'border-brand-300 bg-brand-600 text-white shadow-md' : 'border-transparent text-brand-100 hover:bg-white/10 hover:text-white'}`}>
+          <Home className="h-5 w-5 shrink-0" /> หน้าหลัก (Dashboard)
+        </NavLink>
+        <div className="mb-1 mt-3 px-3 text-xs font-bold uppercase tracking-wider text-brand-300">กลุ่มงาน</div>
+        {GROUPS.map((g) => {
+          const on = activeGroup === g.key;
+          return (
+            <NavLink key={g.key} to={`/group/${g.key}`} onClick={() => setOpen(false)}
+              className={`flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${on ? 'border-brand-300 bg-brand-600 font-bold text-white shadow-md' : 'border-transparent text-brand-100 hover:bg-white/10 hover:text-white'}`}>
+              <span className="w-5 shrink-0 text-center text-base leading-none">{g.emoji}</span>
+              <span className="flex-1 leading-snug">{g.title}</span>
+            </NavLink>
+          );
+        })}
+        {adminVisible.length > 0 && (
+          <div className="mt-4 border-t border-white/10 pt-3">
+            <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-300"><Settings className="h-3.5 w-3.5" /> ผู้ดูแลระบบ</div>
+            {adminVisible.map((i) => (
+              <NavLink key={i.key} to={i.path} onClick={() => setOpen(false)}
+                className={({ isActive }) => `flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${isActive ? 'border-brand-300 bg-brand-600 font-bold text-white shadow-md' : 'border-transparent text-brand-100 hover:bg-white/10 hover:text-white'}`}>
+                <i.icon className="h-5 w-5 shrink-0" /> <span className="flex-1">{i.label}</span>
               </NavLink>
             ))}
           </div>
-        ))}
+        )}
       </div>
       <div className="border-t border-white/10 bg-black/10 p-3 text-sm">
         <div className="truncate font-medium text-white">{profile.name || profile.email}</div>

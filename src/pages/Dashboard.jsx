@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle, Car, CheckCircle2, ClipboardList, Clock, Inbox, CalendarDays, Send, ArrowRight, BookOpenCheck, User,
+  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight, Hammer, User,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
+import { GROUPS } from '../config/menu';
 import { getQuota, usage } from '../lib/leave';
-import { addDays, fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
+import { addDays, fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ErrorState, Spinner } from '../components/ui';
 import Logo from '../components/Logo';
 import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
@@ -28,20 +29,6 @@ const LEAVE_TYPE_TONE = {
 };
 const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่น ๆ'];
 
-// เมนูหลัก 4 งานทะเบียนที่ใช้งานบ่อยที่สุด แสดงเด่นบนแดชบอร์ด งานย่อยอื่น ๆ ไปอยู่ในแถบเมนูด้านซ้ายแทน
-const CARDS = [
-  // ปฏิทินมอบหมายงาน — อยู่ด้านหน้าสุดของเมนูหลักตามที่ ผอ. แจ้ง (แสดงจำนวนงานที่มอบหมายใน 7 วันข้างหน้า)
-  { key: 'assignments', label: 'ปฏิทินมอบหมายงาน', emoji: '📌', desc: 'มอบหมายงาน ประชุม อบรม หน่วยปฐมพยาบาล', icon: ClipboardList, path: '/assignments', module: 'assignments', tone: 'from-rose-500 to-brand-700' },
-  { key: 'incoming', label: 'ทะเบียนหนังสือรับ', emoji: '📥', desc: 'ลงรับหนังสือ ติดตามกำหนดดำเนินการ', icon: Inbox, path: '/incoming', module: 'incoming', tone: 'from-sky-500 to-brand-700' },
-  { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', emoji: '📤', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ', icon: Send, path: '/outgoing', module: 'outgoing', tone: 'from-brand-500 to-brand-800' },
-  // ทางเข้าหน้ารวม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" (ฎีกาเบิกจ่าย/คำสั่ง/ประกาศ/สัญญายืมเงิน ฯลฯ) — ย้ายมาอันดับ 3 ถัดจากหนังสือส่งตามคำขอ เปิดได้ทุกบทบาท ไม่มีช่อง module จึงไม่ต้องตรวจสิทธิ์
-  { key: 'registries', label: 'ทะเบียนประกอบฎีกาและทะเบียนต่างๆ', emoji: '📚', desc: 'ฎีกาเบิกจ่าย คำสั่ง ประกาศ สัญญายืมเงิน และอีก 5 ทะเบียน', icon: BookOpenCheck, path: '/registries', module: null, tone: 'from-mint-400 to-mint-600' },
-  { key: 'leave', label: 'ทะเบียนควบคุมวันลา', emoji: '🗓️', desc: 'ยื่นใบลา อนุมัติ ตรวจสอบวันลาคงเหลือ', icon: CalendarDays, path: '/leave', module: 'leave', tone: 'from-cyan-500 to-brand-700' },
-  { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', desc: 'ขออนุญาตใช้รถ อนุมัติ เลขไมล์ ค่าน้ำมัน', icon: Car, path: '/vehicle', module: 'vehicle', tone: 'from-indigo-500 to-brand-800' },
-];
-
-const ACTION = { create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', login: 'เข้าสู่ระบบ', export: 'ส่งออก', settings: 'ตั้งค่า' };
-
 function Stat({ icon: Icon, label, value, tone }) {
   return (
     <div className="card flex items-center gap-3 p-4">
@@ -57,7 +44,6 @@ export default function Dashboard() {
   const nav = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [logs, setLogs] = useState([]);
   const [leaveRows, setLeaveRows] = useState(null);
   const [leaveQuota, setLeaveQuota] = useState(null);
   const [assignCount, setAssignCount] = useState(null);
@@ -115,13 +101,6 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fy, profile.role]);
 
-  useEffect(() => {
-    if (!canRead(profile.role, 'audit')) return;
-    getDocs(query(collection(db, 'auditLogs'), orderBy('at', 'desc'), limit(8)))
-      .then((s) => setLogs(s.docs.map((d) => ({ id: d.id, ...d.data() }))))
-      .catch(() => {});
-  }, [profile.role]);
-
   const m = useMemo(() => {
     if (!data) return null;
     const today = todayStr();
@@ -141,23 +120,14 @@ export default function Dashboard() {
         out: data.outgoing.filter((x) => (x.sendDate || '').slice(5, 7) === key).length,
       };
     });
-    // จัดกลุ่มตามความเร่งด่วนแทนกลุ่มงาน (ตัดช่องกลุ่มงานออกจากทะเบียนหนังสือรับแล้ว)
-    const byUrgency = {};
-    inc.forEach((x) => { const u = x.urgency || 'ไม่ระบุ'; byUrgency[u] = (byUrgency[u] || 0) + 1; });
-    const recent = [
-      ...inc.map((x) => ({ ...x, mod: 'incoming', no: x.receiveNo, date: x.receiveDate })),
-      ...data.outgoing.map((x) => ({ ...x, mod: 'outgoing', no: x.sendNo, date: x.sendDate })),
-    ].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 6);
     return {
       inTotal: inc.length, inMonth: inc.filter((x) => (x.receiveDate || '').startsWith(thisMonth)).length,
       outTotal: data.outgoing.length, outMonth: data.outgoing.filter((x) => (x.sendDate || '').startsWith(thisMonth)).length,
-      pending, overdue, near, monthly, byUnit: Object.entries(byUrgency).sort((a, b) => b[1] - a[1]),
-      recent,
+      pending, overdue, near, monthly,
     };
   }, [data]);
 
   const maxBar = m ? Math.max(1, ...m.monthly.map((x) => Math.max(x.inc, x.out))) : 1;
-  const maxUnit = m ? Math.max(1, ...m.byUnit.map((x) => x[1])) : 1;
   const today = new Date().toLocaleDateString('th-TH', { dateStyle: 'full' });
 
   return (
@@ -192,30 +162,41 @@ export default function Dashboard() {
               </>
             )}
 
-            <h2 className="mb-2 text-lg font-semibold">เมนูหลัก</h2>
-            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              {CARDS.map((c) => {
-                const allowed = c.module ? canRead(profile.role, c.module) : true;
-                const stats = m && allowed
-                  ? (c.key === 'incoming' ? { total: m.inTotal, month: m.inMonth } : c.key === 'outgoing' ? { total: m.outTotal, month: m.outMonth } : null)
-                  : null;
-                const assignInfo = c.key === 'assignments' && allowed && assignCount !== null ? assignCount : null;
+            <h2 className="mb-3 text-lg font-semibold">กลุ่มงาน</h2>
+            <div className="mb-7 grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {GROUPS.map((g) => {
+                const items = g.items.filter((i) => !i.module || canRead(profile.role, i.module));
+                const live = items.filter((i) => i.ready);
+                const statOf = (i) => (m && i.key === 'incoming' ? `${m.inTotal} รายการ` : m && i.key === 'outgoing' ? `${m.outTotal} รายการ` : i.key === 'assignments' && assignCount !== null ? `7 วัน: ${assignCount} งาน` : null);
                 return (
-                  <Link key={c.key} to={allowed ? c.path : '#'} className={`card group relative flex flex-col gap-2 overflow-hidden p-5 transition ${allowed ? 'hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-lg' : 'opacity-50'}`}>
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${c.tone} text-white shadow-sm`}><c.icon className="h-6 w-6" /></div>
-                    <div className="font-bold text-slate-800">{c.emoji} {c.label}</div>
-                    <div className="text-sm text-slate-500">{c.desc}</div>
-                    {stats ? (
-                      <div className="mt-1 text-sm text-slate-600"><span className="text-2xl font-bold text-brand-800">{stats.total}</span> รายการ · เดือนนี้ {stats.month}</div>
-                    ) : assignInfo !== null ? (
-                      <div className="mt-1 text-sm text-slate-600">7 วันข้างหน้า <span className="text-2xl font-bold text-brand-800">{assignInfo}</span> งาน</div>
-                    ) : !allowed && <span className="text-sm text-slate-400">ไม่มีสิทธิ์เข้าถึง</span>}
-                    <ArrowRight className="absolute bottom-4 right-4 h-5 w-5 text-brand-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
-                  </Link>
+                  <div key={g.key} className="card overflow-hidden transition hover:shadow-lg">
+                    <Link to={`/group/${g.key}`} className={`flex items-center gap-3 bg-gradient-to-r ${g.tone} px-4 py-3 text-white`}>
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-xl">{g.emoji}</span>
+                      <span className="flex-1 font-bold leading-snug">{g.title}</span>
+                      <ArrowRight className="h-5 w-5 opacity-70" />
+                    </Link>
+                    <div className="p-2">
+                      {live.length === 0 ? (
+                        <Link to={`/group/${g.key}`} className="flex items-center gap-2 rounded-lg px-3 py-3 text-sm text-slate-400 hover:bg-slate-50">
+                          <Hammer className="h-4 w-4" /> เร็วๆ นี้ — อยู่ระหว่างพัฒนา
+                        </Link>
+                      ) : live.map((i) => (
+                        <Link key={i.key} to={i.path} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${g.soft}`}><i.icon className="h-4 w-4" /></span>
+                          <span className="flex-1 leading-snug">{i.label}</span>
+                          {statOf(i) && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${g.soft}`}>{statOf(i)}</span>}
+                        </Link>
+                      ))}
+                      {items.some((i) => !i.ready) && live.length > 0 && (
+                        <p className="px-3 pb-1 pt-1 text-xs text-slate-400">เร็วๆ นี้: {items.filter((i) => !i.ready).map((i) => i.label).join(', ')}</p>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
 
+            <h2 className="mb-3 text-lg font-semibold">ภาพรวมและแจ้งเตือน</h2>
             {m && (
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="card p-4">
@@ -235,20 +216,6 @@ export default function Dashboard() {
                 </div>
 
                 <div className="card p-4">
-                  <h3 className="mb-3 font-semibold">หนังสือรับตามความเร่งด่วน</h3>
-                  {m.byUnit.length === 0 ? <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูล</p> : (
-                    <ul className="space-y-2">
-                      {m.byUnit.map(([u, n]) => (
-                        <li key={u} className="text-sm">
-                          <div className="mb-0.5 flex justify-between"><span>{u}</span><span className="font-semibold">{n}</span></div>
-                          <div className="h-2 rounded bg-slate-100"><div className="h-2 rounded bg-brand-600" style={{ width: `${(n / maxUnit) * 100}%` }} /></div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <div className="card p-4">
                   <h3 className="mb-3 flex items-center gap-2 font-semibold"><AlertTriangle className="h-5 w-5 text-red-600" /> แจ้งเตือนสำคัญ</h3>
                   {m.overdue.length + m.near.length === 0 ? (
                     <p className="flex items-center gap-2 py-6 text-emerald-700"><CheckCircle2 className="h-5 w-5" /> ไม่มีรายการเกินกำหนดหรือใกล้ครบกำหนด</p>
@@ -258,20 +225,6 @@ export default function Dashboard() {
                         <li key={x.id} className="flex cursor-pointer items-start gap-2 py-2 hover:bg-slate-50" onClick={() => nav(`/incoming?open=${x.id}`)}>
                           <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${red ? 'bg-red-500' : 'bg-orange-400'}`} />
                           <div className="min-w-0 flex-1"><div className="truncate font-medium">{x.receiveNo} · {x.subject}</div><div className="text-sm text-slate-500">{red ? 'เกินกำหนด' : 'ใกล้ครบกำหนด'} {fmtDate(x.dueDate)}</div></div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <div className="card p-4">
-                  <h3 className="mb-3 font-semibold">เอกสารล่าสุด</h3>
-                  {m.recent.length === 0 ? <p className="py-6 text-center text-slate-400">ยังไม่มีเอกสาร</p> : (
-                    <ul className="divide-y divide-slate-100">
-                      {m.recent.map((x) => (
-                        <li key={x.mod + x.id} className="flex cursor-pointer items-start gap-2 py-2 hover:bg-slate-50" onClick={() => nav(`${REGISTRIES[x.mod].path}?open=${x.id}`)}>
-                          {x.mod === 'incoming' ? <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" /> : <Send className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />}
-                          <div className="min-w-0 flex-1"><div className="truncate font-medium">{x.no} · {x.subject}</div><div className="text-sm text-slate-500">{fmtDate(x.date)}</div></div>
                         </li>
                       ))}
                     </ul>
@@ -325,16 +278,6 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {logs.length > 0 && (
-                  <div className="card p-4 lg:col-span-2">
-                    <h3 className="mb-3 flex items-center justify-between font-semibold">กิจกรรมล่าสุด <Link to="/audit" className="text-sm font-normal text-brand-700 hover:underline">ดูทั้งหมด</Link></h3>
-                    <ul className="divide-y divide-slate-100 text-sm">
-                      {logs.map((l) => (
-                        <li key={l.id} className="flex flex-wrap gap-x-3 py-1.5"><span className="text-slate-500">{fmtDateTime(l.at)}</span><span className="font-medium">{l.userEmail}</span><span>{ACTION[l.action] || l.action} {l.label}</span></li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             )}
           </>

@@ -1,14 +1,9 @@
 import {
-  Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Building2,
-  Activity, HeartPulse, Users, Settings, History, CalendarDays, DatabaseBackup,
-  ClipboardList, MapPinned, CalendarClock,
-  Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound,
+  Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
+  ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe,
 } from 'lucide-react';
 
-// รายการทะเบียนในกลุ่ม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" — ย้ายมาแสดงเป็นลิงก์ตรงในกลุ่ม "ทะเบียนหลัก" ของเมนูซ้ายแล้วตามคำขอ
-// (กดแล้วเข้าทะเบียนนั้นได้ทันที ไม่ต้องผ่านหน้ารวมอีกต่อไป) ยังใช้ array นี้สำหรับหน้ารวมไอคอน/การ์ด (RegistriesHub.jsx) ที่กดเข้าได้จากแดชบอร์ดเช่นเดิม
-// เรียงฎีกาเบิกจ่ายไว้อันดับแรกตามคำขอ และตัด "ทะเบียนคืนเงินยืม" ออกแล้ว (ย้ายไปรวมอยู่ในทะเบียนสัญญายืมเงินแทน)
 export const REGISTRY_LINKS = [
   { key: 'reg-deeka', label: 'ทะเบียนคุมฎีกาเบิกจ่าย', path: '/reg-deeka', icon: FileStack },
   { key: 'reg-orders', label: 'ทะเบียนคำสั่ง', path: '/reg-orders', icon: ScrollText },
@@ -21,89 +16,103 @@ export const REGISTRY_LINKS = [
   { key: 'reg-certificate', label: 'ทะเบียนคุมเลขที่เกียรติบัตร', path: '/reg-certificate', icon: Award },
 ];
 
-// ready = พร้อมใช้งานแล้ว, module = ชื่อสิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
-// icon ของหมวดหมู่ใช้แสดงหัวกลุ่มเมนูในแถบเมนูด้านซ้าย
-export const MENU = [
+// ===== กลุ่มงานหลัก 11 กลุ่ม (ใช้ทั้งแดชบอร์ดกลางหน้า, หน้ากลุ่ม /group/:key และแถบเมนูซ้าย) =====
+// ready=false → ยังไม่เปิดใช้ แสดงเป็น "เร็วๆ นี้" ; module = สิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
+const R = (key, desc) => { const r = REGISTRY_LINKS.find((x) => x.key === key); return { ...r, desc, ready: true, module: key }; };
+export const GROUPS = [
   {
-    title: 'ภาพรวม',
-    icon: Home,
-    main: true,
+    key: 'admin', title: 'งานธุรการ', emoji: '📋', icon: ClipboardList, tone: 'from-sky-500 to-blue-600', soft: 'bg-sky-50 text-sky-700',
     items: [
-      { key: 'dash', label: 'Dashboard', path: '/', icon: Home, ready: true },
-      { key: 'search', label: 'ค้นหาแบบรวม', path: '/search', icon: Search, ready: true },
+      { key: 'incoming', label: 'ทะเบียนหนังสือรับ', path: '/incoming', icon: Inbox, ready: true, module: 'incoming', desc: 'ลงรับหนังสือ ติดตามกำหนดดำเนินการ' },
+      { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', path: '/outgoing', icon: Send, ready: true, module: 'outgoing', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ' },
+      R('reg-orders', 'ออกเลขคำสั่ง'),
+      R('reg-announce', 'ออกเลขประกาศ'),
+      R('reg-contract-no', 'ออกเลขหนังสือสัญญา'),
+      R('reg-certificate', 'ออกเลขเกียรติบัตร'),
+      { key: 'leave', label: 'ทะเบียนควบคุมวันลา', path: '/leave', icon: CalendarDays, ready: true, module: 'leave', desc: 'ยื่นใบลา อนุมัติ วันลาคงเหลือ' },
+      { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', path: '/vehicle', icon: Car, ready: true, module: 'vehicle', desc: 'ขอใช้รถ อนุมัติ เลขไมล์' },
     ],
   },
   {
-    // รวมทะเบียนประกอบฎีกาและทะเบียนควบคุมต่างๆ (REGISTRY_LINKS) ไว้ในกลุ่มเดียวกับทะเบียนหลักตามคำขอ — กดแล้วเข้าทะเบียนนั้นได้ทันที
-    title: 'ทะเบียนหลัก',
-    icon: ClipboardList,
-    main: true,
+    key: 'finance', title: 'งานการเงินและบัญชี', emoji: '💰', icon: Wallet, tone: 'from-emerald-500 to-teal-600', soft: 'bg-emerald-50 text-emerald-700',
     items: [
-      { key: 'incoming', label: 'ทะเบียนหนังสือรับ', emoji: '📥', path: '/incoming', icon: Inbox, ready: true, module: 'incoming' },
-      { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', emoji: '📤', path: '/outgoing', icon: Send, ready: true, module: 'outgoing' },
-      { key: 'leave', label: 'ทะเบียนควบคุมวันลา', emoji: '🗓️', path: '/leave', icon: CalendarDays, ready: true, module: 'leave' },
-      { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', emoji: '🚗', path: '/vehicle', icon: Car, ready: true, module: 'vehicle' },
-      ...REGISTRY_LINKS.map((r) => ({ key: r.key, label: r.label, path: r.path, icon: r.icon, ready: true, module: r.key })),
+      R('reg-deeka', 'ฎีกาเบิกจ่าย ภาษี ประกันสังคม เช็ค'),
+      R('reg-loan', 'สัญญายืมเงิน ติดตามการส่งใช้'),
+      R('reg-cheque', 'ควบคุมการเบิกจ่ายเล่มเช็ค'),
+      R('reg-receipt', 'ควบคุมใบเสร็จรับเงิน'),
     ],
   },
   {
-    title: 'แผนงานและรายงาน',
-    icon: MapPinned,
-    main: true,
+    key: 'info', title: 'งานข้อมูลข่าวสารและสารสนเทศ', emoji: '🌐', icon: Globe, tone: 'from-violet-500 to-purple-600', soft: 'bg-violet-50 text-violet-700',
     items: [
-      { key: 'duty', label: 'แผนเวรนอกเวลาประจำเดือน', emoji: '🌙', path: '/duty', icon: ClipboardList, ready: true, module: 'duty' },
-      { key: 'homevisit', label: 'แผน/รายงานเยี่ยมบ้านเชิงรุกประจำเดือน', emoji: '🏠', path: '/homevisit', icon: MapPinned, ready: true, module: 'homevisit' },
-      { key: 'assignments', label: 'ปฏิทินมอบหมายงาน', emoji: '🗂️', path: '/assignments', icon: CalendarClock, ready: true, module: 'assignments' },
-      // "รายงาน/สถิติการลา" ย้ายไปเป็นแท็บในหน้า "ทะเบียนควบคุมวันลา" (เมนูทะเบียนหลัก) แล้วตามคำขอ ไม่ต้องมีเมนูแยกอีก
+      { key: 'search', label: 'ค้นหาแบบรวม', path: '/search', icon: Search, ready: true, desc: 'ค้นหาข้อมูลทุกทะเบียนในครั้งเดียว' },
     ],
   },
   {
-    title: 'งานบุคคล',
-    icon: Users,
-    main: true,
+    key: 'manage', title: 'งานบริหาร', emoji: '🏛️', icon: Building2, tone: 'from-indigo-500 to-blue-700', soft: 'bg-indigo-50 text-indigo-700',
     items: [
-      { key: 'personnel', label: 'ทำเนียบบุคลากร', emoji: '👥', path: '/personnel', icon: Users, ready: true, module: 'personnel' },
+      { key: 'personnel', label: 'ทำเนียบบุคลากร', path: '/personnel', icon: Users, ready: true, module: 'personnel', desc: 'ข้อมูลบุคลากรและประวัติ' },
+      { key: 'duty', label: 'แผนเวรนอกเวลาประจำเดือน', path: '/duty', icon: ClipboardList, ready: true, module: 'duty', desc: 'จัดเวรนอกเวลาราชการ' },
     ],
   },
   {
-    title: 'กลุ่มงานบริหาร',
-    icon: Building2,
-    main: true,
+    key: 'assign', title: 'ปฏิทินมอบหมายงาน', emoji: '🗂️', icon: CalendarClock, tone: 'from-amber-500 to-orange-600', soft: 'bg-amber-50 text-amber-700',
     items: [
-      { key: 'finance', label: 'การเงินและบัญชี', emoji: '💰', path: '/soon/finance', icon: Wallet },
-      { key: 'equipment', label: 'ครุภัณฑ์', emoji: '🪑', path: '/soon/equipment', icon: Armchair },
-      { key: 'supplies', label: 'พัสดุ', emoji: '📦', path: '/soon/supplies', icon: Package },
-      { key: 'land', label: 'ที่ดินและสิ่งก่อสร้าง', emoji: '🏢', path: '/soon/land', icon: Building2 },
+      { key: 'assignments', label: 'ปฏิทินมอบหมายงาน', path: '/assignments', icon: CalendarClock, ready: true, module: 'assignments', desc: 'มอบหมายงาน ประชุม อบรม หน่วยปฐมพยาบาล' },
     ],
   },
   {
-    title: 'งานบริการสุขภาพ',
-    icon: HeartPulse,
-    main: true,
+    key: 'supply', title: 'งานครุภัณฑ์-พัสดุ', emoji: '📦', icon: Package, tone: 'from-orange-500 to-red-500', soft: 'bg-orange-50 text-orange-700',
     items: [
-      { key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', emoji: '🦠', path: '/soon/disease', icon: Activity },
-      { key: 'family', label: 'เวชปฏิบัติครอบครัว', emoji: '❤️‍🩹', path: '/soon/family', icon: HeartPulse },
+      R('reg-procurement', 'ควบคุมการสั่งซื้อสั่งจ้าง'),
+      { key: 'equipment', label: 'ครุภัณฑ์', path: '/soon/equipment', icon: Armchair, ready: false },
+      { key: 'supplies', label: 'พัสดุ', path: '/soon/supplies', icon: Package, ready: false },
     ],
   },
   {
-    title: 'ผู้ดูแลระบบ',
-    icon: Settings,
-    main: true,
+    key: 'nursing', title: 'งานการพยาบาล', emoji: '🩺', icon: Stethoscope, tone: 'from-rose-500 to-pink-600', soft: 'bg-rose-50 text-rose-700',
+    items: [{ key: 'nursing', label: 'งานการพยาบาล', path: '/soon/nursing', icon: Stethoscope, ready: false }],
+  },
+  {
+    key: 'academic', title: 'งานวิชาการ', emoji: '🎓', icon: GraduationCap, tone: 'from-cyan-500 to-sky-600', soft: 'bg-cyan-50 text-cyan-700',
+    items: [{ key: 'academic', label: 'งานวิชาการ', path: '/soon/academic', icon: GraduationCap, ready: false }],
+  },
+  {
+    key: 'disease', title: 'งานส่งเสริมป้องกันโรค', emoji: '🦠', icon: Activity, tone: 'from-teal-500 to-green-600', soft: 'bg-teal-50 text-teal-700',
+    items: [{ key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', path: '/soon/disease', icon: Activity, ready: false }],
+  },
+  {
+    key: 'ltc', title: 'งานดูแลผู้มีภาวะพึ่งพิง LTC', emoji: '🧓', icon: HeartHandshake, tone: 'from-fuchsia-500 to-purple-600', soft: 'bg-fuchsia-50 text-fuchsia-700',
+    items: [{ key: 'ltc', label: 'ดูแลผู้มีภาวะพึ่งพิง LTC', path: '/soon/ltc', icon: HeartHandshake, ready: false }],
+  },
+  {
+    key: 'visit', title: 'งานเยี่ยมบ้านและงานดูแลผู้ป่วยเชิงรุก', emoji: '🏠', icon: MapPinned, tone: 'from-lime-500 to-green-600', soft: 'bg-lime-50 text-lime-700',
     items: [
-      { key: 'settings', label: 'ตั้งค่าระบบ', emoji: '⚙️', path: '/settings', icon: Settings, ready: true, module: 'settings' },
-      { key: 'backup', label: 'สำรอง/กู้คืนข้อมูล', emoji: '💾', path: '/backup', icon: DatabaseBackup, ready: true, module: 'backup' },
-      { key: 'audit', label: 'Audit Log', emoji: '🕵️', path: '/audit', icon: History, ready: true, module: 'audit' },
-      { key: 'personnel-users', label: 'กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก', emoji: '🔑', path: '/users', icon: KeyRound, ready: true, module: 'users' },
+      { key: 'homevisit', label: 'แผน/รายงานเยี่ยมบ้านเชิงรุกประจำเดือน', path: '/homevisit', icon: MapPinned, ready: true, module: 'homevisit', desc: 'วางแผนและรายงานการเยี่ยมบ้าน' },
     ],
   },
 ];
 
+// เมนูผู้ดูแลระบบ (แสดงเฉพาะที่มีสิทธิ์) — ตัด Audit Log ออกแล้ว
+export const ADMIN_ITEMS = [
+  { key: 'settings', label: 'ตั้งค่าระบบ', path: '/settings', icon: Settings, module: 'settings' },
+  { key: 'backup', label: 'สำรอง/กู้คืนข้อมูล', path: '/backup', icon: DatabaseBackup, module: 'backup' },
+  { key: 'personnel-users', label: 'ผู้ใช้งาน/อนุมัติสมัครสมาชิก', path: '/users', icon: KeyRound, module: 'users' },
+];
+
+// หาว่า path ปัจจุบันอยู่ในกลุ่มงานไหน (ใช้ไฮไลต์เมนูซ้าย)
+export const groupOfPath = (pathname) => {
+  const g = GROUPS.find((x) => pathname === `/group/${x.key}`);
+  if (g) return g.key;
+  return GROUPS.find((x) => x.items.some((i) => i.path !== '/' && (pathname === i.path || pathname.startsWith(i.path + '/'))))?.key || null;
+};
+
 // รายละเอียดโมดูลที่กำลังพัฒนา (แสดงในหน้า "เร็วๆ นี้")
 export const SOON = {
-  finance: { label: 'งานการเงินและบัญชี', features: ['ทะเบียนยืมเงิน (แจ้งเตือนใกล้ครบกำหนด/เกินกำหนด)', 'ทะเบียนสั่งซื้อ/สั่งจ้าง', 'ทะเบียนคุมเลขที่สัญญา (แจ้งเตือนก่อนสัญญาหมดอายุ)', 'ทะเบียนเอกสารทางการเงิน'] },
   equipment: { label: 'งานครุภัณฑ์', features: ['ทะเบียนครุภัณฑ์ (เลขครุภัณฑ์เป็นรหัสหลัก)', 'โอนย้าย / จำหน่าย / ซ่อมบำรุง', 'ตรวจสอบครุภัณฑ์ประจำปี', 'รองรับ QR Code/Barcode ในอนาคต'] },
   supplies: { label: 'งานพัสดุ', features: ['ทะเบียนพัสดุ', 'รับพัสดุ / เบิกจ่าย', 'คงเหลือและจุดสั่งซื้อ', 'แจ้งเตือนพัสดุใกล้หมด'] },
-  land: { label: 'งานที่ดินและสิ่งก่อสร้าง', features: ['ทะเบียนที่ดิน อาคาร สิ่งก่อสร้าง', 'ประวัติการซ่อมและปรับปรุง', 'เอกสารสิทธิ์ แบบแปลน รูปภาพ'] },
   disease: { label: 'งานส่งเสริมป้องกันควบคุมโรค', features: ['บันทึกกิจกรรม/โครงการ ตามหมู่บ้านและกลุ่มเป้าหมาย', 'รายงานตามเดือน ไตรมาส ปีงบประมาณ', 'งานเฝ้าระวังโรค วัคซีน คัดกรอง ไข้เลือดออก ฯลฯ'] },
-  family: { label: 'งานเวชปฏิบัติครอบครัว', features: ['NCD / LTC / ผู้ป่วยติดบ้านติดเตียง / เยี่ยมบ้าน', 'ต้องออกแบบสิทธิ์เข้มงวดและ PDPA ก่อน (เฟสหลัง)'] },
+  nursing: { label: 'งานการพยาบาล', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
+  academic: { label: 'งานวิชาการ', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
+  ltc: { label: 'งานดูแลผู้มีภาวะพึ่งพิง LTC', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
 };

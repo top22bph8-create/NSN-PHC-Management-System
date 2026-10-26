@@ -23,12 +23,11 @@ import Personnel from './pages/Personnel';
 import UserAccounts from './pages/UserAccounts';
 import Leave from './pages/Leave';
 import Assignments from './pages/Assignments';
-import RegistriesHub from './pages/RegistriesHub';
+import GroupPage from './pages/GroupPage';
 import VehicleReport from './pages/VehicleReport';
 import Backup from './pages/Backup';
 import Account from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
-import AuditLog from './pages/AuditLog';
 
 function Blocked({ problem, error }) {
   const { logout, user, profile } = useAuth();
@@ -191,13 +190,13 @@ function Shell() {
           {/* รายงาน/สถิติการลา ย้ายไปเป็นแท็บในหน้าทะเบียนควบคุมวันลา (Leave.jsx) แล้วตามคำขอ — ลิงก์เก่ายังเปิดได้ เด้งไปหน้าทะเบียนวันลาแทน */}
           <Route path="leave-reports" element={<Navigate to="/leave" replace />} />
           <Route path="assignments" element={<Guard module="assignments"><Assignments /></Guard>} />
-          <Route path="registries" element={<RegistriesHub />} />
+          <Route path="registries" element={<Navigate to="/group/finance" replace />} />
+          <Route path="group/:key" element={<GroupPage />} />
           <Route path="vehicle-report" element={<Guard module="vehicle"><VehicleReport /></Guard>} />
           <Route path="backup" element={<Guard module="backup"><Backup /></Guard>} />
           <Route path="account" element={<Account />} />
           <Route path="users" element={<Guard module="users"><UserAccounts /></Guard>} />
           <Route path="settings" element={<Guard module="settings"><SettingsPage /></Guard>} />
-          <Route path="audit" element={<Guard module="audit"><AuditLog /></Guard>} />
           <Route path="soon/:key" element={<ComingSoon />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

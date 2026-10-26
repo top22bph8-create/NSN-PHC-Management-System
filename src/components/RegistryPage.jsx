@@ -12,7 +12,7 @@ import { checkSeqUsed, createNumberedAtSeq, createNumbered, createOutgoingNumber
 import { exportCsv } from '../lib/exportFile';
 import { exportRegistryExcel } from '../lib/report';
 import { fiscalYearBE, fmtDate, nowTimeStr, thMonths, todayStr } from '../lib/thai';
-import { REGISTRY_LINKS } from '../config/menu';
+import { GROUPS, REGISTRY_LINKS } from '../config/menu';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from './ui';
 import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
@@ -1021,8 +1021,8 @@ export default function RegistryPage({ cfg }) {
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
       {isHubRegistry && (
-        <Link to="/registries" className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-900">
-          <ArrowLeft className="h-4 w-4" /> กลับหน้ารวมทะเบียน
+        <Link to={`/group/${GROUPS.find((g) => g.items.some((i) => i.key === cfg.key))?.key || 'admin'}`} className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-900">
+          <ArrowLeft className="h-4 w-4" /> กลับหน้ากลุ่มงาน
         </Link>
       )}
       <PageHeader

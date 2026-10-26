@@ -9,7 +9,7 @@ import { fmtDateTime } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import { Toast } from '../components/ui';
 
-const LABEL = { users: 'บุคลากรและสิทธิ์', credentials: 'รหัสผ่านผู้ใช้งาน', settings: 'การตั้งค่า', counters: 'ตัวนับเลขทะเบียน', incoming: 'หนังสือรับ', outgoing: 'หนังสือส่ง', leaves: 'ใบลา', auditLogs: 'Audit Log' };
+const LABEL = { users: 'บุคลากรและสิทธิ์', credentials: 'รหัสผ่านผู้ใช้งาน', settings: 'การตั้งค่า', counters: 'ตัวนับเลขทะเบียน', incoming: 'หนังสือรับ', outgoing: 'หนังสือส่ง', leaves: 'ใบลา', vehicle: 'ยานพาหนะ', duty: 'แผนเวร', homevisit: 'เยี่ยมบ้าน', assignments: 'ปฏิทินมอบหมายงาน', 'reg-orders': 'ทะเบียนคำสั่ง', 'reg-announce': 'ทะเบียนประกาศ', 'reg-procurement': 'สั่งซื้อสั่งจ้าง', 'reg-contract-no': 'เลขหนังสือสัญญา', 'reg-loan': 'สัญญายืมเงิน', 'reg-cheque': 'เล่มเช็ค', 'reg-receipt': 'ใบเสร็จรับเงิน', 'reg-deeka': 'ฎีกาเบิกจ่าย', 'reg-certificate': 'เกียรติบัตร' };
 
 export default function Backup() {
   const { profile } = useAuth();
@@ -19,6 +19,9 @@ export default function Backup() {
   const [file, setFile] = useState(null);
   const [confirm, setConfirm] = useState('');
   const [progress, setProgress] = useState(0);
+  const [step, setStep] = useState('');
+  const [dlUrl, setDlUrl] = useState(null);
+  const [failedList, setFailedList] = useState([]);
   const [toast, setToast] = useState(null);
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 5000); };
 
@@ -33,7 +36,8 @@ export default function Backup() {
   const download = async () => {
     setBusy(true);
     try {
-      const b = await buildBackup();
+      const b = await buildBackup((n) => setStep(LABEL[n] || n));
+      setFailedList(b.failed || []);
       const blob = new Blob([JSON.stringify(b)], { type: 'application/json' });
       const d = new Date();
       const fileName = `NSN-PHC-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
@@ -44,16 +48,16 @@ export default function Backup() {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setDlUrl({ url, fileName });
       const c = countOf(b);
       await markBackupDone(profile.email, c);
       await writeAudit({ action: 'export', module: 'backup', label: 'สำรองข้อมูลทั้งระบบ', after: c });
       setCounts(c);
       loadLast();
-      say({ type: 'ok', text: 'ดาวน์โหลดไฟล์สำรองข้อมูลแล้ว' });
+      say(b.failed?.length ? { type: 'error', text: `สำรองแล้ว แต่ส่วนต่อไปนี้อ่านไม่ได้: ${b.failed.join(', ')}` } : { type: 'ok', text: 'ดาวน์โหลดไฟล์สำรองข้อมูลแล้ว' });
     } catch (e) {
       say({ type: 'error', text: 'สำรองข้อมูลไม่สำเร็จ: ' + (e.code || e.message) });
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setStep(''); }
   };
 
   const pick = async (e) => {
@@ -72,9 +76,10 @@ export default function Backup() {
   const restore = async () => {
     setBusy(true); setProgress(0);
     try {
-      const n = await restoreBackup(file.data, setProgress);
+      const { done: n, failed } = await restoreBackup(file.data, setProgress);
+      if (failed.length) say({ type: 'error', text: `กู้คืนได้ ${n} รายการ แต่ ${failed.length} รายการกู้ไม่ได้ (ติดสิทธิ์/กฎความปลอดภัย)` });
       await writeAudit({ action: 'settings', module: 'backup', label: `กู้คืนข้อมูลจากไฟล์ ${file.name}`, after: file.counts });
-      say({ type: 'ok', text: `กู้คืนข้อมูลแล้ว ${n} รายการ` });
+      if (!failed.length) say({ type: 'ok', text: `กู้คืนข้อมูลแล้ว ${n} รายการ` });
       setFile(null); setConfirm('');
     } catch (e) {
       say({ type: 'error', text: 'กู้คืนไม่สำเร็จ: ' + (e.code || e.message) });
@@ -92,10 +97,13 @@ export default function Backup() {
 
       <div className="card mb-5 p-5">
         <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold"><Download className="h-5 w-5 text-brand-600" /> สำรองข้อมูล</h2>
-        <p className="mb-1 text-sm text-slate-600">สำรอง: {BACKUP_COLLECTIONS.map((c) => LABEL[c]).join(', ')}</p>
+        <p className="mb-1 text-sm text-slate-600">สำรอง: {['settings', ...BACKUP_COLLECTIONS].map((c) => LABEL[c]).join(', ')}</p>
         <p className="mb-3 text-sm text-slate-500">ไม่รวมไฟล์แนบ (PDF/รูป) ซึ่งเก็บใน Firebase Storage · รวมสำเนารหัสผ่าน (plaintext) ที่ผู้ดูแลระบบตั้งไว้เพื่อแจ้งผู้ใช้งาน แต่ไม่รวมค่ารหัสผ่านที่เข้ารหัสจริงของระบบยืนยันตัวตน (Firebase Authentication) ซึ่งไม่สามารถอ่านออกมาได้อยู่แล้ว</p>
         {last?.lastBackupAt && <p className="mb-3 text-sm">สำรองล่าสุด: <b>{fmtDateTime(last.lastBackupAt)}</b> โดย {last.by}</p>}
         <button className="btn btn-primary" onClick={download} disabled={busy}>{busy && !file && <Loader2 className="h-4 w-4 animate-spin" />} ดาวน์โหลดไฟล์สำรองข้อมูล (.json)</button>
+        {busy && step && <p className="mt-2 text-sm text-slate-500">กำลังอ่านข้อมูล: {step} ...</p>}
+        {dlUrl && <p className="mt-2 text-sm text-slate-600">ถ้าไฟล์ไม่ถูกดาวน์โหลดอัตโนมัติ (เช่นเปิดในแอปไลน์/เบราว์เซอร์ในแอป) <a className="font-semibold text-brand-700 underline" href={dlUrl.url} download={dlUrl.fileName} target="_blank" rel="noreferrer">กดที่นี่เพื่อดาวน์โหลด</a> หรือเปิดระบบด้วย Chrome/Safari</p>}
+        {failedList.length > 0 && <p className="mt-2 text-sm text-amber-700">อ่านไม่ได้: {failedList.join(', ')}</p>}
         {counts && <ul className="mt-3 grid grid-cols-2 gap-1 text-sm text-slate-600 sm:grid-cols-3">{Object.entries(counts).map(([k, v]) => <li key={k}>{LABEL[k] || k}: <b>{v}</b></li>)}</ul>}
       </div>
 
