@@ -471,6 +471,8 @@ export const REGISTRIES = {
     title: 'ทะเบียนคุมฎีกาเบิกจ่าย',
     noun: 'ฎีกาเบิกจ่าย',
     numberField: 'deekaNo',
+    renumberOnDelete: true,
+    hideInsert: true,
     numberLabel: 'เลขที่ฎีกา',
     dateField: 'deekaDate',
     fields: [

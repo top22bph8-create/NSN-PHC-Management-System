@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, runTransaction, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { fiscalYearBE } from './thai';
 
@@ -40,6 +40,43 @@ export async function createNumbered({ collectionName, numberField, dateStr, dat
     });
   });
   return { id: newRef.id, number };
+}
+
+// ===== ทะเบียนคุมฎีกา: กำหนดเลขที่เอง + เลื่อนเลขถัดไปอัตโนมัติ =====
+const seqOf = (numStr) => { const m = String(numStr || '').match(/(\d+)\/\d+$/) || String(numStr || '').match(/(\d+)/); return m ? Number(m[1]) : 0; };
+
+// ตรวจว่าลำดับ seq ในปีงบ fyVal ถูกใช้แล้วหรือยัง และลำดับสูงสุดปัจจุบัน
+export async function checkSeqUsed({ collectionName, numberField, fyVal, seq }) {
+  const snap = await getDocs(query(collection(db, collectionName), where('fy', '==', fyVal)));
+  let max = 0; let used = null;
+  snap.docs.forEach((d) => { const q = seqOf(d.data()[numberField]); if (q > max) max = q; if (q === seq) used = d.data()[numberField]; });
+  return { used, max };
+}
+
+// สร้างรายการด้วยลำดับที่ระบุ (seq) — รายการเดิมที่ลำดับ >= seq จะเลื่อนไป +1 ทั้งหมดในครั้งเดียว (atomic batch)
+export async function createNumberedAtSeq({ collectionName, numberField, fyVal, seq, data, prefixOverride, digitsOverride }) {
+  const cfg = await getNumbering();
+  const year = cfg.era === 'CE' ? fyVal - 543 : fyVal;
+  const prefix = prefixOverride ?? (cfg.prefixes?.[collectionName] || '');
+  const digits = digitsOverride ?? cfg.digits;
+  const snap = await getDocs(query(collection(db, collectionName), where('fy', '==', fyVal)));
+  const rows = snap.docs.map((d) => ({ ref: d.ref, q: seqOf(d.data()[numberField]), no: d.data()[numberField] }));
+  const max = rows.reduce((m, r) => Math.max(m, r.q), 0);
+  if (!Number.isInteger(seq) || seq < 1 || seq > max + 1) throw new Error(`เลขที่ต้องอยู่ระหว่าง 1 ถึง ${max + 1}`);
+  if (rows.length + 1 > 450) throw new Error('จำนวนรายการมากเกินกว่าจะเลื่อนเลขในครั้งเดียว');
+  const batch = writeBatch(db);
+  const shifted = [];
+  rows.filter((r) => r.q >= seq).sort((a, b) => b.q - a.q).forEach((r) => {
+    const nn = formatNumber(r.q + 1, digits, year, prefix);
+    batch.update(r.ref, { [numberField]: nn });
+    shifted.push(`${r.no} → ${nn}`);
+  });
+  const newRef = doc(collection(db, collectionName));
+  const number = formatNumber(seq, digits, year, prefix);
+  batch.set(newRef, { ...data, [numberField]: number, createdAt: serverTimestamp(), createdBy: auth.currentUser.email.toLowerCase() });
+  batch.set(doc(db, 'counters', `${collectionName}_${year}`), { last: max + 1, updatedAt: serverTimestamp() });
+  await batch.commit();
+  return { id: newRef.id, number, shifted };
 }
 
 // ===== แทรกเลขที่ทะเบียนย้อนหลัง (ใช้ได้กับทุกทะเบียนที่ใช้ createNumbered() ด้านบน) =====

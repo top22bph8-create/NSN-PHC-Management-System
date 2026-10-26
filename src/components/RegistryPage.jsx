@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { addDoc, collection, doc, deleteDoc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { can, canWrite } from '../lib/roles';
 import { diffFields, writeAudit } from '../lib/audit';
-import { createNumbered, createOutgoingNumbered, insertOutgoingNumbered, insertRegNumbered, parseRegNumber, formatNumber, getNumbering, ORG_DOC_CODE } from '../lib/numbering';
+import { checkSeqUsed, createNumberedAtSeq, createNumbered, createOutgoingNumbered, insertOutgoingNumbered, insertRegNumbered, parseRegNumber, formatNumber, getNumbering, ORG_DOC_CODE } from '../lib/numbering';
 import { exportCsv } from '../lib/exportFile';
 import { exportRegistryExcel } from '../lib/report';
 import { fiscalYearBE, fmtDate, nowTimeStr, thMonths, todayStr } from '../lib/thai';
@@ -393,7 +393,9 @@ export default function RegistryPage({ cfg }) {
       qy,
       (snap) => {
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        rows.sort((a, b) => (b[cfg.dateField] || '').localeCompare(a[cfg.dateField] || '') || (b[cfg.numberField] || '').localeCompare(a[cfg.numberField] || ''));
+        rows.sort(cfg.key === 'reg-deeka'
+          ? (a, b) => (Number((String(a[cfg.numberField] || '').match(/(\d+)/) || [0, 0])[1])) - (Number((String(b[cfg.numberField] || '').match(/(\d+)/) || [0, 0])[1]))
+          : (a, b) => (b[cfg.dateField] || '').localeCompare(a[cfg.dateField] || '') || (b[cfg.numberField] || '').localeCompare(a[cfg.numberField] || ''));
         setItems(rows);
       },
       (e) => setError(e.code === 'permission-denied' ? 'ไม่มีสิทธิ์เข้าถึงข้อมูลส่วนนี้' : e.message),
@@ -494,6 +496,19 @@ export default function RegistryPage({ cfg }) {
 
   // ทะเบียนสัญญายืมเงิน: เกินกำหนดส่งใช้ = ยังไม่คืน และวันนี้เกินกำหนดวันส่งใช้แล้ว (สถานะที่ 3 นอกเหนือจาก "ค้างจ่าย"/"คืนแล้ว" ซึ่งเป็นแค่สี ไม่ได้เก็บเป็นฟิลด์แยก)
   const isLoanOverdue = (it) => isLoan && !!it.dueDate && it.repaid !== 'ส่งใช้เงินยืมเรียบร้อย' && it.dueDate < todayStr();
+
+  // ทะเบียนคุมฎีกา: เลือกวิธีเพิ่ม (ปกติ = เลขถัดไป / กำหนดเลขเอง) ก่อนเปิดฟอร์ม
+  const [deekaChoice, setDeekaChoice] = useState(null); // {mode, seq}
+  const [deekaPlan, setDeekaPlan] = useState({ mode: 'normal', seq: '' });
+  const [seqConfirm, setSeqConfirm] = useState(null); // {seq, used, fyVal}
+  const seqConfirmedRef = useRef(false);
+  const startAdd = () => { if (isDeeka) setDeekaChoice({ mode: 'normal', seq: '' }); else openCreate(); };
+  const confirmDeekaChoice = () => {
+    if (deekaChoice.mode === 'custom' && !(Number(deekaChoice.seq) >= 1)) { say({ type: 'error', text: 'กรุณากรอกเลขที่ฎีกาที่ต้องการกำหนด' }); return; }
+    setDeekaPlan({ mode: deekaChoice.mode, seq: Number(deekaChoice.seq) || '' });
+    setDeekaChoice(null);
+    openCreate();
+  };
 
   const openCreate = () => {
     setErrors({}); setInsertMode(false); setInsertBase(''); setGenInsertMode(false); setGenInsertBase(''); setJustCreated(null); setOtherOpen({}); setOtherActive({});
@@ -602,6 +617,19 @@ export default function RegistryPage({ cfg }) {
           ({ id, number } = await insertOutgoingNumbered({ fy: fyVal, baseSeq: Number(insertBase), data: { ...values, attachments: [] } }));
         } else if (isOutgoing) {
           ({ id, number } = await createOutgoingNumbered({ fy: fyVal, data: { ...values, attachments: [] } }));
+        } else if (isDeeka && deekaPlan.mode === 'custom') {
+          const seq = Number(deekaPlan.seq);
+          const chk = await checkSeqUsed({ collectionName: cfg.key, numberField: cfg.numberField, fyVal, seq });
+          if (seq > chk.max + 1) { say({ type: 'error', text: `เลขที่ฎีกาสูงสุดตอนนี้คือ ${chk.max} กำหนดได้ไม่เกิน ${chk.max + 1}` }); setSaving(false); return; }
+          if (chk.used && !seqConfirmedRef.current) { setSeqConfirm({ seq, used: chk.used, fyVal }); setSaving(false); return; }
+          seqConfirmedRef.current = false;
+          let shifted;
+          ({ id, number, shifted } = await createNumberedAtSeq({
+            collectionName: cfg.key, numberField: cfg.numberField, fyVal, seq,
+            data: { ...values, fy: fyVal, attachments: [] },
+            prefixOverride: cfg.numberPrefix, digitsOverride: cfg.numberDigits,
+          }));
+          if (shifted.length) await writeAudit({ action: 'update', module: cfg.key, docId: 'renumber', label: `เลื่อนเลขที่${cfg.numberLabel} ปีงบ ${fyVal}`, after: { changes: shifted.join(', ') } });
         } else if (canInsertNumber && genInsertMode) {
           if (!genInsertBase) { setErrors({ ...e, insertBase: `กรุณาเลือก${cfg.numberLabel}เดิมที่จะแทรก` }); setSaving(false); return; }
           ({ id, number } = await insertRegNumbered({
@@ -653,16 +681,17 @@ export default function RegistryPage({ cfg }) {
         const numCfg = await getNumbering();
         const digits = cfg.numberDigits ?? numCfg.digits;
         const prefix = cfg.numberPrefix ?? (numCfg.prefixes?.[cfg.key] || '');
+        const yr = numCfg.era === 'CE' ? it.fy - 543 : it.fy;
         const batch = writeBatch(db);
         const renameLog = [];
         remaining.forEach((r, idx) => {
-          const newNumber = formatNumber(idx + 1, digits, it.fy, prefix);
+          const newNumber = formatNumber(idx + 1, digits, yr, prefix);
           if (newNumber !== r[cfg.numberField]) {
             batch.update(doc(db, cfg.key, r.id), { [cfg.numberField]: newNumber });
             renameLog.push(`${r[cfg.numberField]} → ${newNumber}`);
           }
         });
-        batch.set(doc(db, 'counters', `${cfg.key}_${it.fy}`), { last: remaining.length, updatedAt: serverTimestamp() });
+        batch.set(doc(db, 'counters', `${cfg.key}_${yr}`), { last: remaining.length, updatedAt: serverTimestamp() });
         await batch.commit();
         if (renameLog.length) {
           await writeAudit({ action: 'update', module: cfg.key, docId: 'renumber', label: `เรียงเลขที่${cfg.numberLabel}ใหม่ ปีงบ ${it.fy}`, after: { changes: renameLog.join(', ') } });
@@ -944,7 +973,7 @@ export default function RegistryPage({ cfg }) {
             {isVehicle && (
               <Link to="/vehicle-report" className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25"><FileSpreadsheet className="h-4 w-4" /> รายงานผู้บริหาร</Link>
             )}
-            {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openCreate}><Plus className="h-4 w-4" /> {cfg.addLabel || `เพิ่ม${cfg.noun}`}</button>}
+            {writable && !isStockLedger && <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={startAdd}><Plus className="h-4 w-4" /> {cfg.addLabel || `เพิ่ม${cfg.noun}`}</button>}
           </div>
         }
       />
@@ -1261,7 +1290,7 @@ export default function RegistryPage({ cfg }) {
           <form id="reg-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2" noValidate>
             {!form.id && isGenericNumbered && (
               <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800 sm:col-span-2">
-                <p>{cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก และแนบไฟล์ได้หลังบันทึกแล้ว</p>
+                <p>{isDeeka && deekaPlan.mode === 'custom' ? `${cfg.numberLabel}จะถูกกำหนดเป็นลำดับที่ ${deekaPlan.seq} (ฎีกาถัดไปจะเลื่อนอัตโนมัติถ้าเลขนี้ถูกใช้แล้ว)` : `${cfg.numberLabel}จะถูกสร้างอัตโนมัติเมื่อกดบันทึก`} และแนบไฟล์ได้หลังบันทึกแล้ว</p>
                 {canInsertNumber && genInsertMode && <p className="mt-1">เลขที่จะเป็นเลขแทรกของเลขที่เดิมที่เลือกไว้ เช่น 001.1/2569 (ลำดับแทรกจริงจะคำนวณตอนบันทึก)</p>}
                 {canInsertNumber && (
                   <>
@@ -1863,6 +1892,39 @@ export default function RegistryPage({ cfg }) {
         </Modal>
       )}
 
+      {deekaChoice && (
+        <Modal title="เพิ่มฎีกาเบิกจ่าย" onClose={() => setDeekaChoice(null)}
+          footer={<>
+            <button className="btn btn-outline" onClick={() => setDeekaChoice(null)}>ยกเลิก</button>
+            <button className="btn btn-primary" onClick={confirmDeekaChoice}>ถัดไป</button>
+          </>}>
+          <div className="space-y-3 text-sm">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3">
+              <input type="radio" className="mt-1" checked={deekaChoice.mode === 'normal'} onChange={() => setDeekaChoice({ ...deekaChoice, mode: 'normal' })} />
+              <span><b>เพิ่มฎีกาเบิกจ่ายปกติ</b><br /><span className="text-slate-500">ระบบออกเลขที่ฎีกาถัดไปให้อัตโนมัติ</span></span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3">
+              <input type="radio" className="mt-1" checked={deekaChoice.mode === 'custom'} onChange={() => setDeekaChoice({ ...deekaChoice, mode: 'custom' })} />
+              <span className="flex-1"><b>เพิ่มเพื่อเรียงฎีกา / กำหนดเลขที่ฎีกาเอง</b><br /><span className="text-slate-500">ถ้าเลขนั้นถูกใช้แล้ว ระบบจะถามยืนยัน แล้วเลื่อนเลขถัดไปให้อัตโนมัติ</span>
+                {deekaChoice.mode === 'custom' && (
+                  <input type="number" min="1" className="input mt-2 w-40" placeholder="เลขที่ฎีกา" value={deekaChoice.seq} autoFocus
+                    onChange={(e) => setDeekaChoice({ ...deekaChoice, seq: e.target.value })} />
+                )}
+              </span>
+            </label>
+          </div>
+        </Modal>
+      )}
+      {seqConfirm && (
+        <Modal title="ยืนยันการเปลี่ยนเลขที่ฎีกา" onClose={() => setSeqConfirm(null)}
+          footer={<>
+            <button className="btn btn-outline" onClick={() => setSeqConfirm(null)}>ยกเลิก</button>
+            <button className="btn btn-primary" onClick={() => { seqConfirmedRef.current = true; setSeqConfirm(null); submit({ preventDefault() {} }); }}>ยืนยัน ใช้เลขนี้</button>
+          </>}>
+          <p className="text-sm">เลขที่ <b>{seqConfirm.used}</b> ถูกใช้แล้ว ต้องการเปลี่ยนฎีกานี้เป็นเลขที่ {seqConfirm.seq} จริงหรือไม่?<br />
+            <span className="text-slate-500">ฎีกาเดิมเลขที่ {seqConfirm.seq} เป็นต้นไปจะเลื่อนเป็นเลขถัดไป (+1) อัตโนมัติ</span></p>
+        </Modal>
+      )}
       {toDelete && (
         <ConfirmDialog
           message={
