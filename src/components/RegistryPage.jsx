@@ -425,7 +425,11 @@ export default function RegistryPage({ cfg }) {
     });
   }, [items, q, status, month, yearBE, cfg, searchKeys]);
   // ปี พ.ศ. ที่มีอยู่ในรายการ (ปีปฏิทินของวันที่เอกสาร) ไว้เป็นตัวเลือกกรอง
-  const yearOptions = useMemo(() => [...new Set((items || []).map((it) => Number((it[cfg.dateField] || '').slice(0, 4))).filter(Boolean).map((y) => String(y + 543)))].sort(), [items, cfg]);
+  const yearOptions = useMemo(() => {
+    const set = new Set((items || []).map((it) => Number((it[cfg.dateField] || '').slice(0, 4))).filter(Boolean).map((y) => y + 543));
+    for (let y = 2569; y <= 2579; y++) set.add(y); // ล่วงหน้าไป 10 ปีนับจาก พ.ศ. 2569
+    return [...set].sort((a, b) => a - b).map(String);
+  }, [items, cfg]);
 
   const viewItem = items?.find((x) => x.id === viewId) || null;
   const listFields = cfg.fields.filter((f) => f.list);
@@ -1071,7 +1075,7 @@ export default function RegistryPage({ cfg }) {
             <EmptyState title="ไม่พบรายการที่ตรงกับเงื่อนไข" hint="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" />
           ) : (
             <div className="overflow-x-auto">
-              <table className={`w-full text-left [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${isDeeka ? 'min-w-[1100px]' : 'min-w-[720px]'}`}>
+              <table className={`w-full text-left ${isDeeka ? 'min-w-[1100px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300' : 'min-w-[720px]'}`}>
                 <thead className="bg-slate-100 text-sm text-slate-600">
                   <tr>
                     {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
@@ -1083,7 +1087,7 @@ export default function RegistryPage({ cfg }) {
                 </thead>
                 <tbody>
                   {filtered.map((it) => (
-                    <tr key={it.id} className="cursor-pointer border-t border-slate-100 odd:bg-white even:bg-slate-50/70 hover:bg-brand-50/60" onClick={() => setViewId(it.id)}>
+                    <tr key={it.id} className={`cursor-pointer border-t border-slate-100 hover:bg-brand-50/60 ${isDeeka ? 'odd:bg-white even:bg-slate-50/70' : ''}`} onClick={() => setViewId(it.id)}>
                       {listFields.map((f) => (
                         <td key={f.key} className={`px-3 py-2 align-top ${isDeeka && f.key === 'subject' ? 'min-w-[20rem] text-base leading-relaxed' : f.key === 'subject' ? 'max-w-xs' : ''} ${isDeeka && (f.type === 'number' || f.type === 'computed') ? 'whitespace-nowrap text-right font-semibold tabular-nums' : ''}`}>
                           {f.key === cfg.statusField ? (

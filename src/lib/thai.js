@@ -51,7 +51,9 @@ export const currentFiscalYear = () => Math.max(fiscalYearBE(todayStr()), START_
 export function fiscalYearOptions() {
   const cur = currentFiscalYear();
   const list = [];
-  for (let y = START_FISCAL_YEAR; y <= cur + 1; y++) list.push(y);
+  // ล่วงหน้าไปถึง พ.ศ. 2579 (นับจาก 2569 อีก 10 ปี) หรือปีปัจจุบัน+1 แล้วแต่ว่าอย่างไหนไกลกว่า
+  const last = Math.max(cur + 1, 2579);
+  for (let y = START_FISCAL_YEAR; y <= last; y++) list.push(y);
   return list;
 }
 
