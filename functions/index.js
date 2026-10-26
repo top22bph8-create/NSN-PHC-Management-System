@@ -617,17 +617,26 @@ exports.monthEndTaxReminder = onSchedule({ schedule: '30 8 * * *', timeZone: 'As
   const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
   if (!channelAccessToken || !targetId || !enabled || !events.taxOverdueReminder) return;
 
-  const snap = await db.collection('reg-deeka').where('taxStatus', '==', 'ค้างส่ง').get();
+  const taxSnap = await db.collection('reg-deeka').where('taxStatus', '==', 'ค้างส่ง').get();
   // ฎีกาที่ไม่ได้ลงยอดภาษีหัก ณ ที่จ่ายไว้ (เว้นว่าง/เป็น 0) ถือว่าไม่มีภาษีต้องนำส่ง แม้ฟิลด์ taxStatus จะยังเป็นค่าเริ่มต้น "ค้างส่ง"
   // อยู่ก็ตาม (ตั้งค่าเริ่มต้นเป็นค้างส่งเสมอตอนสร้างฎีกาใหม่ ไม่ว่าจะมียอดหักหรือไม่) จึงต้องกรองออกไม่ให้แจ้งเตือนรายการเหล่านี้
-  const overdue = snap.docs.map((d) => d.data()).filter((l) => Number(l.taxWithheld) > 0);
-  if (!overdue.length) return;
+  const overdue = taxSnap.docs.map((d) => d.data()).filter((l) => Number(l.taxWithheld) > 0);
+  // เงินประกันสังคมที่หักไว้ (กรณีจ่ายเงินเดือนลูกจ้าง) แต่ยังไม่จ่ายก่อนสิ้นเดือน — กรองเฉพาะที่มียอดหัก > 0 เช่นเดียวกัน
+  const ssoSnap = await db.collection('reg-deeka').where('ssoStatus', '==', 'ค้างจ่าย').get();
+  const ssoOverdue = ssoSnap.docs.map((d) => d.data()).filter((l) => Number(l.ssoAmount) > 0);
+  if (!overdue.length && !ssoOverdue.length) return;
 
-  const lines = overdue
-    .sort((a, b) => String(a.deekaDate || '').localeCompare(String(b.deekaDate || '')))
-    .map((l, i) => `${i + 1}. ${l.deekaNo || '-'} · ${l.subject || '-'} · ภาษีหัก ณ ที่จ่าย ${l.taxWithheld || '-'} บาท`);
-  const text = `📌 แจ้งเตือนเจ้าหน้าที่การเงินและบัญชี: ใกล้สิ้นเดือนแล้ว ยังมีภาษีหัก ณ ที่จ่ายค้างนำส่งกรมสรรพากร (${overdue.length} รายการ)\nกรุณาจัดทำเอกสารฎีกาและนำส่งเงินภาษีให้ทันก่อนสิ้นเดือน\n\n${lines.join('\n')}`;
-  await sendLine(channelAccessToken, targetId, text);
+  const byDate = (a, b) => String(a.deekaDate || '').localeCompare(String(b.deekaDate || ''));
+  const parts = [];
+  if (overdue.length) {
+    const lines = overdue.sort(byDate).map((l, i) => `${i + 1}. ${l.deekaNo || '-'} · ${l.subject || '-'} · ภาษีหัก ณ ที่จ่าย ${l.taxWithheld || '-'} บาท`);
+    parts.push(`📌 แจ้งเตือนเจ้าหน้าที่การเงินและบัญชี: ใกล้สิ้นเดือนแล้ว ยังมีภาษีหัก ณ ที่จ่ายค้างนำส่งกรมสรรพากร (${overdue.length} รายการ)\nกรุณาจัดทำเอกสารฎีกาและนำส่งเงินภาษีให้ทันก่อนสิ้นเดือน\n\n${lines.join('\n')}`);
+  }
+  if (ssoOverdue.length) {
+    const lines = ssoOverdue.sort(byDate).map((l, i) => `${i + 1}. ${l.deekaNo || '-'} · ${l.subject || '-'} · หักประกันสังคม ${l.ssoAmount || '-'} บาท`);
+    parts.push(`📌 แจ้งเตือนเจ้าหน้าที่การเงินและบัญชี: ใกล้สิ้นเดือนแล้ว ยังมีเงินประกันสังคมที่หักไว้แต่ยังไม่ได้นำจ่าย (${ssoOverdue.length} รายการ)\nกรุณานำจ่ายประกันสังคมให้ทันก่อนสิ้นเดือน\n\n${lines.join('\n')}`);
+  }
+  for (const text of parts) await sendLine(channelAccessToken, targetId, text);
 });
 
 // คำอวยพรวันเกิดหลายๆ แบบ (สุ่มเลือกไม่ให้ซ้ำแบบเดิมทุกครั้ง) — ใช้กับ dailyBirthdayReminder ด้านล่าง

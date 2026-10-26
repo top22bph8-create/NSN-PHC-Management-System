@@ -482,7 +482,9 @@ export default function PrintLeave() {
     const before = extra.filter((x) => x.type === l.type).reduce((s2, x) => s2 + (Number(x.days) || 0), 0);
     stats.push({ type: l.type, before: before || '', thisTime: l.days, total: before + Number(l.days || 0) });
   }
-  const isOwnerLeave = l.userEmail === OWNER_EMAIL;
+  // ใบลาของผู้อำนวยการ: ตรวจจากอีเมลเจ้าของ (ไม่สนตัวพิมพ์เล็ก/ใหญ่) หรือจากชื่อ-สกุลในใบลา กรณีผู้อื่นบันทึกใบลาแทนด้วยอีเมลต่างกัน
+  const nameCompact = String(l.name || '').replace(/\s+/g, '');
+  const isOwnerLeave = String(l.userEmail || '').toLowerCase() === String(OWNER_EMAIL).toLowerCase() || (nameCompact.includes('พงศกร') && nameCompact.includes('แป่มจำนัก'));
   // ทุกคนเรียนถึงผู้อำนวยการ รพ.สต. ยกเว้นใบลาของผู้อำนวยการเองที่ต้องส่งขึ้นไปที่กองสาธารณสุข
   const to = isOwnerLeave ? 'ผู้อำนวยการกองสาธารณสุข' : 'ผู้อำนวยการโรงพยาบาลส่งเสริมสุขภาพตำบลบ้านหนองสนม';
   // วันที่หัวกระดาษ ปกติ = วันที่บันทึกใบลาเข้าระบบจริง (createdAt) แต่ถ้าเป็น "ลาย้อนหลัง" (วันเริ่มลาอยู่ก่อนวันที่ยื่นจริง)

@@ -32,6 +32,59 @@ const emptyForm = (cfg) => {
 };
 
 // หน้าทะเบียนแบบกำหนดด้วย config: เพิ่ม แก้ไข ค้นหา ดูรายละเอียด แนบไฟล์ ลบ Export
+// สรุปยอดทะเบียนคุมฎีกาเบิกจ่าย: ยอดรวมของรายการที่กรองอยู่ (เลือกเดือนด้านบนเพื่อดูรายเดือน) + ตารางสรุปรายเดือนทั้งปีงบประมาณ พร้อมยอดรวมทั้งปี
+const num = (v) => Number(v) || 0;
+const money = (n) => n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const FY_MONTH_ORDER = ['10', '11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09'];
+function sumDeeka(list) {
+  return list.reduce((a, it) => {
+    const pay = num(it.payAmount), tax = num(it.taxWithheld), sso = num(it.ssoAmount);
+    return { n: a.n + 1, pay: a.pay + pay, tax: a.tax + tax, sso: a.sso + sso, total: a.total + (String(it.amount ?? '').trim() !== '' ? num(it.amount) : pay + tax + sso) };
+  }, { n: 0, pay: 0, tax: 0, sso: 0, total: 0 });
+}
+function DeekaSummary({ items, filtered, month, fy }) {
+  const [open, setOpen] = useState(false);
+  const cur = sumDeeka(filtered);
+  const rows = FY_MONTH_ORDER.map((mm) => ({ mm, s: sumDeeka(items.filter((it) => String(it.deekaDate || '').slice(5, 7) === mm)) })).filter((r) => r.s.n > 0);
+  const all = sumDeeka(items);
+  const cell = 'px-2 py-1.5 text-right';
+  return (
+    <div className="card mb-4 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-700">
+          ยอดรวม{month ? ` เดือน${thMonths[Number(month) - 1]}` : 'ตามตัวกรอง'} · {cur.n} ฎีกา
+        </div>
+        <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setOpen(!open)}>{open ? 'ซ่อนสรุปรายเดือน' : '📅 สรุปรายเดือนทั้งปีงบประมาณ'}</button>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <div className="rounded-lg bg-slate-50 p-2"><div className="text-slate-500">ยอดจ่ายเช็ค</div><div className="font-bold">{money(cur.pay)}</div></div>
+        <div className="rounded-lg bg-slate-50 p-2"><div className="text-slate-500">ภาษีหัก ณ ที่จ่าย</div><div className="font-bold">{money(cur.tax)}</div></div>
+        <div className="rounded-lg bg-slate-50 p-2"><div className="text-slate-500">หักจ่ายประกันสังคม</div><div className="font-bold">{money(cur.sso)}</div></div>
+        <div className="rounded-lg bg-brand-50 p-2"><div className="text-slate-500">มูลค่าตั้งเบิกตามฎีกา</div><div className="font-bold text-brand-800">{money(cur.total)}</div></div>
+      </div>
+      {open && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-slate-100 text-slate-600"><tr>
+              <th className="px-2 py-1.5 text-left">เดือน</th><th className={cell}>จำนวนฎีกา</th><th className={cell}>ยอดจ่ายเช็ค</th><th className={cell}>ภาษีหัก ณ ที่จ่าย</th><th className={cell}>ประกันสังคม</th><th className={cell}>มูลค่าตั้งเบิก</th>
+            </tr></thead>
+            <tbody>
+              {rows.map(({ mm, s }) => (
+                <tr key={mm} className="border-t border-slate-100">
+                  <td className="px-2 py-1.5">{thMonths[Number(mm) - 1]}</td><td className={cell}>{s.n}</td><td className={cell}>{money(s.pay)}</td><td className={cell}>{money(s.tax)}</td><td className={cell}>{money(s.sso)}</td><td className={`${cell} font-semibold`}>{money(s.total)}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                <td className="px-2 py-1.5">รวมปีงบประมาณ {fy}</td><td className={cell}>{all.n}</td><td className={cell}>{money(all.pay)}</td><td className={cell}>{money(all.tax)}</td><td className={cell}>{money(all.sso)}</td><td className={cell}>{money(all.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RegistryPage({ cfg }) {
   const { profile } = useAuth();
   const { fy, options: fyOptions } = useFiscalYear();
@@ -82,6 +135,7 @@ export default function RegistryPage({ cfg }) {
   // ฎีกาที่ไม่ได้ลงยอด "ภาษีหัก ณ ที่จ่าย" ไว้ (เว้นว่าง/เป็น 0) ถือว่าไม่มีภาษีต้องนำส่ง — แสดงสถานะ "ไม่มียอดหัก" สีเขียวแทน
   // และไม่ต้องมีปุ่มกด "ส่งสรรพากร" ให้กด (มีแต่ปุ่ม "ชำระเช็ค" เท่านั้น) ตามที่ ผอ. แจ้ง
   const hasNoTax = (it) => !(Number(it?.taxWithheld) > 0);
+  const hasNoSso = (it) => !(Number(it?.ssoAmount) > 0);
   // ===== ทะเบียนควบคุมยานพาหนะ (ระบบขออนุญาตใช้ยานพาหนะราชการ เฟส 2): แยกสิทธิ์ผู้อนุมัติออกจากผู้บันทึกคำขออย่างชัดเจน =====
   // อนุมัติ/ไม่อนุมัติ/ยกเลิก (โดยผู้มีอำนาจ) ทำผ่านปุ่มเฉพาะด้านล่างเท่านั้น (ไม่ใช่ช่องสถานะในฟอร์มแก้ไขทั่วไป ซึ่งไม่มีช้อย "อนุมัติ" ให้เลือกได้เอง)
   // ผู้บันทึกคำขอเองยกเลิกคำขอของตัวเองได้เช่นกัน ถ้ายังไม่ถูกพิจารณา (เหมือนการยกเลิกใบลาของตัวเองในทะเบียนควบคุมวันลา)
@@ -472,6 +526,12 @@ export default function RegistryPage({ cfg }) {
     if (isDeeka && !form.id) {
       values.chequeStatus = 'ค้างจ่าย';
       values.taxStatus = 'ค้างส่ง';
+      values.ssoStatus = 'ค้างจ่าย';
+    }
+    // แก้ไขฎีกาเก่าแล้วเพิ่มยอดหักประกันสังคมทีหลัง: ตั้งสถานะ "ค้างจ่าย" ให้ เพื่อให้ระบบแจ้งเตือนสิ้นเดือนนับรายการนี้ด้วย
+    if (isDeeka && form.id && Number(values.ssoAmount) > 0) {
+      const oldRec = items.find((x) => x.id === form.id);
+      if (!oldRec?.ssoStatus) values.ssoStatus = 'ค้างจ่าย';
     }
     // คำขอใช้รถใหม่: บันทึกอีเมลผู้ขอไว้ (ไม่ได้อยู่ในฟอร์มที่แก้ไขเองได้) ใช้เช็กสิทธิ์ "ยกเลิกคำขอของตัวเอง" ภายหลัง
     if (isVehicle && !form.id) {
@@ -647,18 +707,23 @@ export default function RegistryPage({ cfg }) {
   };
 
   // ===== ทะเบียนคุมฎีกาเบิกจ่าย: บันทึกการชำระเช็ค / การส่งภาษีหัก ณ ที่จ่ายให้สรรพากร (แยกกันคนละสถานะคนละปุ่ม ใช้ modal เดียวกันสลับตาม kind) =====
-  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayAction({ item: it, kind }); };
+  const PAY_CHEQUE_KEY = { cheque: 'chequeNo', tax: 'taxChequeNo', sso: 'ssoChequeNo' };
+  const [payActionChequeNo, setPayActionChequeNo] = useState('');
+  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayAction({ item: it, kind }); };
   const submitPayAction = async () => {
     if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
     const { item, kind } = payAction;
+    const chequeNo = payActionChequeNo.trim();
     const after = kind === 'cheque'
-      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate }
-      : { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate };
+      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo }
+      : kind === 'tax'
+        ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate, taxChequeNo: chequeNo }
+        : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: payActionDate, ssoChequeNo: chequeNo };
     setPayActionSaving(true);
     try {
       await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
       await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
-      say({ type: 'ok', text: kind === 'cheque' ? 'บันทึกการจ่ายเช็คแล้ว' : 'บันทึกการส่งภาษีสรรพากรแล้ว' });
+      say({ type: 'ok', text: kind === 'cheque' ? 'บันทึกการจ่ายเช็คแล้ว' : kind === 'tax' ? 'บันทึกการส่งภาษีสรรพากรแล้ว' : 'บันทึกการจ่ายประกันสังคมแล้ว' });
       setPayAction(null);
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
@@ -972,6 +1037,8 @@ export default function RegistryPage({ cfg }) {
         </select>
       </div>
 
+      {isDeeka && items && items.length > 0 && <DeekaSummary items={items} filtered={filtered} month={month} fy={fy} />}
+
       <div className="card overflow-hidden">
         {error ? <ErrorState message={error} onRetry={() => setReload((n) => n + 1)} />
           : items === null ? <Spinner />
@@ -1060,6 +1127,18 @@ export default function RegistryPage({ cfg }) {
                                 </>
                               )}
                             </div>
+                            {!hasNoSso(it) && (
+                              <div className="flex items-center gap-1.5">
+                                {it.ssoStatus === 'จ่ายแล้ว' ? (
+                                  <span className="text-xs text-emerald-700">จ่ายประกันสังคมแล้ว {fmtDate(it.ssoPaidDate)}</span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs text-amber-700">ค้างจ่ายประกันสังคม</span>
+                                    {writable && <button className="btn btn-outline !py-1 !px-2 text-xs text-red-700" onClick={() => openPayAction(it, 'sso')}>จ่ายประกันสังคม</button>}
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                       )}
@@ -1340,6 +1419,9 @@ export default function RegistryPage({ cfg }) {
               {isDeeka && !hasNoTax(viewItem) && viewItem.taxStatus !== 'ส่งสรรพากรแล้ว' && (
                 <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'tax')}>ส่งภาษีสรรพากร</button>
               )}
+              {isDeeka && !hasNoSso(viewItem) && viewItem.ssoStatus !== 'จ่ายแล้ว' && (
+                <button className="btn btn-outline text-red-700" onClick={() => openPayAction(viewItem, 'sso')}>จ่ายประกันสังคม</button>
+              )}
               {canApproveVehicle && viewItem.status === 'รออนุมัติ' && (
                 <>
                   <button className="btn btn-outline text-emerald-700" onClick={() => openVehicleAction(viewItem, 'approve')}>อนุมัติ</button>
@@ -1370,6 +1452,7 @@ export default function RegistryPage({ cfg }) {
                   {f.key === cfg.statusField ? (
                     isLoanOverdue(viewItem) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[viewItem[f.key]]}>{viewItem[f.key]}</Badge>
                   ) : isDeeka && f.key === 'taxStatus' && hasNoTax(viewItem) ? 'ไม่มียอดหัก'
+                  : isDeeka && f.key === 'ssoStatus' && hasNoSso(viewItem) ? 'ไม่มียอดหัก'
                   : display(f, viewItem[f.key], viewItem)}
                 </dd>
               </div>
@@ -1455,7 +1538,7 @@ export default function RegistryPage({ cfg }) {
       {/* ทะเบียนคุมฎีกาเบิกจ่าย: ป๊อปอัพบันทึกวันที่จ่ายเช็ค / วันที่ส่งภาษีสรรพากร (ใช้ modal เดียวกันสลับข้อความตาม payAction.kind) */}
       {payAction && (
         <Modal
-          title={`${payAction.kind === 'cheque' ? 'ชำระเช็ค' : 'ส่งภาษีหัก ณ ที่จ่ายให้สรรพากร'} — ${payAction.item[cfg.numberField]}`}
+          title={`${payAction.kind === 'cheque' ? 'ชำระเช็ค' : payAction.kind === 'tax' ? 'ส่งภาษีหัก ณ ที่จ่ายให้สรรพากร' : 'จ่ายเงินประกันสังคม'} — ${payAction.item[cfg.numberField]}`}
           onClose={() => !payActionSaving && setPayAction(null)}
           footer={
             <>
@@ -1466,8 +1549,12 @@ export default function RegistryPage({ cfg }) {
         >
           <div className="grid gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">{payAction.kind === 'cheque' ? 'วันที่จ่ายเช็ค' : 'วันที่ส่งภาษีสรรพากร'}</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">{payAction.kind === 'cheque' ? 'วันที่จ่ายเช็ค' : payAction.kind === 'tax' ? 'วันที่ส่งภาษีสรรพากร' : 'วันที่จ่ายประกันสังคม'}</label>
               <ThaiDateInput value={payActionDate} onChange={setPayActionDate} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่เช็ค</label>
+              <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => setPayActionChequeNo(e.target.value)} />
             </div>
           </div>
         </Modal>

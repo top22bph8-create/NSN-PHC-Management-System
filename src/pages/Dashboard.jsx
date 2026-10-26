@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight, BookOpenCheck, User,
+  AlertTriangle, Car, CheckCircle2, ClipboardList, Clock, Inbox, CalendarDays, Send, ArrowRight, BookOpenCheck, User,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,8 @@ const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่�
 
 // เมนูหลัก 4 งานทะเบียนที่ใช้งานบ่อยที่สุด แสดงเด่นบนแดชบอร์ด งานย่อยอื่น ๆ ไปอยู่ในแถบเมนูด้านซ้ายแทน
 const CARDS = [
+  // ปฏิทินมอบหมายงาน — อยู่ด้านหน้าสุดของเมนูหลักตามที่ ผอ. แจ้ง (แสดงจำนวนงานที่มอบหมายใน 7 วันข้างหน้า)
+  { key: 'assignments', label: 'ปฏิทินมอบหมายงาน', emoji: '📌', desc: 'มอบหมายงาน ประชุม อบรม หน่วยปฐมพยาบาล', icon: ClipboardList, path: '/assignments', module: 'assignments', tone: 'from-rose-500 to-brand-700' },
   { key: 'incoming', label: 'ทะเบียนหนังสือรับ', emoji: '📥', desc: 'ลงรับหนังสือ ติดตามกำหนดดำเนินการ', icon: Inbox, path: '/incoming', module: 'incoming', tone: 'from-sky-500 to-brand-700' },
   { key: 'outgoing', label: 'ทะเบียนหนังสือส่ง', emoji: '📤', desc: 'ออกเลขที่หนังสือส่ง ติดตามสถานะ', icon: Send, path: '/outgoing', module: 'outgoing', tone: 'from-brand-500 to-brand-800' },
   // ทางเข้าหน้ารวม "ทะเบียนประกอบฎีกาและทะเบียนต่างๆ" (ฎีกาเบิกจ่าย/คำสั่ง/ประกาศ/สัญญายืมเงิน ฯลฯ) — ย้ายมาอันดับ 3 ถัดจากหนังสือส่งตามคำขอ เปิดได้ทุกบทบาท ไม่มีช่อง module จึงไม่ต้องตรวจสิทธิ์
@@ -58,6 +60,12 @@ export default function Dashboard() {
   const [logs, setLogs] = useState([]);
   const [leaveRows, setLeaveRows] = useState(null);
   const [leaveQuota, setLeaveQuota] = useState(null);
+  const [assignCount, setAssignCount] = useState(null);
+  useEffect(() => {
+    if (!canRead(profile.role, 'assignments')) return;
+    getDocs(query(collection(db, 'assignments'), where('date', '>=', todayStr()), where('date', '<=', addDays(todayStr(), 7))))
+      .then((s) => setAssignCount(s.size)).catch(() => setAssignCount(null));
+  }, [profile.role]);
 
   const readable = ['incoming', 'outgoing'].filter((m) => canRead(profile.role, m));
   const canSeeLeave = canRead(profile.role, 'leave');
@@ -185,12 +193,13 @@ export default function Dashboard() {
             )}
 
             <h2 className="mb-2 text-lg font-semibold">เมนูหลัก</h2>
-            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               {CARDS.map((c) => {
                 const allowed = c.module ? canRead(profile.role, c.module) : true;
                 const stats = m && allowed
                   ? (c.key === 'incoming' ? { total: m.inTotal, month: m.inMonth } : c.key === 'outgoing' ? { total: m.outTotal, month: m.outMonth } : null)
                   : null;
+                const assignInfo = c.key === 'assignments' && allowed && assignCount !== null ? assignCount : null;
                 return (
                   <Link key={c.key} to={allowed ? c.path : '#'} className={`card group relative flex flex-col gap-2 overflow-hidden p-5 transition ${allowed ? 'hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-lg' : 'opacity-50'}`}>
                     <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${c.tone} text-white shadow-sm`}><c.icon className="h-6 w-6" /></div>
@@ -198,6 +207,8 @@ export default function Dashboard() {
                     <div className="text-sm text-slate-500">{c.desc}</div>
                     {stats ? (
                       <div className="mt-1 text-sm text-slate-600"><span className="text-2xl font-bold text-brand-800">{stats.total}</span> รายการ · เดือนนี้ {stats.month}</div>
+                    ) : assignInfo !== null ? (
+                      <div className="mt-1 text-sm text-slate-600">7 วันข้างหน้า <span className="text-2xl font-bold text-brand-800">{assignInfo}</span> งาน</div>
                     ) : !allowed && <span className="text-sm text-slate-400">ไม่มีสิทธิ์เข้าถึง</span>}
                     <ArrowRight className="absolute bottom-4 right-4 h-5 w-5 text-brand-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
                   </Link>
