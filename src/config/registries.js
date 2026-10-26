@@ -477,7 +477,6 @@ export const REGISTRIES = {
     dateField: 'deekaDate',
     fields: [
       { key: 'deekaNo', label: 'เลขที่ฎีกา', type: 'text', auto: true, list: true, search: true },
-      { key: 'dikaRefNo', label: 'ฎีกาเลขที่', type: 'text', required: true, list: true, search: true },
       { key: 'deekaDate', label: 'วันที่', type: 'date', required: true, list: true },
       { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
       // ยอดจ่ายเช็ค + ภาษีหัก ณ ที่จ่าย กรอกเอง แล้วรวมเป็น "มูลค่าตั้งเบิกตามฎีกา" อัตโนมัติ (คำนวณใน RegistryPage.jsx ตอนบันทึก และแสดงสดตอนกรอกฟอร์ม)
@@ -511,7 +510,7 @@ export const REGISTRIES = {
       { key: 'ssoChequeNo', label: 'เลขที่เช็คจ่ายประกันสังคม', type: 'text', auto: true },
     ],
     reportColor: 'B48EAD',
-    reportColumns: ['deekaNo', 'dikaRefNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'payMethod', 'payMethodOther', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxPayDika', 'taxPayAmount', 'taxPayMethod', 'taxPayMethodOther', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoPayDika', 'ssoPayAmount', 'ssoPayMethod', 'ssoPayMethodOther', 'ssoChequeNo'],
+    reportColumns: ['deekaNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'payMethod', 'payMethodOther', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxPayDika', 'taxPayAmount', 'taxPayMethod', 'taxPayMethodOther', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoPayDika', 'ssoPayAmount', 'ssoPayMethod', 'ssoPayMethodOther', 'ssoChequeNo'],
   },
   // ทะเบียนใหม่ตามแบบฟอร์มตัวอย่างที่ส่งมา — เลขที่เกียรติบัตรไม่เติมศูนย์หน้า (numberDigits: 1) เช่น 1/2569, 2/2569 ...
   'reg-certificate': {

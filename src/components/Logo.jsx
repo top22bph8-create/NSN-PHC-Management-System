@@ -6,16 +6,19 @@ export default function Logo({ size = 40, className = '' }) {
 }
 
 // แถบหัวหน้าจอพร้อมโลโก้ ใช้ในหน้าต่าง ๆ ให้เป็นสไตล์เดียวกัน (โทนฟ้าเข้มขึ้น ทันสมัย ตัวหนังสือขาวทึบตัดกับพื้นฟ้าชัดเจน)
-export function PageHeader({ icon: Icon, emoji, title, subtitle, actions }) {
+export function PageHeader({ icon: Icon, emoji, title, subtitle, actions, tone, big }) {
   return (
-    <div className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-800 via-brand-700 to-brand-600 p-4 shadow-lg shadow-brand-900/15 sm:p-5">
+    <div className={`relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-r ${tone || 'from-brand-800 via-brand-700 to-brand-600'} p-4 shadow-lg shadow-brand-900/15 ${big ? 'sm:p-7' : 'sm:p-5'}`}>
       <div className="pointer-events-none absolute -right-6 -top-8 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
       <img src={logoUrl} alt="" aria-hidden="true" className="pointer-events-none absolute -right-4 -top-4 h-32 w-32 object-contain opacity-15" />
       <div className="relative flex flex-wrap items-center gap-3">
         {Icon && <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white shadow ring-1 ring-white/30"><Icon className="h-6 w-6" /></div>}
         <div className="min-w-0 flex-1">
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-white drop-shadow-md sm:text-3xl">
-            {emoji && <span className="emoji-blink text-3xl sm:text-4xl">{emoji}</span>} {title}
+          <h1 className={`flex items-center gap-3 font-extrabold tracking-tight text-white drop-shadow-md ${big ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl'}`}>
+            {emoji && (big
+              ? <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-3xl shadow-lg ring-2 ring-white/60 sm:h-16 sm:w-16 sm:text-4xl">{emoji}</span>
+              : <span className="emoji-blink text-3xl sm:text-4xl">{emoji}</span>)}
+            <span>{title}</span>
           </h1>
           <div className="mt-1 h-1 w-14 rounded-full bg-white/60 sm:w-20" />
           {subtitle && <p className="mt-1.5 text-sm font-medium text-white/90">{subtitle}</p>}

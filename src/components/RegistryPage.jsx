@@ -795,9 +795,9 @@ export default function RegistryPage({ cfg }) {
       try {
         const want = expectedAmt(item, kind);
         const seqNo = (n) => (String(n || '').match(/(\d+)/) || [])[1];
-        let found = (items || []).find((c) => c.id !== item.id && (String(c.dikaRefNo || '').trim() === no || String(c.deekaNo || '') === no));
+        let found = (items || []).find((c) => c.id !== item.id && (String(c.deekaNo || '') === no || (/^\d+$/.test(no) && Number(String(c.deekaNo || '').match(/(\d+)/)?.[1]) === Number(no))));
         if (!found) {
-          const snap = await getDocs(query(collection(db, cfg.key), where('dikaRefNo', '==', no)));
+          const snap = await getDocs(query(collection(db, cfg.key), where('deekaNo', '==', no)));
           const d = snap.docs.find((x) => x.id !== item.id);
           if (d) found = { id: d.id, ...d.data() };
         }
@@ -1027,6 +1027,7 @@ export default function RegistryPage({ cfg }) {
       )}
       <PageHeader
         emoji={cfg.emoji} title={cfg.title}
+        tone={isDeeka ? 'from-emerald-700 via-emerald-600 to-teal-500' : undefined} big={isDeeka}
         subtitle={`ปีงบประมาณ ${fy} · ${items ? `${filtered.length} จาก ${items.length} รายการ` : 'กำลังโหลด'}`}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -1684,7 +1685,7 @@ export default function RegistryPage({ cfg }) {
               <div className="grid gap-3">
                 <p className="text-sm text-slate-600">ยอดที่หักไว้ <b>{fmtMoney(expectedAmt(payAction.item, payAction.kind))}</b> บาท — ระบุเลขที่ฎีกาที่ตั้งเบิกจ่ายเพื่อชำระ ระบบจะตรวจยอดและชื่อเรื่องให้อัตโนมัติ</p>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่ฎีกาที่ใช้ชำระ (ฎีกาเลขที่) <span className="text-red-600">*</span></label>
+                  <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่ฎีกาที่ใช้ชำระ (เช่น 005 หรือ 005/2569) <span className="text-red-600">*</span></label>
                   <input className="input" value={payDikaNo} onChange={(e) => { setPayDikaNo(e.target.value); setPayWarn(''); setPayForce(false); }} />
                 </div>
                 {dikaSuggestions.length > 0 && (
@@ -1692,8 +1693,8 @@ export default function RegistryPage({ cfg }) {
                     <p className="mb-1 font-medium">พบฎีกาที่ยอดตรงและชื่อคล้ายกัน (กดเพื่อเลือก):</p>
                     {dikaSuggestions.map((c) => (
                       <button key={c.id} type="button" className="mb-1 mr-1 rounded-full bg-white px-3 py-1 text-left ring-1 ring-emerald-300 hover:bg-emerald-100"
-                        onClick={() => { setPayDikaNo(String(c.dikaRefNo || '')); setPayWarn(''); setPayForce(false); }}>
-                        ฎีกา {c.dikaRefNo || c.deekaNo} · {String(c.subject || '').slice(0, 40)} · {fmtMoney(c.payAmount || c.amount)}
+                        onClick={() => { setPayDikaNo(String(c.deekaNo || '')); setPayWarn(''); setPayForce(false); }}>
+                        ฎีกา {c.deekaNo} · {String(c.subject || '').slice(0, 40)} · {fmtMoney(c.payAmount || c.amount)}
                       </button>
                     ))}
                   </div>
