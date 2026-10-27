@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, HeartPulse, BarChart3, FileCheck2, UserCheck,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -49,7 +49,7 @@ export const GROUPS = [
   {
     key: 'info', title: 'งานข้อมูลข่าวสารและสารสนเทศ', emoji: '🌐', icon: Globe, tone: 'from-violet-500 to-purple-600', soft: 'bg-violet-50 text-violet-700',
     items: [
-      { key: 'search', label: 'ค้นหาแบบรวม', path: '/search', icon: Search, ready: true, desc: 'ค้นหาข้อมูลทุกทะเบียนในครั้งเดียว' },
+      { key: 'ndpmanual', label: 'คู่มือการบันทึก NDP – JHCIS (รพ.สต.บ้านหนองสนม 05449)', path: '/group/info', href: `${import.meta.env.BASE_URL}ndp-manual/index.html`, icon: BookOpenCheck, manual: true, emoji: '📘', tone: 'from-blue-600 to-cyan-500', ready: true, desc: 'คู่มือบันทึก NDP รหัสค่าใช้จ่าย Mapping Error Msg (ปรับปรุงจากต้นฉบับ)' },
       { key: 'jhcis', label: 'โปรแกรม JHCIS', path: '/group/info', protocol: 'jhcis://open', copyText: 'C:\\Program Files\\jhcis\\JHCIS_Launcher.bat', icon: Database, tone: 'from-blue-500 to-indigo-600', ready: true, desc: 'ฐานข้อมูลสุขภาพ รพ.สต. (โปรแกรมในเครื่อง — กดเพื่อเปิด)' },
       { key: 'onestop', label: 'ระบบ NHSO Digital Platform (One Stop Service)', path: '/group/info', href: 'https://iam.nhso.go.th/realms/nhso/protocol/openid-connect/auth?response_type=code&client_id=nhso-digital-platform&redirect_uri=https%3A%2F%2Fserviceunit-nhsodp.nhso.go.th%2Flogin&scope=openid+mobile+email+profile', icon: Store, tone: 'from-teal-500 to-cyan-600', ready: true, desc: 'NHSO Digital Platform / One Stop Service สปสช.' },
       { key: 'oppp', label: 'โปรแกรม OP/PP', path: '/group/info', href: 'https://op.nhso.go.th/op/main/MainWebAction.do', icon: ClipboardCheck, tone: 'from-sky-500 to-cyan-600', ready: true, desc: 'สปสช. บันทึก/ส่งข้อมูลบริการ OP/PP' },
