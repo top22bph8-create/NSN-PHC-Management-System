@@ -45,6 +45,15 @@ export default function Layout() {
         <div className="mb-1 mt-3 px-3 text-xs font-bold uppercase tracking-wider text-brand-300">กลุ่มงาน</div>
         {GROUPS.map((g) => {
           const on = activeGroup === g.key;
+          const ext = g.items.length === 1 && g.items[0].href;
+          if (ext) return (
+            <a key={g.key} href={ext} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-lg border-l-4 border-transparent px-3 py-2 text-sm text-brand-100 transition hover:bg-white/10 hover:text-white">
+              <span className="w-5 shrink-0 text-center text-base leading-none">{g.emoji}</span>
+              <span className="flex-1 leading-snug">{g.title}</span>
+              <span className="text-xs opacity-60">↗</span>
+            </a>
+          );
           return (
             <NavLink key={g.key} to={`/group/${g.key}`} onClick={() => setOpen(false)}
               className={`flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${on ? 'border-brand-300 bg-brand-600 font-bold text-white shadow-md' : 'border-transparent text-brand-100 hover:bg-white/10 hover:text-white'}`}>

@@ -83,7 +83,7 @@ export const GROUPS = [
   },
   {
     key: 'ltc', title: 'งานดูแลผู้มีภาวะพึ่งพิง LTC', emoji: '🧓', icon: HeartHandshake, tone: 'from-fuchsia-500 to-purple-600', soft: 'bg-fuchsia-50 text-fuchsia-700',
-    items: [{ key: 'ltc', label: 'ดูแลผู้มีภาวะพึ่งพิง LTC', path: '/soon/ltc', icon: HeartHandshake, ready: false }],
+    items: [{ key: 'ltc', label: 'ระบบงานดูแลผู้มีภาวะพึ่งพิง LTC', href: 'https://top22bph8-create.github.io/Nongsanom-LTC/', path: '/group/ltc', icon: HeartHandshake, ready: true, desc: 'เปิดระบบ LTC (เว็บแยก) ในแท็บใหม่' }],
   },
   {
     key: 'visit', title: 'งานเยี่ยมบ้านและงานดูแลผู้ป่วยเชิงรุก', emoji: '🏠', icon: MapPinned, tone: 'from-lime-500 to-green-600', soft: 'bg-lime-50 text-lime-700',
@@ -114,5 +114,4 @@ export const SOON = {
   disease: { label: 'งานส่งเสริมป้องกันควบคุมโรค', features: ['บันทึกกิจกรรม/โครงการ ตามหมู่บ้านและกลุ่มเป้าหมาย', 'รายงานตามเดือน ไตรมาส ปีงบประมาณ', 'งานเฝ้าระวังโรค วัคซีน คัดกรอง ไข้เลือดออก ฯลฯ'] },
   nursing: { label: 'งานการพยาบาล', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
   academic: { label: 'งานวิชาการ', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
-  ltc: { label: 'งานดูแลผู้มีภาวะพึ่งพิง LTC', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
 };

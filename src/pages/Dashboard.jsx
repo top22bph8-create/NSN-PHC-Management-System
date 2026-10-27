@@ -30,6 +30,13 @@ const LEAVE_TYPE_TONE = {
 };
 const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่น ๆ'];
 
+// ลิงก์งาน: ถ้ามี href (เว็บภายนอก เช่น ระบบ LTC) เปิดแท็บใหม่ ไม่งั้นใช้ลิงก์ภายในระบบ
+function LinkOrA({ item, className, children }) {
+  return item.href
+    ? <a href={item.href} target="_blank" rel="noopener noreferrer" className={className}>{children}</a>
+    : <Link to={item.path} className={className}>{children}</Link>;
+}
+
 function Stat({ icon: Icon, label, value, tone }) {
   return (
     <div className="card flex items-center gap-3 p-4">
@@ -173,22 +180,22 @@ export default function Dashboard() {
                 const statOf = (i) => (m && i.key === 'incoming' ? `${m.inTotal} รายการ` : m && i.key === 'outgoing' ? `${m.outTotal} รายการ` : i.key === 'assignments' && assignCount !== null ? `7 วัน: ${assignCount} งาน` : null);
                 return (
                   <div key={g.key} className="card overflow-hidden transition hover:shadow-lg">
-                    <Link to={`/group/${g.key}`} className={`flex items-center gap-3 bg-gradient-to-r ${g.tone} px-4 py-3 text-white`}>
+                    <LinkOrA item={g.items.length === 1 && g.items[0].href ? g.items[0] : { path: `/group/${g.key}` }} className={`flex items-center gap-3 bg-gradient-to-r ${g.tone} px-4 py-3 text-white`}>
                       <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-xl">{g.emoji}</span>
                       <span className="flex-1 font-bold leading-snug">{g.title}</span>
                       <ArrowRight className="h-5 w-5 opacity-70" />
-                    </Link>
+                    </LinkOrA>
                     <div className="p-2">
                       {live.length === 0 ? (
                         <Link to={`/group/${g.key}`} className="flex items-center gap-2 rounded-lg px-3 py-3 text-sm text-slate-400 hover:bg-slate-50">
                           <Hammer className="h-4 w-4" /> เร็วๆ นี้ — อยู่ระหว่างพัฒนา
                         </Link>
                       ) : live.map((i) => (
-                        <Link key={i.key} to={i.path} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50">
+                        <LinkOrA key={i.key} item={i} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50">
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${g.soft}`}><i.icon className="h-4 w-4" /></span>
                           <span className="flex-1 leading-snug">{i.label}</span>
                           {statOf(i) && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${g.soft}`}>{statOf(i)}</span>}
-                        </Link>
+                        </LinkOrA>
                       ))}
                       {items.some((i) => !i.ready) && live.length > 0 && (
                         <p className="px-3 pb-1 pt-1 text-xs text-slate-400">เร็วๆ นี้: {items.filter((i) => !i.ready).map((i) => i.label).join(', ')}</p>
