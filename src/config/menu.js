@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -40,6 +40,10 @@ export const GROUPS = [
       R('reg-loan', 'สัญญายืมเงิน ติดตามการส่งใช้'),
       R('reg-cheque', 'ควบคุมการเบิกจ่ายเล่มเช็ค'),
       R('reg-receipt', 'ควบคุมใบเสร็จรับเงิน'),
+      { key: 'elaas', label: 'ระบบการเงินและบัญชี (New e-LAAS)', path: '/group/finance', href: 'https://laas.dla.go.th', icon: Calculator, tone: 'from-blue-500 to-indigo-600', ready: true, desc: 'ระบบบัญชีคอมพิวเตอร์ อปท. (กรมส่งเสริมการปกครองท้องถิ่น)' },
+      { key: 'sso-pay', label: 'ระบบจ่ายเงินประกันสังคมออนไลน์', path: '/group/finance', href: 'https://www.sso.go.th/eservices/esv/login.do', icon: ShieldCheck, tone: 'from-emerald-500 to-green-600', ready: true, desc: 'e-Service สำนักงานประกันสังคม' },
+      { key: 'baac', label: 'ระบบ ธกส. (คอร์ปอเรท) BAAC Corporate Banking', path: '/group/finance', href: 'https://corp.inbaac.com/corp-webe/auth/login', icon: Landmark, tone: 'from-green-600 to-lime-600', ready: true, desc: 'โอนจ่ายผ่าน BAAC Corporate' },
+      { key: 'ktb', label: 'ระบบ กรุงไทย (คอร์ปอเรท) Krungthai Corporate Online', path: '/group/finance', href: 'https://www.bizgrowing.krungthai.com/corporate/', icon: Building2, tone: 'from-sky-500 to-blue-600', ready: true, desc: 'โอนจ่ายผ่าน Krungthai Corporate' },
     ],
   },
   {
