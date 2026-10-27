@@ -1,19 +1,32 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-// ลิงก์งานบนการ์ด: href = เว็บภายนอก (แท็บใหม่) / copyText = โปรแกรมในเครื่อง (เบราว์เซอร์เปิดไฟล์ในเครื่องโดยตรงไม่ได้ → คัดลอกที่อยู่ไฟล์ให้) / path = หน้าในระบบ
+// ลิงก์งานบนการ์ด: href = เว็บภายนอก (แท็บใหม่) / protocol = โปรแกรมในเครื่องผ่านตัวช่วย (jhcis://) /
+// copyText = สำรอง (คัดลอกที่อยู่ไฟล์) / path = หน้าในระบบ
 export default function MenuLink({ item, className, children }) {
-  const [note, setNote] = useState('');
-  if (item.copyText) {
-    const copy = async () => {
-      try { await navigator.clipboard.writeText(item.copyText); setNote('คัดลอกที่อยู่โปรแกรมแล้ว — กด Win+R วางแล้ว Enter เพื่อเปิด'); }
-      catch { setNote(`เปิดไม่ได้จากเว็บ — ที่อยู่โปรแกรม: ${item.copyText}`); }
-      setTimeout(() => setNote(''), 7000);
+  const [panel, setPanel] = useState(false);
+  if (item.protocol) {
+    const open = () => {
+      const a = document.createElement('a');
+      a.href = item.protocol;
+      document.body.appendChild(a); a.click(); a.remove();
+      setPanel(true);
+      setTimeout(() => setPanel(false), 15000);
     };
+    const copy = () => navigator.clipboard?.writeText(item.copyText).catch(() => {});
     return (
       <>
-        <button type="button" onClick={copy} className={`${className} w-full text-left`}>{children}</button>
-        {note && <div role="status" className="fixed bottom-20 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white shadow-lg lg:bottom-6">{note}</div>}
+        <button type="button" onClick={open} className={`${className} w-full text-left`}>{children}</button>
+        {panel && (
+          <div role="status" className="fixed bottom-20 left-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 rounded-xl bg-slate-800 p-4 text-sm text-white shadow-xl lg:bottom-6">
+            <p className="font-semibold">กำลังเปิดโปรแกรม…</p>
+            <p className="mt-1 text-slate-200">ถ้าเบราว์เซอร์ถามว่าเปิดแอปหรือไม่ ให้กด “เปิด” (ติ๊ก “อนุญาตเสมอ” จะไม่ถามอีก)</p>
+            <p className="mt-2 text-slate-200">ถ้าไม่มีอะไรเกิดขึ้น แปลว่ายังไม่ได้ติดตั้งตัวช่วย (ทำครั้งเดียวต่อเครื่อง):</p>
+            <a className="mt-1 inline-block font-semibold text-sky-300 underline" href={`${import.meta.env.BASE_URL}jhcis-setup.reg`} download>ดาวน์โหลดตัวช่วยติดตั้ง (jhcis-setup.reg)</a>
+            <span className="text-slate-300"> → ดับเบิลคลิกไฟล์ → กด “ใช่/Yes”</span>
+            <button type="button" className="mt-2 block text-xs text-slate-300 underline" onClick={copy}>หรือคัดลอกที่อยู่ไฟล์ไปเปิดเอง</button>
+          </div>
+        )}
       </>
     );
   }

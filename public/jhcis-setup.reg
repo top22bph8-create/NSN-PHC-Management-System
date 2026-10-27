@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\jhcis]
+@="URL:JHCIS Launcher"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\jhcis\shell\open\command]
+@="cmd.exe /c cd /d \"C:\\Program Files\\jhcis\" && start \"\" \"JHCIS_Launcher.bat\""
