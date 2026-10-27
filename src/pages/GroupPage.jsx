@@ -23,9 +23,10 @@ export default function GroupPage() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((i) => (
-          <MenuLink key={i.key} item={i} className={`card group relative flex flex-col gap-2 p-5 transition hover:-translate-y-0.5 hover:shadow-lg ${i.ready ? '' : 'opacity-70'}`}>
+          <MenuLink key={i.key} item={i} className={`card group relative flex flex-col gap-2 p-5 transition hover:-translate-y-0.5 hover:shadow-lg ${i.ready ? '' : 'opacity-70'} ${i.manual ? 'sm:col-span-2 lg:col-span-3 !border-2 !border-dashed !border-sky-400 bg-gradient-to-r from-sky-50 via-white to-cyan-50' : ''}`}>
             <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${i.tone || g.tone} text-white shadow-sm`}><i.icon className="h-6 w-6" /></div>
-            <div className="font-bold text-slate-800">{i.label}</div>
+            <div className="font-bold text-slate-800">{i.manual && i.emoji && <span className="emoji-blink mr-1.5 text-xl">{i.emoji}</span>}{i.label}</div>
+            {i.manual && <span className="absolute right-4 top-4 rounded-full bg-sky-600 px-3 py-1 text-xs font-bold text-white shadow">📖 คู่มือ</span>}
             {i.desc && <div className="text-sm text-slate-500">{i.desc}</div>}
             {!i.ready && <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">เร็วๆ นี้</span>}
             <ArrowRight className="absolute bottom-4 right-4 h-5 w-5 text-slate-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />

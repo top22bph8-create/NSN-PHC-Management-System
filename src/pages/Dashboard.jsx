@@ -185,9 +185,12 @@ export default function Dashboard() {
                           <Hammer className="h-4 w-4" /> เร็วๆ นี้ — อยู่ระหว่างพัฒนา
                         </Link>
                       ) : live.map((i) => (
-                        <MenuLink key={i.key} item={i} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50">
+                        <MenuLink key={i.key} item={i} className={i.manual
+                          ? 'my-1 flex items-center gap-3 rounded-xl border-2 border-dashed border-sky-400 bg-gradient-to-r from-sky-50 to-cyan-50 px-3 py-2.5 text-sm font-semibold text-sky-900 shadow-sm transition hover:border-sky-600 hover:shadow-md'
+                          : 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50'}>
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${g.soft}`}><i.icon className="h-4 w-4" /></span>
-                          <span className="flex-1 leading-snug">{i.label}</span>
+                          <span className="flex-1 leading-snug">{i.manual && i.emoji && <span className="emoji-blink mr-1 text-base">{i.emoji}</span>}{i.label}</span>
+                          {i.manual && <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[11px] font-bold text-white">คู่มือ</span>}
                           {statOf(i) && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${g.soft}`}>{statOf(i)}</span>}
                         </MenuLink>
                       ))}
