@@ -54,3 +54,9 @@ export async function getLineWebhookLog() {
     .map(([id, v]) => ({ id, ...v }))
     .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 }
+
+// สถานะการส่งไลน์/โควตา (settings/lineStatus เขียนโดย Cloud Function) — ใช้เตือนบนแดชบอร์ดและหน้าตั้งค่า
+export async function getLineStatus() {
+  const s = await getDoc(doc(db, 'settings', 'lineStatus'));
+  return s.exists() ? s.data() : {};
+}

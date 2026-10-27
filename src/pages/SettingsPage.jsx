@@ -9,6 +9,7 @@ import { ErrorState, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/leave';
 import ThaiDateInput from '../components/ThaiDateInput';
+import LineQuotaStatus from '../components/LineQuotaStatus';
 import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
 import {
   DEFAULT_DESTINATIONS, DEFAULT_MISSION_GROUPS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, MISSION_LIST_VERSION, VEHICLE_STATUSES, VEHICLE_TYPES,
@@ -170,6 +171,7 @@ export default function SettingsPage() {
 
           <div className="border-t border-brand-100 pt-4">
             <h2 className="mb-1 flex items-center gap-2 font-semibold"><MessageCircle className="h-5 w-5 text-brand-600" /> แจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณาวันลา (LINE Messaging API)</h2>
+            <LineQuotaStatus full />
             <p className="mb-3 text-sm text-slate-500">
               <b>LINE Notify แบบเดิมปิดให้บริการถาวรแล้วตั้งแต่ 31 มี.ค. 2568</b> ระบบนี้จึงเปลี่ยนมาใช้ LINE Messaging API แทน ต้องมี LINE Official Account ของหน่วยงานเอง (สมัครฟรีได้ที่{' '}
               <a className="text-brand-700 underline" href="https://developers.line.biz/console/" target="_blank" rel="noreferrer">LINE Developers Console</a>) แล้วนำ <b>Channel access token</b> (แบบ long-lived) กับ <b>Target ID</b> ของกลุ่ม/ผู้ใช้ปลายทางมาวางไว้ที่นี่

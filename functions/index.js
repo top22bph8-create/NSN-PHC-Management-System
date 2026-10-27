@@ -55,6 +55,35 @@ async function getLineSettings() {
   };
 }
 
+// ===== บันทึกสถานะการส่งไลน์ (settings/lineStatus) — เดิมถ้าส่งไม่สำเร็จ (เช่นโควตาข้อความรายเดือนเต็ม HTTP 429) จะแค่ log เงียบๆ ไม่มีใครรู้ =====
+// หน้าตั้งค่าและแดชบอร์ด (เฉพาะ Super Admin) อ่านเอกสารนี้เพื่อเตือน "โควตาไลน์เต็ม/ส่งไม่สำเร็จ"
+async function recordLineResult(ok, status, bodyText) {
+  try {
+    const ref = db.doc('settings/lineStatus');
+    if (ok) {
+      const cur = await ref.get();
+      if (cur.exists && cur.data().lastError) await ref.set({ lastError: FieldValue.delete(), recoveredAt: FieldValue.serverTimestamp() }, { merge: true });
+      return;
+    }
+    const quotaFull = status === 429 || /monthly limit|reached your/i.test(bodyText || '');
+    await ref.set({ lastError: { at: FieldValue.serverTimestamp(), status, quotaFull, message: String(bodyText || '').slice(0, 300) } }, { merge: true });
+  } catch (e) { console.error('บันทึกสถานะไลน์ไม่สำเร็จ:', e.message); }
+}
+
+async function fetchLineQuota(channelAccessToken) {
+  const h = { Authorization: `Bearer ${channelAccessToken}` };
+  const [q, c] = await Promise.all([
+    fetch('https://api.line.me/v2/bot/message/quota', { headers: h }),
+    fetch('https://api.line.me/v2/bot/message/quota/consumption', { headers: h }),
+  ]);
+  if (!q.ok || !c.ok) throw new Error(`LINE ตอบกลับ HTTP ${q.ok ? c.status : q.status}`);
+  const qj = await q.json(); const cj = await c.json();
+  const limited = qj.type === 'limited';
+  const limit = limited ? Number(qj.value) : null;
+  const used = Number(cj.totalUsage) || 0;
+  return { limited, limit, used, remaining: limited ? Math.max(0, limit - used) : null, percent: limited && limit ? Math.round((used / limit) * 100) : null };
+}
+
 async function pushLine(channelAccessToken, targetId, messages) {
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -62,7 +91,11 @@ async function pushLine(channelAccessToken, targetId, messages) {
     body: JSON.stringify({ to: targetId, messages }),
   });
   if (!res.ok) {
-    console.error('LINE push ส่งไม่สำเร็จ:', res.status, await res.text());
+    const t = await res.text();
+    console.error('LINE push ส่งไม่สำเร็จ:', res.status, t);
+    await recordLineResult(false, res.status, t);
+  } else {
+    await recordLineResult(true);
   }
 }
 
@@ -78,6 +111,7 @@ async function pushLineOrThrow(channelAccessToken, targetId, messages) {
   if (!res.ok) {
     const bodyText = await res.text().catch(() => '');
     console.error('LINE push ส่งไม่สำเร็จ (resend):', res.status, bodyText);
+    await recordLineResult(false, res.status, bodyText);
     throw new Error(`LINE ปฏิเสธการส่งข้อความ (HTTP ${res.status}): ${bodyText || 'ไม่มีรายละเอียดเพิ่มเติม'}`);
   }
 }
@@ -732,4 +766,36 @@ exports.onUserWritten = onDocumentWritten('users/{email}', async (event) => {
     }
     tx.set(ref, { list: filtered, updatedAt: FieldValue.serverTimestamp() });
   });
+});
+
+
+// ===== ตรวจโควตาข้อความไลน์ =====
+// เรียกจากหน้าตั้งค่า (ปุ่ม "ตรวจโควตา") — เฉพาะ Super Admin
+exports.getLineQuota = onCall(async (request) => {
+  const callerEmail = request.auth && request.auth.token && request.auth.token.email;
+  if (!callerEmail) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
+  const callerSnap = await db.doc(`users/${callerEmail}`).get();
+  if (!callerSnap.exists || callerSnap.data().role !== 'super_admin') throw new HttpsError('permission-denied', 'เฉพาะ Super Admin เท่านั้น');
+  const { channelAccessToken } = await getLineSettings();
+  if (!channelAccessToken) throw new HttpsError('failed-precondition', 'ยังไม่ได้ตั้งค่า Channel access token');
+  let info;
+  try { info = await fetchLineQuota(channelAccessToken); } catch (e) { throw new HttpsError('internal', e.message); }
+  await db.doc('settings/lineStatus').set({ quota: { ...info, checkedAt: FieldValue.serverTimestamp() } }, { merge: true });
+  return info;
+});
+
+// ทุกวัน 08:00 — เช็กโควตา เก็บไว้ให้แดชบอร์ดแสดง และถ้าใช้ไป >= 80% ส่งเตือนเข้าไลน์กลุ่มหลักครั้งเดียวต่อเดือน
+exports.dailyLineQuotaCheck = onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const { channelAccessToken, targetId, enabled } = await getLineSettings();
+  if (!channelAccessToken) return;
+  let info;
+  try { info = await fetchLineQuota(channelAccessToken); } catch (e) { console.error('ตรวจโควตาไลน์ไม่สำเร็จ:', e.message); return; }
+  const ref = db.doc('settings/lineStatus');
+  await ref.set({ quota: { ...info, checkedAt: FieldValue.serverTimestamp() } }, { merge: true });
+  if (!enabled || !targetId || !info.limited || info.percent === null || info.percent < 80 || info.remaining <= 0) return;
+  const month = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }).slice(0, 7);
+  const cur = await ref.get();
+  if (cur.exists && cur.data().warnedMonth === month) return;
+  await ref.set({ warnedMonth: month }, { merge: true });
+  await sendLine(channelAccessToken, targetId, `⚠️ โควตาข้อความไลน์ใกล้เต็ม\nใช้ไปแล้ว ${info.used} / ${info.limit} ข้อความ (${info.percent}%) เหลือ ${info.remaining} ข้อความ\nเมื่อเต็ม ระบบจะส่งแจ้งเตือนเข้าไลน์ไม่ได้จนถึงต้นเดือนหน้า`);
 });

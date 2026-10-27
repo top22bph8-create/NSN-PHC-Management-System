@@ -10,6 +10,7 @@ import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { GROUPS } from '../config/menu';
+import LineQuotaStatus from '../components/LineQuotaStatus';
 import { getQuota, usage } from '../lib/leave';
 import { addDays, fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ErrorState, Spinner } from '../components/ui';
@@ -144,6 +145,8 @@ export default function Dashboard() {
         <div className="mt-1 text-sm text-brand-100">ปีงบประมาณ {fy}</div>
         </div>
       </div>
+
+      {normalizeRole(profile.role) === 'super_admin' && <LineQuotaStatus />}
 
       {error ? <ErrorState message={error} />
         : !data && readable.length ? <Spinner />
