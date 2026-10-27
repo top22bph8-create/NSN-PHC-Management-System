@@ -1,14 +1,9 @@
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
+import MenuLink from '../components/MenuLink';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { GROUPS } from '../config/menu';
 import { canRead } from '../lib/roles';
-
-function LinkOrA({ item, className, children }) {
-  return item.href
-    ? <a href={item.href} target="_blank" rel="noopener noreferrer" className={className}>{children}</a>
-    : <Link to={item.path} className={className}>{children}</Link>;
-}
 
 // หน้ากลุ่มงาน: แสดงรายการงานทั้งหมดของกลุ่มเป็นการ์ดใหญ่ (เปิดจากเมนูซ้าย หรือกดหัวกลุ่มบนแดชบอร์ด)
 export default function GroupPage() {
@@ -28,13 +23,13 @@ export default function GroupPage() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((i) => (
-          <LinkOrA key={i.key} item={i} className={`card group relative flex flex-col gap-2 p-5 transition hover:-translate-y-0.5 hover:shadow-lg ${i.ready ? '' : 'opacity-70'}`}>
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${g.tone} text-white shadow-sm`}><i.icon className="h-6 w-6" /></div>
+          <MenuLink key={i.key} item={i} className={`card group relative flex flex-col gap-2 p-5 transition hover:-translate-y-0.5 hover:shadow-lg ${i.ready ? '' : 'opacity-70'}`}>
+            <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${i.tone || g.tone} text-white shadow-sm`}><i.icon className="h-6 w-6" /></div>
             <div className="font-bold text-slate-800">{i.label}</div>
             {i.desc && <div className="text-sm text-slate-500">{i.desc}</div>}
             {!i.ready && <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">เร็วๆ นี้</span>}
             <ArrowRight className="absolute bottom-4 right-4 h-5 w-5 text-slate-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
-          </LinkOrA>
+          </MenuLink>
         ))}
       </div>
     </div>
