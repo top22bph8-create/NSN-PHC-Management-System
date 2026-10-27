@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -55,6 +55,7 @@ export const GROUPS = [
       { key: 'drugcat', label: 'โปรแกรม Drugcatalogue', path: '/group/info', href: 'https://drug.nhso.go.th/drugcatalogue/', icon: Pill, tone: 'from-rose-500 to-pink-600', ready: true, desc: 'บัญชียาและรหัสยา สปสช.' },
       { key: 'sso', label: 'โปรแกรมเบิกประกันสังคม', path: '/group/info', href: 'https://cs10.chi.or.th/ssopupload', icon: ShieldPlus, tone: 'from-emerald-500 to-green-600', ready: true, desc: 'อัปโหลดข้อมูลเบิกประกันสังคม' },
       { key: 'eportal', label: 'ระบบศูนย์กลางบริการระบบงานขึ้นทะเบียน (e-Portal)', path: '/group/info', href: 'https://ossregister.nhso.go.th/#/public-portal', icon: IdCard, tone: 'from-violet-500 to-purple-600', ready: true, desc: 'e-Portal ขึ้นทะเบียน สปสช.' },
+      { key: 'eclaim', label: 'โปรแกรมระบบรายงานชดเชยค่าบริการ - กองทุน e-claim', path: '/group/info', href: 'https://monitor.humsolution.com/dashboard', icon: FileBarChart, tone: 'from-fuchsia-500 to-pink-600', ready: true, desc: 'รายงานการชดเชยค่าบริการ e-claim' },
       { key: 'smt', label: 'ระบบบริหารการเบิกจ่ายกองทุนหลักประกันสุขภาพแห่งชาติ (Smart Money Transfer)', path: '/group/info', href: 'https://smt.nhso.go.th/smtf/#/home/budget/summary', icon: Banknote, tone: 'from-lime-500 to-emerald-600', ready: true, desc: 'SMT สปสช. สรุปงบเบิกจ่ายกองทุน' },
       { key: 'qmsmart', label: 'โปรแกรม QM smart', path: '/group/info', href: 'https://qm-smart.online/qm-smart-uat/login', icon: BadgeCheck, tone: 'from-amber-500 to-orange-600', ready: true, desc: 'ระบบ QM smart' },
       { key: 'onestop', label: 'โปรแกรม One Stop Service', path: '/group/info', href: 'https://iam.nhso.go.th/realms/nhso/protocol/openid-connect/auth?response_type=code&client_id=nhso-digital-platform&redirect_uri=https%3A%2F%2Fserviceunit-nhsodp.nhso.go.th%2Flogin&scope=openid+mobile+email+profile', icon: Store, tone: 'from-teal-500 to-cyan-600', ready: true, desc: 'One Stop Service สปสช. (เข้าสู่ระบบ)' },
