@@ -148,6 +148,8 @@ export default function RegistryPage({ cfg }) {
   const [repaySaving, setRepaySaving] = useState(false);
   // ทะเบียนคุมฎีกาเบิกจ่าย: สถานะจ่ายเช็ค และสถานะส่งภาษีหัก ณ ที่จ่ายให้สรรพากร แยกกันคนละสถานะ คนละปุ่ม ("ชำระ") ต้องเลือกวันที่ทุกครั้งที่กด
   const isDeeka = cfg.key === 'reg-deeka';
+  // ตารางกว้างมีเส้นกริด + แสดงรายการ/เรื่องเต็มบรรทัด (ฎีกา และทะเบียนสั่งซื้อ/สั่งจ้าง)
+  const wideTable = isDeeka || !!cfg.wideTable;
   // ฎีกาที่ไม่ได้ลงยอด "ภาษีหัก ณ ที่จ่าย" ไว้ (เว้นว่าง/เป็น 0) ถือว่าไม่มีภาษีต้องนำส่ง — แสดงสถานะ "ไม่มียอดหัก" สีเขียวแทน
   // และไม่ต้องมีปุ่มกด "ส่งสรรพากร" ให้กด (มีแต่ปุ่ม "ชำระเช็ค" เท่านั้น) ตามที่ ผอ. แจ้ง
   const hasNoTax = (it) => !(Number(it?.taxWithheld) > 0);
@@ -1027,7 +1029,7 @@ export default function RegistryPage({ cfg }) {
       )}
       <PageHeader
         emoji={cfg.emoji} title={cfg.title}
-        tone={isDeeka ? 'from-emerald-700 via-emerald-600 to-teal-500' : undefined} big={isDeeka}
+        tone={isDeeka ? 'from-emerald-700 via-emerald-600 to-teal-500' : cfg.headerTone} big={isDeeka || !!cfg.headerTone}
         subtitle={`ปีงบประมาณ ${fy} · ${items ? `${filtered.length} จาก ${items.length} รายการ` : 'กำลังโหลด'}`}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -1171,7 +1173,7 @@ export default function RegistryPage({ cfg }) {
             <EmptyState title="ไม่พบรายการที่ตรงกับเงื่อนไข" hint="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" />
           ) : (
             <div className="overflow-x-auto">
-              <table className={`w-full text-left ${isDeeka ? 'min-w-[1100px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300' : 'min-w-[720px]'}`}>
+              <table className={`w-full text-left ${wideTable ? (isDeeka ? 'min-w-[1100px]' : 'min-w-[860px]') + ' [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300' : 'min-w-[720px]'}`}>
                 <thead className="bg-slate-100 text-sm text-slate-600">
                   <tr>
                     {listFields.map((f) => <th key={f.key} className="px-3 py-2 font-semibold">{f.label}</th>)}
@@ -1185,7 +1187,7 @@ export default function RegistryPage({ cfg }) {
                   {filtered.map((it) => (
                     <tr key={it.id} className={`cursor-pointer border-t border-slate-100 hover:bg-brand-50/60 ${isDeeka ? 'odd:bg-white even:bg-slate-50/70' : ''}`} onClick={() => setViewId(it.id)}>
                       {listFields.map((f) => (
-                        <td key={f.key} className={`px-3 py-2 align-top ${isDeeka && f.key === 'subject' ? 'min-w-[20rem] text-base leading-relaxed' : f.key === 'subject' ? 'max-w-xs' : ''} ${isDeeka && (f.type === 'number' || f.type === 'computed') ? 'whitespace-nowrap text-right font-semibold tabular-nums' : ''}`}>
+                        <td key={f.key} className={`px-3 py-2 align-top ${wideTable && f.key === 'subject' ? 'min-w-[20rem] text-base leading-relaxed' : f.key === 'subject' ? 'max-w-xs' : ''} ${isDeeka && (f.type === 'number' || f.type === 'computed') ? 'whitespace-nowrap text-right font-semibold tabular-nums' : ''}`}>
                           {f.key === cfg.statusField ? (
                             isLoanOverdue(it) ? <Badge className="bg-red-600 text-white">เกินกำหนดส่งใช้เงินยืม</Badge> : <Badge className={cfg.statusColors[it[f.key]]}>{it[f.key]}</Badge>
                           )
@@ -1200,7 +1202,7 @@ export default function RegistryPage({ cfg }) {
                               )
                             )
                             : f.key === cfg.numberField ? <span className="font-semibold text-brand-800">{it[f.key]}</span>
-                            : <span className={(f.key === 'subject' && !isDeeka ? 'line-clamp-2' : f.key === 'subject' ? 'whitespace-pre-wrap' : '') + (isUnpaidAmt(f, it) ? ' font-semibold text-red-400' : '')}>{display(f, it[f.key], it)}</span>}
+                            : <span className={(f.key === 'subject' && !wideTable ? 'line-clamp-2' : f.key === 'subject' ? 'whitespace-pre-wrap' : '') + (isUnpaidAmt(f, it) ? ' font-semibold text-red-400' : '')}>{display(f, it[f.key], it)}</span>}
                         </td>
                       ))}
                       {isLoan && (

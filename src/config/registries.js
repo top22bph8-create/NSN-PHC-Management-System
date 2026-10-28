@@ -251,21 +251,25 @@ export const REGISTRIES = {
     key: 'reg-procurement',
     path: '/reg-procurement',
     emoji: '🛒',
-    title: 'ทะเบียนใบสั่งซื้อ/สั่งจ้าง',
+    title: 'ทะเบียนสั่งซื้อ/สั่งจ้าง',
     noun: 'ใบสั่งซื้อ/สั่งจ้าง',
     numberField: 'poNo',
     numberLabel: 'เลขที่ใบสั่งซื้อ/สั่งจ้าง',
     dateField: 'poDate',
+    // หัวหน้าสีส้ม-ทอง ตัวใหญ่ + ตารางมีเส้นกริด แสดงรายการเต็มบรรทัด (ใช้ร่วมกับทะเบียนคุมฎีกา) — ดู RegistryPage.jsx (wideTable)
+    headerTone: 'from-amber-700 via-orange-600 to-amber-500',
+    wideTable: true,
+    // ใบสั่งซื้อและใบสั่งจ้างใช้เลขที่ชุดเดียวกัน เรียงต่อเนื่องอัตโนมัติรายปีงบประมาณ (ไม่ต้องกรอกเอง)
     fields: [
       { key: 'poNo', label: 'เลขที่ใบสั่งซื้อ/สั่งจ้าง', type: 'text', auto: true, list: true, search: true },
-      { key: 'poDate', label: 'วันที่', type: 'date', required: true, list: true },
-      // เพิ่มตามคำขอ: ชื่อผู้รับใบสั่งซื้อ/สั่งจ้าง (จะเป็นบุคคลธรรมดา ร้าน หจก. หรือบริษัทก็ได้ กรอกเป็นข้อความ)
-      { key: 'vendorName', label: 'ชื่อผู้รับใบสั่งซื้อสั่งจ้าง (บุคคลธรรมดา/ร้าน/หจก./บริษัท)', type: 'text', list: true, search: true },
-      { key: 'subject', label: 'เรื่อง', type: 'textarea', required: true, list: true, search: true },
+      { key: 'poDate', label: 'วันที่สั่งซื้อ/สั่งจ้าง', type: 'date', required: true, list: true },
+      // key เดิมคือ subject (คงไว้เพื่อให้ข้อมูลเก่ายังอยู่ครบ) แต่เปลี่ยนชื่อที่แสดงให้ตรงกับการใช้งานจริง
+      { key: 'subject', label: 'รายการ/รายละเอียดการซื้อ/จ้าง', type: 'textarea', required: true, list: true, search: true },
+      { key: 'vendorName', label: 'ชื่อผู้รับจ้าง / ห้าง ร้าน บริษัท', type: 'text', required: true, list: true, search: true },
       { key: 'note', label: 'หมายเหตุ', type: 'textarea' },
     ],
     reportColor: 'FFD400',
-    reportColumns: ['poNo', 'poDate', 'vendorName', 'subject'],
+    reportColumns: ['poNo', 'poDate', 'subject', 'vendorName'],
   },
   'reg-contract-no': {
     key: 'reg-contract-no',

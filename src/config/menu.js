@@ -37,6 +37,7 @@ export const GROUPS = [
     key: 'finance', title: 'งานการเงินและบัญชี', emoji: '💰', icon: Wallet, tone: 'from-emerald-500 to-teal-600', soft: 'bg-emerald-50 text-emerald-700',
     items: [
       R('reg-deeka', 'ฎีกาเบิกจ่าย ภาษี ประกันสังคม เช็ค'),
+      R('reg-procurement', 'ใบสั่งซื้อ/สั่งจ้าง เลขที่เรียงอัตโนมัติ'),
       R('reg-loan', 'สัญญายืมเงิน ติดตามการส่งใช้'),
       R('reg-cheque', 'ควบคุมการเบิกจ่ายเล่มเช็ค'),
       R('reg-receipt', 'ควบคุมใบเสร็จรับเงิน'),
@@ -81,7 +82,6 @@ export const GROUPS = [
   {
     key: 'supply', title: 'งานครุภัณฑ์-พัสดุ', emoji: '📦', icon: Package, tone: 'from-orange-500 to-red-500', soft: 'bg-orange-50 text-orange-700',
     items: [
-      R('reg-procurement', 'ควบคุมการสั่งซื้อสั่งจ้าง'),
       { key: 'equipment', label: 'ครุภัณฑ์', path: '/soon/equipment', icon: Armchair, ready: false },
       { key: 'supplies', label: 'พัสดุ', path: '/soon/supplies', icon: Package, ready: false },
     ],
