@@ -401,7 +401,7 @@ export default function RegistryPage({ cfg }) {
       qy,
       (snap) => {
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        rows.sort(cfg.key === 'reg-deeka'
+        rows.sort(cfg.key === 'reg-deeka' || cfg.key === 'reg-cheque'
           ? (a, b) => (Number((String(a[cfg.numberField] || '').match(/(\d+)/) || [0, 0])[1])) - (Number((String(b[cfg.numberField] || '').match(/(\d+)/) || [0, 0])[1]))
           : (a, b) => (b[cfg.dateField] || '').localeCompare(a[cfg.dateField] || '') || (b[cfg.numberField] || '').localeCompare(a[cfg.numberField] || ''));
         setItems(rows);
@@ -591,6 +591,16 @@ export default function RegistryPage({ cfg }) {
     const e = validate(values);
     setErrors(e);
     if (Object.keys(e).length) return;
+    if (isDeeka) {
+      for (const k of ['chequeNo', 'taxChequeNo', 'ssoChequeNo']) {
+        const v = String(values[k] || '').trim();
+        if (!v) continue;
+        const old = form.id ? items.find((x) => x.id === form.id) : null;
+        if (old && String(old[k] || '') === v) continue; // ไม่เปลี่ยนค่า ไม่ต้องเตือนซ้ำ
+        const hit = await findInStockCheque(v);
+        if (hit) { say({ type: 'error', text: stockChequeMsg(hit, v) }); return; }
+      }
+    }
     // คำนวณระยะทางครั้งนี้ = เลขไมล์ปัจจุบัน − เลขไมล์ครั้งก่อน (เฉพาะรถยนต์ที่กรอกเลขไมล์ปัจจุบัน)
     if (isVehicle) {
       const oldRec = form.id ? items.find((x) => x.id === form.id) : null;
@@ -768,6 +778,23 @@ export default function RegistryPage({ cfg }) {
 
   // ===== ทะเบียนคุมฎีกาเบิกจ่าย: บันทึกการชำระเช็ค / การส่งภาษีหัก ณ ที่จ่ายให้สรรพากร (แยกกันคนละสถานะคนละปุ่ม ใช้ modal เดียวกันสลับตาม kind) =====
   const PAY_CHEQUE_KEY = { cheque: 'chequeNo', tax: 'taxChequeNo', sso: 'ssoChequeNo' };
+  // ตรวจว่าเลขที่เช็คที่กรอก อยู่ในเล่มที่ยัง "คงคลัง" (ยังไม่ได้เบิกออกใช้) ในทะเบียนคุมการเบิกจ่ายเล่มเช็คหรือไม่
+  const findInStockCheque = async (no) => {
+    const n = String(no || '').replace(/\D/g, '');
+    if (!n) return null;
+    const v = Number(n);
+    try {
+      const snap = await getDocs(query(collection(db, 'reg-cheque'), where('bookStatus', '==', 'คงคลัง')));
+      for (const d of snap.docs) {
+        const b = d.data();
+        const f = Number(String(b.chequeFrom || '').replace(/\D/g, ''));
+        const t = Number(String(b.chequeTo || '').replace(/\D/g, ''));
+        if (f && t && v >= f && v <= t) return { id: d.id, ...b };
+      }
+    } catch (e) { /* ไม่มีสิทธิ์/ออฟไลน์ — ไม่ขัดขวางการบันทึก */ }
+    return null;
+  };
+  const stockChequeMsg = (b, no) => `เลขที่เช็ค ${no} อยู่ในเล่มที่ ${b.bookNo} (${b.chequeFrom}-${b.chequeTo}) ซึ่งยังเป็น "คงคลัง" ไม่ได้เบิกออกใช้ — กรุณาไปทำรายการ "เบิกใช้" เล่มเช็คในทะเบียนคุมการเบิกจ่ายเล่มเช็คก่อน แล้วจึงกลับมาบันทึกการจ่าย`;
   const [payActionChequeNo, setPayActionChequeNo] = useState('');
   const [payActionMethod, setPayActionMethod] = useState('');
   // ภาษี/ประกันสังคม: ชำระผ่านการตั้งฎีกาเบิกจ่าย (ระบุเลขฎีกาแล้วระบบตรวจยอด/ชื่ออัตโนมัติ) หรือจ่ายตรง
@@ -775,6 +802,7 @@ export default function RegistryPage({ cfg }) {
   const [payDikaNo, setPayDikaNo] = useState('');
   const [payForce, setPayForce] = useState(false);
   const [payWarn, setPayWarn] = useState('');
+  const [payStockWarn, setPayStockWarn] = useState('');
   const KIND_WORDS = { tax: ['ภาษี', 'สรรพากร', 'หัก ณ ที่จ่าย', 'ภงด'], sso: ['ประกันสังคม', 'สปส', 'สมทบ'] };
   const sameMoney = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
   const expectedAmt = (it, kind) => Number(kind === 'tax' ? it.taxWithheld : it.ssoAmount) || 0;
@@ -784,7 +812,7 @@ export default function RegistryPage({ cfg }) {
     ? (items || []).filter((c) => c.id !== payAction.item.id && (sameMoney(c.payAmount, expectedAmt(payAction.item, payAction.kind)) || sameMoney(c.amount, expectedAmt(payAction.item, payAction.kind))) && matchesKind(c, payAction.kind))
     : [];
   const [payActionMethodOther, setPayActionMethodOther] = useState('');
-  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayAction({ item: it, kind }); };
+  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayStockWarn(''); setPayAction({ item: it, kind }); };
   const submitPayAction = async () => {
     if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
     const { item, kind } = payAction;
@@ -833,6 +861,10 @@ export default function RegistryPage({ cfg }) {
       if (!payActionMethod) { say({ type: 'error', text: 'กรุณาเลือกวิธีการจ่าย' }); return; }
       if (payActionMethod === 'อื่นๆ' && !methodOther) { say({ type: 'error', text: 'กรุณาระบุวิธีการจ่าย' }); return; }
       if (!isChequeMethod(payActionMethod)) chequeNo = '';
+    }
+    if (chequeNo) {
+      const hit = await findInStockCheque(chequeNo);
+      if (hit) { setPayStockWarn(stockChequeMsg(hit, chequeNo)); return; }
     }
     const after = kind === 'cheque'
       ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo }
@@ -1108,22 +1140,32 @@ export default function RegistryPage({ cfg }) {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มในคลัง {writable && '(คลิกที่เล่มเพื่อเบิกออกใช้)'}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {inStockBooks.length === 0 && <span className="text-sm text-slate-400">ไม่มีเล่มคงคลัง</span>}
-                  {inStockBooks.map((it) => (
-                    <button
-                      key={it.id}
-                      type="button"
-                      disabled={!writable}
-                      onClick={() => openWithdraw(it)}
-                      title={writable ? `คลิกเพื่อเบิกเล่มที่ ${it[cfg.numberField]} ออกจากคลัง` : undefined}
-                      className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-default disabled:hover:bg-emerald-100"
-                    >
-                      เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
-                    </button>
-                  ))}
-                </div>
+                <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มในคลัง (เรียงจากน้อยไปมาก){writable && ' — เบิกได้เฉพาะเล่มลำดับน้อยที่สุด'}</p>
+                {inStockBooks.length === 0 && <span className="text-sm text-slate-400">ไม่มีเล่มคงคลัง</span>}
+                {inStockBooks[0] && (
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-emerald-400 bg-emerald-50 px-3 py-2">
+                    <div>
+                      <div className="text-xs font-medium text-emerald-700">เล่มถัดไปที่จะเบิกใช้</div>
+                      <div className="text-base font-bold text-emerald-900">เล่ม {inStockBooks[0][cfg.numberField]}</div>
+                      <div className="text-xs text-slate-600">เลขที่ {inStockBooks[0][SL.numFromKey]}-{inStockBooks[0][SL.numToKey]}</div>
+                    </div>
+                    {writable && (
+                      <button type="button" className="btn bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => openWithdraw(inStockBooks[0])}>
+                        เบิกใช้ เล่ม {inStockBooks[0][cfg.numberField]}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {inStockBooks.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-slate-500">รอเบิกตามลำดับ:</span>
+                    {inStockBooks.slice(1).map((it) => (
+                      <span key={it.id} className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
+                        เล่ม {it[cfg.numberField]} ({it[SL.numFromKey]}-{it[SL.numToKey]})
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <p className="mb-1.5 text-sm font-medium text-slate-600">เล่มที่เบิกใช้แล้ว</p>
@@ -1727,7 +1769,13 @@ export default function RegistryPage({ cfg }) {
             {(payAction.kind === 'cheque' || (payVia === 'direct' && isChequeMethod(payActionMethod))) && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่เช็ค</label>
-                <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => setPayActionChequeNo(e.target.value)} />
+                <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => { setPayActionChequeNo(e.target.value); setPayStockWarn(''); }} />
+                {payStockWarn && (
+                  <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p>⚠ {payStockWarn}</p>
+                    <Link to="/reg-cheque" className="mt-1 inline-block font-semibold text-brand-700 underline">ไปที่ทะเบียนคุมการเบิกจ่ายเล่มเช็ค →</Link>
+                  </div>
+                )}
               </div>
             )}
           </div>
