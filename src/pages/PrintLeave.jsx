@@ -176,7 +176,7 @@ function OrderBox({ status, isOwnerLeave, decidedDate, pushTop = 42 }) {
         <div className="mt-4 text-center leading-[1.15]">
           <div className="mx-auto w-[130px] border-b border-dotted border-slate-500">&nbsp;</div>
           <div>( {DIRECTOR_NAME} )</div>
-          <div>{DIRECTOR_POSITION}</div>
+          <div className="relative left-1/2 w-max -translate-x-1/2 whitespace-nowrap" style={{ fontSize: '0.8em' }}>{DIRECTOR_POSITION}</div>
           {decidedDate ? <div className="mt-1">วันที่ {decidedDate}</div> : <div className="mt-1">วันที่ <Blank w="w-10" /> เดือน <Blank w="w-24" /> พ.ศ. <Blank w="w-14" /></div>}
         </div>
       )}
@@ -503,6 +503,12 @@ export default function PrintLeave() {
   const quotaRemain = Math.max(0, (Number(quotaCfg['ลาพักผ่อน']) || 0) - vBefore);
   const quotaTotal = quotaAccrued + quotaRemain;
 
+  // ชื่อผู้ลาพร้อมคำนำหน้า (นาย/นาง/นางสาว ฯลฯ) จากทำเนียบบุคลากร — ถ้าชื่อมีคำนำหน้าอยู่แล้วไม่เติมซ้ำ
+  const PFX = ['นางสาว', 'นาง', 'นาย', 'น.ส.', 'ดร.', 'ว่าที่'];
+  const rawName = String(l.name || '').trim();
+  const pfx = String(person.namePrefix || '').trim();
+  const lp = { ...l, name: pfx && !PFX.some((x) => rawName.startsWith(x)) ? `${pfx}${rawName}` : rawName };
+
   return (
     <div
       className="print-doc mx-auto max-w-[800px] bg-white p-8 text-slate-800 print:max-w-none print:p-0"
@@ -515,13 +521,13 @@ export default function PrintLeave() {
       </div>
       <p className="pf-tip mb-2 text-xs text-amber-700 print:hidden">เคล็ดลับ: ตอนสั่งพิมพ์ ให้เปิด "การตั้งค่าเพิ่มเติม" แล้วปิดตัวเลือก "ส่วนหัวและส่วนท้าย" (Headers and footers) เพื่อไม่ให้เบราว์เซอร์แทรกวันที่/URL/เลขหน้าลงในกระดาษ (ไม่มีวิธีปิดจากโค้ดของเว็บได้ ต้องปิดที่ตัวเลือกนี้ในกล่องพิมพ์เองทุกครั้ง) · แบบฟอร์มนี้ใช้ฟอนต์ TH SarabunIT๙ ที่แนบมาฝังไว้ในไฟล์ให้แล้ว จึงแสดงผลเหมือนกันทุกเครื่อง · หากต้องการให้ไฟล์ PDF ที่บันทึกจากหน้าพิมพ์นี้ไปเก็บที่โฟลเดอร์ Downloads ของเครื่องโดยอัตโนมัติทุกครั้ง (ไม่ต้องเลือกที่เก็บเอง) ให้ไปที่การตั้งค่าเบราว์เซอร์ (เช่น Chrome: การตั้งค่า → ดาวน์โหลด) แล้วปิดตัวเลือก "ถามก่อนว่าจะบันทึกไฟล์แต่ละไฟล์ไว้ที่ไหน"</p>
       {l.type === 'ลาพักผ่อน' ? (
-        <Vacation l={l} to={to} quotaAccrued={quotaAccrued} quotaRemain={quotaRemain} quotaTotal={quotaTotal} before={vBefore || ''} thisTime={vThisTime || ''} total={vTotal || ''} isOwnerLeave={isOwnerLeave} dateText={dateText} decidedDate={decidedDate} />
+        <Vacation l={lp} to={to} quotaAccrued={quotaAccrued} quotaRemain={quotaRemain} quotaTotal={quotaTotal} before={vBefore || ''} thisTime={vThisTime || ''} total={vTotal || ''} isOwnerLeave={isOwnerLeave} dateText={dateText} decidedDate={decidedDate} />
       ) : ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาคลอดบุตร'].includes(l.type) ? (
-        <SickPersonalMaternity l={l} stats={stats} lastSame={lastSameDate} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+        <SickPersonalMaternity l={lp} stats={stats} lastSame={lastSameDate} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
       ) : l.type === 'ลาอุปสมบท/ประกอบพิธีฮัจย์' ? (
-        <Ordination l={l} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+        <Ordination l={lp} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
       ) : (
-        <GenericLeave l={l} stats={stats} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
+        <GenericLeave l={lp} stats={stats} to={to} dateText={dateText} isOwnerLeave={isOwnerLeave} decidedDate={decidedDate} />
       )}
     </div>
   );

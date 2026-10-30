@@ -23,7 +23,7 @@ export const PERSONNEL_TYPES = ['ข้าราชการ', 'พนักง�
 
 function EditPersonModal({ user, onClose, say }) {
   const [f, setF] = useState({
-    name: user.name || '', position: user.position || '', personnelType: user.personnelType || '',
+    name: user.name || '', namePrefix: user.namePrefix || '', position: user.position || '', personnelType: user.personnelType || '',
     idCard: user.idCard || '', phone: user.phone || '', education: user.education || '',
     birthday: user.birthday || '', startWorkDate: user.startWorkDate || '', civilServiceDate: user.civilServiceDate || '',
     vacationCarryOver: user.vacationCarryOver || 0,
@@ -39,7 +39,7 @@ function EditPersonModal({ user, onClose, say }) {
     setBusy(true);
     try {
       const patch = {
-        name: clean(f.name), position: clean(f.position), personnelType: f.personnelType,
+        name: clean(f.name), namePrefix: f.namePrefix || '', position: clean(f.position), personnelType: f.personnelType,
         idCard: clean(f.idCard), phone: clean(f.phone), education: clean(f.education),
         birthday: f.birthday || '', startWorkDate: f.startWorkDate || '', civilServiceDate: f.civilServiceDate || '',
         vacationCarryOver: Number(f.vacationCarryOver) || 0,
@@ -57,6 +57,13 @@ function EditPersonModal({ user, onClose, say }) {
     <Modal title={`แก้ไขข้อมูลบุคลากร: ${user.name}`} onClose={onClose}
       footer={<button className="btn btn-primary w-full" onClick={submit} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>}>
       <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-sm text-slate-600" htmlFor="pnp">คำนำหน้าชื่อ (ใช้ในใบลา)</label>
+          <select id="pnp" className="input" value={f.namePrefix} onChange={set('namePrefix')}>
+            <option value="">- ไม่ระบุ -</option>
+            {['นาย', 'นาง', 'นางสาว', 'ว่าที่ร้อยตรี', 'ดร.'].map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="pn">ชื่อ - สกุล</label><input id="pn" required className="input" value={f.name} onChange={set('name')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="po">ตำแหน่ง</label><input id="po" className="input" value={f.position} onChange={set('position')} /></div>
         <div>
