@@ -37,7 +37,7 @@ const licenseState = (iso) => {
 function EditPersonModal({ user, onClose, say }) {
   const [f, setF] = useState({
     name: splitPrefix(user.name).rest || user.name || '', namePrefix: user.namePrefix || splitPrefix(user.name).prefix, position: user.position || '', personnelType: user.personnelType || '',
-    idCard: user.idCard || '', phone: user.phone || '', education: user.education || '',
+    idCard: user.idCard || '', phone: user.phone || '', education: user.education || '', masterDegree: user.masterDegree || '',
     licenseName: user.licenseName || '', licenseNo: user.licenseNo || '', licenseIssue: user.licenseIssue || '', licenseExpire: user.licenseExpire || '',
     birthday: user.birthday || '', startWorkDate: user.startWorkDate || '', civilServiceDate: user.civilServiceDate || '',
     vacationCarryOver: user.vacationCarryOver || 0,
@@ -54,7 +54,7 @@ function EditPersonModal({ user, onClose, say }) {
     try {
       const patch = {
         name: splitPrefix(clean(f.name)).rest || clean(f.name), namePrefix: f.namePrefix || splitPrefix(clean(f.name)).prefix || '', position: clean(f.position), personnelType: f.personnelType,
-        idCard: clean(f.idCard), phone: clean(f.phone), education: clean(f.education),
+        idCard: clean(f.idCard), phone: clean(f.phone), education: clean(f.education), masterDegree: clean(f.masterDegree),
         licenseName: clean(f.licenseName), licenseNo: clean(f.licenseNo), licenseIssue: f.licenseIssue || '', licenseExpire: f.licenseExpire || '',
         birthday: f.birthday || '', startWorkDate: f.startWorkDate || '', civilServiceDate: f.civilServiceDate || '',
         vacationCarryOver: Number(f.vacationCarryOver) || 0,
@@ -93,6 +93,7 @@ function EditPersonModal({ user, onClose, say }) {
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="pph">เบอร์โทรศัพท์</label><input id="pph" className="input" value={f.phone} onChange={set('phone')} /></div>
         </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ped">วุฒิการศึกษา</label><input id="ped" className="input" value={f.education} onChange={set('education')} placeholder="เช่น ปริญญาตรี สาขา..." /></div>
+        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="pmd">วุฒิการศึกษาระดับปริญญาโท (ถ้ามี)</label><input id="pmd" className="input" placeholder="เช่น สาธารณสุขศาสตรมหาบัณฑิต (สส.ม.) สาขา... สถาบัน..." value={f.masterDegree} onChange={set('masterDegree')} /></div>
         <div className="rounded-lg border border-brand-100 bg-brand-50/40 p-3">
           <p className="mb-2 text-sm font-semibold text-brand-800">ใบประกอบวิชาชีพ</p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -152,6 +153,7 @@ export default function Personnel() {
       'เลขบัตรประชาชน': u.idCard || '',
       'เบอร์โทรศัพท์': u.phone || '',
       'วุฒิการศึกษา': u.education || '',
+      'วุฒิระดับปริญญาโท': u.masterDegree || '',
       'ใบประกอบวิชาชีพ': u.licenseName || '',
       'เลขที่ใบอนุญาต': u.licenseNo || '',
       'วันที่ออกบัตร': u.licenseIssue ? fmtDate(u.licenseIssue) : '',
