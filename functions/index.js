@@ -542,6 +542,45 @@ exports.adminBulkResetPassword = onCall(async (request) => {
   return results;
 });
 
+
+// จัดการบัญชีล็อกอิน (Firebase Auth) แทนการเข้า Firebase Console เอง — Super Admin เท่านั้น
+// op 'set': ตั้ง/เปลี่ยนรหัสผ่านของบัญชี (ถ้ายังไม่มีบัญชีล็อกอินจะสร้างให้ ไม่ต้องเปิด Enable sign-up และไม่ต้องลบผู้ใช้ใน Console)
+// op 'delete': ลบบัญชีล็อกอินของอีเมลนั้นทิ้ง (ใช้ตอนลบผู้ใช้/เปลี่ยน Username)
+exports.adminAccountOp = onCall(async (request) => {
+  const callerEmail = request.auth && request.auth.token && request.auth.token.email;
+  if (!callerEmail) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
+  const callerSnap = await db.doc(`users/${callerEmail}`).get();
+  if (!callerSnap.exists || callerSnap.data().role !== 'super_admin') throw new HttpsError('permission-denied', 'เฉพาะ Super Admin เท่านั้น');
+  const { op, email, password } = request.data || {};
+  const target = String(email || '').trim().toLowerCase();
+  if (!target) throw new HttpsError('invalid-argument', 'ไม่ระบุบัญชี');
+  if (op === 'set') {
+    const raw = String(password || '').trim();
+    if (!raw) throw new HttpsError('invalid-argument', 'กรุณาระบุรหัสผ่าน');
+    const pw = firebasePasswordServer(raw);
+    try {
+      const u = await getAuth().getUserByEmail(target);
+      await getAuth().updateUser(u.uid, { password: pw });
+      return { ok: true, created: false };
+    } catch (err) {
+      if (err.code !== 'auth/user-not-found') throw new HttpsError('internal', err.message || String(err));
+      await getAuth().createUser({ email: target, password: pw });
+      return { ok: true, created: true };
+    }
+  }
+  if (op === 'delete') {
+    if (target === String(callerEmail).toLowerCase()) throw new HttpsError('failed-precondition', 'ลบบัญชีของตัวเองไม่ได้');
+    try {
+      const u = await getAuth().getUserByEmail(target);
+      await getAuth().deleteUser(u.uid);
+    } catch (err) {
+      if (err.code !== 'auth/user-not-found') throw new HttpsError('internal', err.message || String(err));
+    }
+    return { ok: true };
+  }
+  throw new HttpsError('invalid-argument', 'op ไม่ถูกต้อง');
+});
+
 // ส่งแจ้งเตือนไลน์ซ้ำสำหรับใบลาที่มีอยู่แล้ว (Super Admin เท่านั้น) — ใช้กรณีตอนยื่นใบลาจริง (onLeaveCreated ด้านบน)
 // ไม่ติดเข้ากลุ่มไลน์ด้วยสาเหตุใดก็ตาม (เช่น ตอนนั้นยังไม่ได้ตั้งค่า/เปิดสวิตช์แจ้งเตือนไลน์ไว้ หรือเครือข่ายขัดข้องชั่วคราว)
 // ส่งข้อความตามสถานะปัจจุบันจริงของใบลานั้น (รอพิจารณา = การ์ดปุ่มอนุมัติ/ไม่อนุมัติเหมือนตอนยื่นใหม่, อนุมัติ/ไม่อนุมัติ/ยกเลิก = ข้อความผลพิจารณา)

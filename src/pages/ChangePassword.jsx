@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { KeyRound, Loader2 } from 'lucide-react';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { firebasePassword } from '../lib/accounts';
 import { writeAudit } from '../lib/audit';
+import ThaiDateInput from '../components/ThaiDateInput';
 import { PageHeader } from '../components/Logo';
 import { Toast } from '../components/ui';
 
@@ -65,12 +67,62 @@ export function PasswordForm() {
   );
 }
 
+// ข้อมูลส่วนตัวของตัวเอง — เป็นเอกสารเดียวกับ "ทำเนียบบุคลากร" (users/{email}) แก้ที่ไหนก็เปลี่ยนตรงกันทั้งสองหน้า
+// (ตำแหน่ง/สิทธิ์/ประเภทบุคลากร ผู้ดูแลระบบเป็นผู้แก้)
+export function ProfileForm() {
+  const { profile, refresh } = useAuth();
+  const [f, setF] = useState({ namePrefix: profile.namePrefix || '', name: profile.name || '', phone: profile.phone || '', education: profile.education || '', birthday: profile.birthday || '' });
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.name.trim()) return setToast({ type: 'error', text: 'กรุณากรอกชื่อ - สกุล' });
+    setBusy(true);
+    try {
+      const patch = { namePrefix: f.namePrefix, name: f.name.replace(/\s+/g, ' ').trim(), phone: f.phone.trim(), education: f.education.trim(), birthday: f.birthday || '' };
+      await updateDoc(doc(db, 'users', profile.email), patch);
+      try { await writeAudit({ action: 'update', module: 'auth', docId: profile.email, label: 'แก้ไขข้อมูลส่วนตัว' }); } catch { /* ignore */ }
+      await refresh();
+      setToast({ type: 'ok', text: 'บันทึกข้อมูลส่วนตัวแล้ว (เปลี่ยนในทำเนียบบุคลากรด้วย)' });
+    } catch (err) {
+      setToast({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) });
+    } finally { setBusy(false); setTimeout(() => setToast(null), 3500); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label htmlFor="mp" className="mb-1 block text-sm font-medium text-slate-600">คำนำหน้า</label>
+          <select id="mp" className="input" value={f.namePrefix} onChange={set('namePrefix')}>
+            <option value="">- ไม่ระบุ -</option>
+            {['นาย', 'นาง', 'นางสาว', 'ว่าที่ร้อยตรี', 'ดร.'].map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="mn" className="mb-1 block text-sm font-medium text-slate-600">ชื่อ - สกุล</label>
+          <input id="mn" required className="input" value={f.name} onChange={set('name')} />
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><label htmlFor="mt" className="mb-1 block text-sm font-medium text-slate-600">เบอร์โทรศัพท์</label><input id="mt" inputMode="tel" className="input" value={f.phone} onChange={set('phone')} /></div>
+        <div><label htmlFor="mb" className="mb-1 block text-sm font-medium text-slate-600">วันเดือนปีเกิด</label><ThaiDateInput id="mb" value={f.birthday} onChange={(v) => setF({ ...f, birthday: v })} yearsBack={80} yearsForward={0} /></div>
+      </div>
+      <div><label htmlFor="me" className="mb-1 block text-sm font-medium text-slate-600">วุฒิการศึกษา</label><input id="me" className="input" value={f.education} onChange={set('education')} /></div>
+      <p className="text-xs text-slate-500">ตำแหน่งและสิทธิ์การใช้งาน แก้โดยผู้ดูแลระบบที่หน้า "ทำเนียบบุคลากร"</p>
+      <button className="btn btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึกข้อมูลส่วนตัว</button>
+      <Toast toast={toast} onClose={() => setToast(null)} />
+    </form>
+  );
+}
+
 export default function Account() {
   const { profile } = useAuth();
   return (
-    <div className="mx-auto max-w-lg p-4 lg:p-6">
+    <div className="mx-auto max-w-xl p-4 lg:p-6">
       <PageHeader icon={KeyRound} title="บัญชีของฉัน" subtitle={`${profile.name || ''} · ${profile.position || ''}`} />
-      <div className="card p-5"><PasswordForm /></div>
+      <div className="card mb-4 p-5"><h2 className="mb-3 font-semibold text-slate-700">ข้อมูลส่วนตัว</h2><ProfileForm /></div>
+      <div className="card p-5"><h2 className="mb-3 font-semibold text-slate-700">เปลี่ยนรหัสผ่าน</h2><PasswordForm /></div>
     </div>
   );
 }

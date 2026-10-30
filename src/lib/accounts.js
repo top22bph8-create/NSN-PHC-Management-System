@@ -1,6 +1,7 @@
 import { deleteApp, getApps, initializeApp } from 'firebase/app';
 import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
-import { firebaseConfig } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { firebaseConfig, functions } from '../firebase';
 
 // Username (เช่น 1, 2, 3) แปลงเป็นอีเมลภายในระบบ ผู้ใช้ไม่ต้องรู้จักอีเมลนี้
 // ใช้โดเมน .example ซึ่งสงวนไว้ ไม่มีใครจดทะเบียนได้ ป้องกันการแย่งบัญชีผ่านอีเมล
@@ -29,4 +30,24 @@ export async function createAuthAccount(email, password) {
     await signOut(a).catch(() => {});
     await deleteApp(app).catch(() => {});
   }
+}
+
+// ตั้ง/เปลี่ยนรหัสผ่านบัญชีล็อกอิน (สร้างให้ถ้ายังไม่มี) ผ่าน Cloud Function — ไม่ต้องเข้า Firebase Console / ไม่ต้องเปิด sign-up
+export async function setAuthPassword(email, password) {
+  try {
+    await httpsCallable(functions, 'adminAccountOp')({ op: 'set', email, password });
+  } catch (err) { throw wrapFnErr(err); }
+}
+// ลบบัญชีล็อกอิน (ไม่มีอยู่แล้วก็ถือว่าสำเร็จ)
+export async function deleteAuthAccount(email) {
+  try {
+    await httpsCallable(functions, 'adminAccountOp')({ op: 'delete', email });
+  } catch (err) { throw wrapFnErr(err); }
+}
+function wrapFnErr(err) {
+  const e = new Error(err.code === 'functions/not-found' || err.code === 'functions/internal' && /not found|NOT_FOUND/i.test(err.message || '')
+    ? 'ยังไม่ได้ deploy Cloud Functions เวอร์ชันล่าสุด (ดูวิธีใน README v106)'
+    : (err.message || String(err)));
+  e.code = err.code;
+  return e;
 }

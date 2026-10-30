@@ -10,7 +10,7 @@ import { db, functions } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { ASSIGNABLE_ROLES, PENDING_LABEL, ROLES, canWrite, normalizeRole } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
-import { createAuthAccount, toEmail, usernameOf } from '../lib/accounts';
+import { deleteAuthAccount, setAuthPassword, toEmail, usernameOf } from '../lib/accounts';
 import { normalizeName } from '../lib/people';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
@@ -62,11 +62,7 @@ function ImportModal({ existing, onClose, say }) {
       const email = toEmail(r.username);
       if (existing.has(email)) { res[r.username] = 'ข้าม: มีในระบบแล้ว'; setResult({ ...res }); continue; }
       try {
-        try {
-          await createAuthAccount(email, r.password);
-        } catch (e) {
-          if (e.code !== 'auth/email-already-in-use') throw e; // มีบัญชีล็อกอินอยู่แล้ว: สร้างเฉพาะข้อมูลสิทธิ์
-        }
+        await setAuthPassword(email, r.password);
         await setDoc(doc(db, 'users', email), {
           email, username: r.username, name: r.name, position: r.position, role: r.role,
           active: true, createdAt: serverTimestamp(),
@@ -131,7 +127,7 @@ function AddModal({ existing, rows, onClose, say }) {
     if (dup && !dupConfirmed) return say({ type: 'error', text: `พบชื่อ "${f.name.trim()}" อยู่ในระบบแล้ว (username: ${usernameOf(dup.email)}) กดยืนยันด้านล่างอีกครั้งถ้าต้องการสร้างซ้ำจริง` });
     setBusy(true);
     try {
-      try { await createAuthAccount(email, f.password); } catch (err) { if (err.code !== 'auth/email-already-in-use') throw err; }
+      await setAuthPassword(email, f.password);
       await setDoc(doc(db, 'users', email), { email, username, name: clean(f.name), position: clean(f.position), role: f.role, active: true, createdAt: serverTimestamp() });
       await setDoc(doc(db, 'credentials', email), { username, password: f.password });
       await writeAudit({ action: 'create', module: 'users', docId: email, label: clean(f.name), after: { role: f.role } });
@@ -160,7 +156,7 @@ function AddModal({ existing, rows, onClose, say }) {
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ao">ตำแหน่ง</label><input id="ao" className="input" value={f.position} onChange={set('position')} /></div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ar">บทบาท</label>
           <select id="ar" className="input" value={f.role} onChange={set('role')}>{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-        <p className="text-xs text-slate-500">ต้องเปิด Enable create (sign-up) ใน Firebase Authentication ชั่วคราวระหว่างสร้างบัญชี</p>
+        <p className="text-xs text-slate-500">ระบบสร้างบัญชีล็อกอินให้อัตโนมัติ ไม่ต้องเข้า Firebase ผู้ใช้เปลี่ยนรหัสผ่านเองได้ที่เมนู "บัญชีของฉัน"</p>
       </div>
     </Modal>
   );
@@ -172,7 +168,7 @@ function ResetModal({ user, onClose, say }) {
   const go = async () => {
     setBusy(true);
     try {
-      await createAuthAccount(user.email, pw);
+      await setAuthPassword(user.email, pw);
       await setDoc(doc(db, 'credentials', user.email), { username: usernameOf(user.email), password: pw }, { merge: true });
       await writeAudit({ action: 'update', module: 'users', docId: user.email, label: `ตั้งรหัสเริ่มต้นใหม่ ${user.name}` });
       say({ type: 'ok', text: 'ตั้งรหัสเริ่มต้นใหม่แล้ว' });
@@ -185,10 +181,7 @@ function ResetModal({ user, onClose, say }) {
     <Modal title={`ตั้งรหัสเริ่มต้นใหม่: ${user.name}`} onClose={onClose}
       footer={<button className="btn btn-primary w-full" onClick={go} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} ยืนยัน</button>}>
       <div className="space-y-3">
-        <ol className="list-decimal pl-5 text-sm text-slate-600">
-          <li>ที่ Firebase Console → Authentication → Users ลบผู้ใช้ <b>{usernameOf(user.email)}@nsnphc.example</b></li>
-          <li>เปิด Enable create (sign-up) ชั่วคราว แล้วกรอกรหัสเริ่มต้นใหม่ด้านล่าง</li>
-        </ol>
+        <p className="text-sm text-slate-600">ระบบจะตั้งรหัสผ่านใหม่ให้ทันที ไม่ต้องเข้า Firebase Console แจ้งรหัสนี้ให้ผู้ใช้ แล้วให้ผู้ใช้เปลี่ยนเองได้ที่ "บัญชีของฉัน"</p>
         <input required className="input" placeholder="รหัสผ่านเริ่มต้นใหม่" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="รหัสผ่านเริ่มต้นใหม่" />
       </div>
     </Modal>
@@ -219,11 +212,12 @@ function EditAccountModal({ user, onClose, say, prefill }) {
           pw = cSnap.exists() ? cSnap.data().password : '';
         }
         if (!pw) { say({ type: 'error', text: 'ไม่พบรหัสผ่านเดิมที่บันทึกไว้ กรุณากรอกรหัสผ่านใหม่สำหรับชื่อผู้ใช้นี้ด้วย' }); setBusy(false); return; }
-        await createAuthAccount(newEmail, pw);
+        await setAuthPassword(newEmail, pw);
         await setDoc(doc(db, 'users', newEmail), { ...user, email: newEmail, username: newUsername, updatedAt: serverTimestamp() });
         await setDoc(doc(db, 'credentials', newEmail), { username: newUsername, password: pw });
         await deleteDoc(doc(db, 'users', user.email));
         await deleteDoc(doc(db, 'credentials', user.email)).catch(() => {});
+        await deleteAuthAccount(user.email).catch(() => {}); // ลบบัญชีล็อกอินเดิมทิ้ง ไม่ให้ค้าง
         // สำคัญ: ย้ายทะเบียนลาเดิมทั้งหมด (field userEmail) ไปอีเมลใหม่ด้วย ไม่งั้นใบลาเก่าจะ "หลุด" ไม่ถูกนับในสถิติ/โควตาของบัญชีใหม่อีกต่อไป
         // (เดิมเคยเกิดปัญหานี้มาแล้วตอนเปลี่ยน Username ทำให้การ์ดสรุปวันลาที่หน้า "รายชื่อบุคลากร" ขึ้นเต็มโควตาผิดๆ เพราะจับคู่อีเมลไม่เจอ)
         try {
@@ -240,13 +234,8 @@ function EditAccountModal({ user, onClose, say, prefill }) {
         return;
       }
       if (f.password.trim()) {
-        try {
-          await createAuthAccount(user.email, f.password.trim());
-          await setDoc(doc(db, 'credentials', user.email), { username: newUsername, password: f.password.trim() }, { merge: true });
-        } catch (err) {
-          if (err.code === 'auth/email-already-in-use') { setNeedDelete(true); setBusy(false); return; }
-          throw err;
-        }
+        await setAuthPassword(user.email, f.password.trim());
+        await setDoc(doc(db, 'credentials', user.email), { username: newUsername, password: f.password.trim() }, { merge: true });
       }
       await writeAudit({ action: 'update', module: 'users', docId: user.email, label: `แก้ไขบัญชี ${user.name}` });
       say({ type: 'ok', text: 'บันทึกแล้ว' });
@@ -302,6 +291,7 @@ function MergeModal({ rows, onClose, say }) {
       batch.delete(doc(db, 'users', dupEmail));
       await batch.commit();
       await deleteDoc(doc(db, 'credentials', dupEmail)).catch(() => {});
+      await deleteAuthAccount(dupEmail).catch(() => {});
       await writeAudit({
         action: 'delete', module: 'users', docId: dupEmail,
         label: `รวมบัญชีซ้ำ: ย้ายวันลา ${leavesSnap.size} รายการจาก "${dup?.name || dupEmail}" ไปรวมกับ "${keep?.name || keepEmail}" แล้วลบบัญชีที่ซ้ำ`,
@@ -444,6 +434,7 @@ export default function UserAccounts() {
     try {
       await deleteDoc(doc(db, 'users', u.email));
       await deleteDoc(doc(db, 'credentials', u.email)).catch(() => {});
+      await deleteAuthAccount(u.email).catch(() => {}); // ลบบัญชีล็อกอินด้วย จะสร้างชื่อผู้ใช้เดิมใหม่ได้ทันที
       await writeAudit({ action: 'delete', module: 'users', docId: u.email, label: u.name || u.email });
       say({ type: 'ok', text: `ลบ ${u.name || usernameOf(u.email)} ออกจากระบบแล้ว` });
       setToDelete(null);

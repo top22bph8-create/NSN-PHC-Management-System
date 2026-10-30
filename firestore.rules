@@ -43,7 +43,10 @@ service cloud.firestore {
       allow update: if hasRole(['super_admin'])
                     || (signedIn() && request.auth.token.email == email
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword'])
-                        && request.resource.data.mustChangePassword == false);
+                        && request.resource.data.mustChangePassword == false)
+                    // เจ้าตัวแก้ข้อมูลส่วนตัวของตัวเองได้ (คำนำหน้า/ชื่อ/เบอร์/วุฒิ/วันเกิด) ไม่รวมสิทธิ์ ตำแหน่ง สถานะ
+                    || (isActive() && request.auth.token.email == email
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['namePrefix', 'name', 'phone', 'education', 'birthday']));
       allow delete: if hasRole(['super_admin']);
     }
 
