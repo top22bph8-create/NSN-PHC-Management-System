@@ -22,10 +22,22 @@ const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 // ประเภทบุคลากร ตามที่ใช้จริงในหน่วยงานสาธารณสุขระดับ รพ.สต.
 export const PERSONNEL_TYPES = ['ข้าราชการ', 'พนักงานราชการ', 'พนักงานกระทรวงสาธารณสุข', 'ลูกจ้างประจำ', 'ลูกจ้างชั่วคราว', 'จ้างเหมาบริการ', 'อื่นๆ'];
 
+const LICENSE_NAMES = [
+  'ใบอนุญาตประกอบวิชาชีพการพยาบาลและการผดุงครรภ์', 'ใบอนุญาตประกอบวิชาชีพเวชกรรม', 'ใบอนุญาตประกอบโรคศิลปะสาขาการแพทย์แผนไทย',
+  'ใบอนุญาตประกอบวิชาชีพเภสัชกรรม', 'ใบอนุญาตประกอบวิชาชีพทันตกรรม', 'ใบอนุญาตประกอบโรคศิลปะสาขาเทคนิคการแพทย์', 'ใบอนุญาตประกอบโรคศิลปะสาขากายภาพบำบัด',
+];
+// สถานะวันหมดอายุใบประกอบวิชาชีพ: หมดอายุแล้ว (แดง) / ใกล้หมดอายุภายใน 180 วัน (เหลือง)
+const licenseState = (iso) => {
+  if (!iso) return null;
+  const days = Math.floor((new Date(iso + 'T00:00:00') - new Date(new Date().toDateString())) / 86400000);
+  return days < 0 ? { cls: 'text-red-600', note: 'หมดอายุแล้ว' } : days <= 180 ? { cls: 'text-amber-600', note: `อีก ${days} วันหมดอายุ` } : { cls: 'text-slate-500', note: '' };
+};
+
 function EditPersonModal({ user, onClose, say }) {
   const [f, setF] = useState({
     name: splitPrefix(user.name).rest || user.name || '', namePrefix: user.namePrefix || splitPrefix(user.name).prefix, position: user.position || '', personnelType: user.personnelType || '',
     idCard: user.idCard || '', phone: user.phone || '', education: user.education || '',
+    licenseName: user.licenseName || '', licenseNo: user.licenseNo || '', licenseIssue: user.licenseIssue || '', licenseExpire: user.licenseExpire || '',
     birthday: user.birthday || '', startWorkDate: user.startWorkDate || '', civilServiceDate: user.civilServiceDate || '',
     vacationCarryOver: user.vacationCarryOver || 0,
   });
@@ -42,6 +54,7 @@ function EditPersonModal({ user, onClose, say }) {
       const patch = {
         name: splitPrefix(clean(f.name)).rest || clean(f.name), namePrefix: f.namePrefix || splitPrefix(clean(f.name)).prefix || '', position: clean(f.position), personnelType: f.personnelType,
         idCard: clean(f.idCard), phone: clean(f.phone), education: clean(f.education),
+        licenseName: clean(f.licenseName), licenseNo: clean(f.licenseNo), licenseIssue: f.licenseIssue || '', licenseExpire: f.licenseExpire || '',
         birthday: f.birthday || '', startWorkDate: f.startWorkDate || '', civilServiceDate: f.civilServiceDate || '',
         vacationCarryOver: Number(f.vacationCarryOver) || 0,
       };
@@ -79,6 +92,17 @@ function EditPersonModal({ user, onClose, say }) {
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="pph">เบอร์โทรศัพท์</label><input id="pph" className="input" value={f.phone} onChange={set('phone')} /></div>
         </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ped">วุฒิการศึกษา</label><input id="ped" className="input" value={f.education} onChange={set('education')} placeholder="เช่น ปริญญาตรี สาขา..." /></div>
+        <div className="rounded-lg border border-brand-100 bg-brand-50/40 p-3">
+          <p className="mb-2 text-sm font-semibold text-brand-800">ใบประกอบวิชาชีพ</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2"><label className="mb-1 block text-sm text-slate-600" htmlFor="pln">ชื่อใบประกอบวิชาชีพ / สภาวิชาชีพ</label>
+              <input id="pln" list="license-names" className="input" placeholder="เช่น ใบอนุญาตประกอบวิชาชีพการพยาบาลและการผดุงครรภ์" value={f.licenseName} onChange={set('licenseName')} />
+              <datalist id="license-names">{LICENSE_NAMES.map((t) => <option key={t} value={t} />)}</datalist></div>
+            <div className="sm:col-span-2"><label className="mb-1 block text-sm text-slate-600" htmlFor="plno">เลขที่ใบอนุญาต</label><input id="plno" className="input" value={f.licenseNo} onChange={set('licenseNo')} /></div>
+            <div><label className="mb-1 block text-sm text-slate-600" htmlFor="pli">วันที่ออกบัตร</label><ThaiDateInput id="pli" value={f.licenseIssue} onChange={setDate('licenseIssue')} yearsBack={40} yearsForward={0} /></div>
+            <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ple">วันหมดอายุ</label><ThaiDateInput id="ple" value={f.licenseExpire} onChange={setDate('licenseExpire')} yearsBack={5} yearsForward={10} /></div>
+          </div>
+        </div>
         <div>
           <label className="mb-1 block text-sm text-slate-600" htmlFor="pbd">วันเดือนปีเกิด</label>
           <ThaiDateInput id="pbd" value={f.birthday} onChange={setDate('birthday')} yearsBack={80} yearsForward={0} />
@@ -127,6 +151,10 @@ export default function Personnel() {
       'เลขบัตรประชาชน': u.idCard || '',
       'เบอร์โทรศัพท์': u.phone || '',
       'วุฒิการศึกษา': u.education || '',
+      'ใบประกอบวิชาชีพ': u.licenseName || '',
+      'เลขที่ใบอนุญาต': u.licenseNo || '',
+      'วันที่ออกบัตร': u.licenseIssue ? fmtDate(u.licenseIssue) : '',
+      'วันหมดอายุใบอนุญาต': u.licenseExpire ? fmtDate(u.licenseExpire) : '',
       'วันเดือนปีเกิด': u.birthday ? fmtDate(u.birthday) : '',
       'อายุ': u.birthday ? fmtDuration(calcDuration(u.birthday)) : '',
       'วันมาปฏิบัติงาน': u.startWorkDate ? fmtDate(u.startWorkDate) : '',
@@ -154,12 +182,12 @@ export default function Personnel() {
       </div>
       <div className="card overflow-x-auto">
         {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : shown.length === 0 ? <EmptyState title="ยังไม่มีข้อมูลบุคลากร" hint="เพิ่มบัญชีผู้ใช้งานที่เมนู “กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก” ก่อน แล้วค่อยกลับมากรอกข้อมูลส่วนตัวที่นี่" /> : (
-          <table className="w-full min-w-[1400px] table-fixed text-left">
+          <table className="w-full min-w-[1650px] table-fixed text-left">
             <thead className="bg-brand-50 text-sm text-slate-600">
               <tr>
                 <th className="w-44 px-3 py-2">ชื่อ - สกุล</th><th className="w-44 px-3 py-2">ตำแหน่ง</th><th className="w-36 px-3 py-2">ประเภทบุคลากร</th>
                 <th className="w-28 px-3 py-2">เบอร์โทร</th><th className="w-36 px-3 py-2">วันเกิด / อายุ</th><th className="w-28 px-3 py-2">วันมาปฏิบัติงาน</th>
-                <th className="w-40 px-3 py-2">วันบรรจุ / อายุราชการ</th><th className="w-28 px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="w-16 px-3 py-2" />}
+                <th className="w-40 px-3 py-2">วันบรรจุ / อายุราชการ</th><th className="w-56 px-3 py-2">ใบประกอบวิชาชีพ</th><th className="w-28 px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="w-16 px-3 py-2" />}
               </tr>
             </thead>
             <tbody>
@@ -175,6 +203,13 @@ export default function Personnel() {
                   <td className="px-3 py-2 text-sm text-slate-600">{u.startWorkDate ? fmtDate(u.startWorkDate) : '-'}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">
                     {u.civilServiceDate ? (<>{fmtDate(u.civilServiceDate)}<div className="text-xs text-slate-400">อายุราชการ {fmtDuration(calcDuration(u.civilServiceDate))}</div></>) : '-'}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-slate-600">
+                    {u.licenseNo || u.licenseName ? (() => { const st = licenseState(u.licenseExpire); return (<>
+                      <div className="truncate" title={u.licenseName || ''}>{u.licenseName || 'ใบประกอบวิชาชีพ'}</div>
+                      <div className="text-xs text-slate-500">เลขที่ {u.licenseNo || '-'}</div>
+                      {u.licenseExpire && <div className={`text-xs ${st.cls}`}>หมดอายุ {fmtDate(u.licenseExpire)}{st.note ? ` · ${st.note}` : ''}</div>}
+                    </>); })() : '-'}
                   </td>
                   <td className="px-3 py-2 text-sm text-slate-600">{u.vacationCarryOver || 0}</td>
                   {writable && (
