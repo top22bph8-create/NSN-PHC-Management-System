@@ -9,6 +9,7 @@ import { writeAudit } from '../lib/audit';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { PageHeader } from '../components/Logo';
 import { Toast } from '../components/ui';
+import { PREFIX_OPTIONS, splitPrefix } from '../lib/people';
 
 export const MIN_LEN = 8;
 
@@ -71,7 +72,7 @@ export function PasswordForm() {
 // (ตำแหน่ง/สิทธิ์/ประเภทบุคลากร ผู้ดูแลระบบเป็นผู้แก้)
 export function ProfileForm() {
   const { profile, refresh } = useAuth();
-  const [f, setF] = useState({ namePrefix: profile.namePrefix || '', name: profile.name || '', phone: profile.phone || '', education: profile.education || '', birthday: profile.birthday || '' });
+  const [f, setF] = useState({ namePrefix: profile.namePrefix || splitPrefix(profile.name).prefix, name: splitPrefix(profile.name).rest || profile.name || '', phone: profile.phone || '', education: profile.education || '', birthday: profile.birthday || '' });
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -80,7 +81,7 @@ export function ProfileForm() {
     if (!f.name.trim()) return setToast({ type: 'error', text: 'กรุณากรอกชื่อ - สกุล' });
     setBusy(true);
     try {
-      const patch = { namePrefix: f.namePrefix, name: f.name.replace(/\s+/g, ' ').trim(), phone: f.phone.trim(), education: f.education.trim(), birthday: f.birthday || '' };
+      const patch = { namePrefix: f.namePrefix, name: splitPrefix(f.name.replace(/\s+/g, ' ').trim()).rest || f.name.trim(), phone: f.phone.trim(), education: f.education.trim(), birthday: f.birthday || '' };
       await updateDoc(doc(db, 'users', profile.email), patch);
       try { await writeAudit({ action: 'update', module: 'auth', docId: profile.email, label: 'แก้ไขข้อมูลส่วนตัว' }); } catch { /* ignore */ }
       await refresh();
@@ -96,7 +97,7 @@ export function ProfileForm() {
           <label htmlFor="mp" className="mb-1 block text-sm font-medium text-slate-600">คำนำหน้า</label>
           <select id="mp" className="input" value={f.namePrefix} onChange={set('namePrefix')}>
             <option value="">- ไม่ระบุ -</option>
-            {['นาย', 'นาง', 'นางสาว', 'ว่าที่ร้อยตรี', 'ดร.'].map((t) => <option key={t} value={t}>{t}</option>)}
+            {PREFIX_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div className="sm:col-span-2">

@@ -9,6 +9,7 @@ import { db } from '../firebase';
 import { fmtDate, calcDuration, fmtDuration } from '../lib/thai';
 import { exportXlsx } from '../lib/exportFile';
 import ThaiDateInput from '../components/ThaiDateInput';
+import { fullName, splitPrefix } from '../lib/people';
 import { useAuth } from '../context/AuthContext';
 import { canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
@@ -23,7 +24,7 @@ export const PERSONNEL_TYPES = ['ข้าราชการ', 'พนักง�
 
 function EditPersonModal({ user, onClose, say }) {
   const [f, setF] = useState({
-    name: user.name || '', namePrefix: user.namePrefix || '', position: user.position || '', personnelType: user.personnelType || '',
+    name: splitPrefix(user.name).rest || user.name || '', namePrefix: user.namePrefix || splitPrefix(user.name).prefix, position: user.position || '', personnelType: user.personnelType || '',
     idCard: user.idCard || '', phone: user.phone || '', education: user.education || '',
     birthday: user.birthday || '', startWorkDate: user.startWorkDate || '', civilServiceDate: user.civilServiceDate || '',
     vacationCarryOver: user.vacationCarryOver || 0,
@@ -39,7 +40,7 @@ function EditPersonModal({ user, onClose, say }) {
     setBusy(true);
     try {
       const patch = {
-        name: clean(f.name), namePrefix: f.namePrefix || '', position: clean(f.position), personnelType: f.personnelType,
+        name: splitPrefix(clean(f.name)).rest || clean(f.name), namePrefix: f.namePrefix || splitPrefix(clean(f.name)).prefix || '', position: clean(f.position), personnelType: f.personnelType,
         idCard: clean(f.idCard), phone: clean(f.phone), education: clean(f.education),
         birthday: f.birthday || '', startWorkDate: f.startWorkDate || '', civilServiceDate: f.civilServiceDate || '',
         vacationCarryOver: Number(f.vacationCarryOver) || 0,
@@ -120,7 +121,7 @@ export default function Personnel() {
   const doExportExcel = () => {
     if (!rows?.length) return say({ type: 'error', text: 'ไม่มีข้อมูลบุคลากรให้ออกรายงาน' });
     const data = rows.map((u) => ({
-      'ชื่อ - สกุล': u.name || usernameOf(u.email),
+      'ชื่อ - สกุล': fullName(u) || usernameOf(u.email),
       'ตำแหน่ง': u.position || '',
       'ประเภทบุคลากร': u.personnelType || '',
       'เลขบัตรประชาชน': u.idCard || '',
@@ -164,7 +165,7 @@ export default function Personnel() {
             <tbody>
               {shown.map((u) => (
                 <tr key={u.email} className="border-t border-slate-100">
-                  <td className="truncate px-3 py-2" title={u.name || ''}>{u.name || usernameOf(u.email)}</td>
+                  <td className="truncate px-3 py-2" title={fullName(u)}>{fullName(u) || usernameOf(u.email)}</td>
                   <td className="truncate px-3 py-2 text-sm text-slate-600" title={u.position || ''}>{u.position || '-'}</td>
                   <td className="px-3 py-2 text-sm">{u.personnelType ? <Badge className="bg-brand-100 text-brand-800">{u.personnelType}</Badge> : <span className="text-slate-400">-</span>}</td>
                   <td className="truncate px-3 py-2 text-sm text-slate-600">{u.phone || '-'}</td>

@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { ASSIGNABLE_ROLES, PENDING_LABEL, ROLES, canWrite, normalizeRole } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { deleteAuthAccount, setAuthPassword, toEmail, usernameOf } from '../lib/accounts';
-import { normalizeName } from '../lib/people';
+import { PREFIX_OPTIONS, fullName, normalizeName, splitPrefix } from '../lib/people';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 import { PageHeader } from '../components/Logo';
 
@@ -195,10 +195,14 @@ function EditAccountModal({ user, onClose, say, prefill }) {
   const [f, setF] = useState({ username: prefill?.username || usernameOf(user.email), password: prefill?.password || '' });
   const [busy, setBusy] = useState(false);
   const [needDelete, setNeedDelete] = useState(false);
+  // คำนำหน้า: ใช้ฟิลด์ namePrefix ถ้ามี ไม่งั้นแยกจากชื่อเดิม (ชื่อที่เคยพิมพ์คำนำหน้าติดไว้)
+  const [prefix, setPrefix] = useState(user.namePrefix || splitPrefix(user.name).prefix);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const submit = async () => {
     setNeedDelete(false);
+    // บันทึกคำนำหน้าแยกเป็นฟิลด์ และตัดคำนำหน้าที่ติดอยู่ในชื่อเดิมออก (กันซ้ำ/กันค้างค่าเก่า)
+    const profPatch = { namePrefix: prefix, name: splitPrefix(user.name).rest || user.name };
     const newUsername = f.username.trim().toLowerCase();
     if (!/^[a-z0-9._@-]+$/.test(newUsername)) return say({ type: 'error', text: 'ชื่อผู้ใช้ใช้ได้เฉพาะ a-z ตัวเลข . _ -' });
     const usernameChanged = newUsername !== usernameOf(user.email);
@@ -213,7 +217,7 @@ function EditAccountModal({ user, onClose, say, prefill }) {
         }
         if (!pw) { say({ type: 'error', text: 'ไม่พบรหัสผ่านเดิมที่บันทึกไว้ กรุณากรอกรหัสผ่านใหม่สำหรับชื่อผู้ใช้นี้ด้วย' }); setBusy(false); return; }
         await setAuthPassword(newEmail, pw);
-        await setDoc(doc(db, 'users', newEmail), { ...user, email: newEmail, username: newUsername, updatedAt: serverTimestamp() });
+        await setDoc(doc(db, 'users', newEmail), { ...user, ...profPatch, email: newEmail, username: newUsername, updatedAt: serverTimestamp() });
         await setDoc(doc(db, 'credentials', newEmail), { username: newUsername, password: pw });
         await deleteDoc(doc(db, 'users', user.email));
         await deleteDoc(doc(db, 'credentials', user.email)).catch(() => {});
@@ -237,6 +241,7 @@ function EditAccountModal({ user, onClose, say, prefill }) {
         await setAuthPassword(user.email, f.password.trim());
         await setDoc(doc(db, 'credentials', user.email), { username: newUsername, password: f.password.trim() }, { merge: true });
       }
+      await updateDoc(doc(db, 'users', user.email), profPatch);
       await writeAudit({ action: 'update', module: 'users', docId: user.email, label: `แก้ไขบัญชี ${user.name}` });
       say({ type: 'ok', text: 'บันทึกแล้ว' });
       onClose();
@@ -249,6 +254,13 @@ function EditAccountModal({ user, onClose, say, prefill }) {
     <Modal title={`แก้ไขบัญชี: ${user.name}`} onClose={onClose}
       footer={<button className="btn btn-primary w-full" onClick={submit} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>}>
       <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-sm text-slate-600" htmlFor="epx">คำนำหน้าชื่อ — {splitPrefix(user.name).rest || user.name}</label>
+          <select id="epx" className="input" value={prefix} onChange={(e) => setPrefix(e.target.value)}>
+            <option value="">- ไม่ระบุ -</option>
+            {PREFIX_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="eu">ชื่อผู้ใช้ (Username)</label><input id="eu" required className="input" value={f.username} onChange={set('username')} /></div>
         <div>
           <label className="mb-1 block text-sm text-slate-600" htmlFor="ep">รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label>
@@ -509,7 +521,7 @@ export default function UserAccounts() {
                         </span>
                       ) : <span className="text-slate-400">-</span>}
                     </td>
-                    <td className="truncate px-3 py-2" title={u.name || ''}>{u.name || '-'}</td>
+                    <td className="truncate px-3 py-2" title={fullName(u)}>{fullName(u) || '-'}</td>
                     <td className="truncate px-3 py-2 text-sm text-slate-600" title={u.position || ''}>{u.position || '-'}</td>
                     <td className="px-3 py-2">
                       {writable ? (

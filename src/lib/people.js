@@ -27,3 +27,17 @@ export async function findNameInIndex(name) {
     return null; // อ่านไม่สำเร็จ (เช่นระหว่างออฟไลน์) ไม่ควรบล็อกการสมัคร
   }
 }
+
+// แยกคำนำหน้าออกจากชื่อ ("นางสาวสุนิศา ดาบพลหาร" -> { prefix: 'นางสาว', rest: 'สุนิศา ดาบพลหาร' }) — ใช้ลำดับยาวก่อน (นางสาว ก่อน นาง)
+export const PREFIX_OPTIONS = ['นาย', 'นาง', 'นางสาว', 'ว่าที่ร้อยตรี', 'ดร.'];
+export function splitPrefix(name) {
+  const s = String(name || '').trim();
+  const list = ['ว่าที่ร้อยตรีหญิง', 'ว่าที่ร้อยตรี', 'นางสาว', 'น.ส.', 'นาง', 'นาย', 'ดร.'];
+  for (const p of list) if (s.startsWith(p)) return { prefix: p === 'น.ส.' ? 'นางสาว' : p, rest: s.slice(p.length).trim() };
+  return { prefix: '', rest: s };
+}
+// ชื่อเต็มสำหรับแสดง: คำนำหน้า (ฟิลด์ namePrefix) + ชื่อ (ไม่เติมซ้ำถ้าชื่อมีคำนำหน้าอยู่แล้ว)
+export const fullName = (u) => {
+  const n = String(u?.name || '').trim();
+  return u?.namePrefix && !splitPrefix(n).prefix ? `${u.namePrefix}${n}` : n;
+};
