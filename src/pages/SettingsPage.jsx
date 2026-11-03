@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const [lineToken, setLineToken] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
   const [lineVehicleTargetId, setLineVehicleTargetId] = useState('');
+  const [lineThaiTargetId, setLineThaiTargetId] = useState('');
   const [lineTargets, setLineTargets] = useState([]);
   const [lineTargetsError, setLineTargetsError] = useState('');
   const [error, setError] = useState('');
@@ -70,9 +71,10 @@ export default function SettingsPage() {
       const tokenChanged = !!lineToken.trim();
       const targetChanged = !!lineTargetId.trim();
       const vehicleTargetChanged = !!lineVehicleTargetId.trim();
-      if (tokenChanged || targetChanged || vehicleTargetChanged) {
-        await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim() });
-        setLineToken(''); setLineTargetId(''); setLineVehicleTargetId('');
+      const thaiTargetChanged = !!lineThaiTargetId.trim();
+      if (tokenChanged || targetChanged || vehicleTargetChanged || thaiTargetChanged) {
+        await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim(), thaiTargetId: lineThaiTargetId.trim() });
+        setLineToken(''); setLineTargetId(''); setLineVehicleTargetId(''); setLineThaiTargetId('');
       }
       await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged, vehicleTargetChanged } });
       const fleetV = (fleet || []).map((v, i) => ({ ...v, id: v.id || `v${Date.now()}_${i}` }));
@@ -205,6 +207,11 @@ export default function SettingsPage() {
                 <input id="lineVehicleTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineVehicleTargetId} onChange={(e) => setLineVehicleTargetId(e.target.value)} />
                 <p className="mt-1 text-xs text-slate-500">คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการที่ตั้งไว้ด้านบน) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง</p>
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineThaiTargetId">Target ID ไลน์กลุ่ม "งานแพทย์แผนไทย" (แจ้งเตือนการจองคิวออนไลน์)</label>
+                <input id="lineThaiTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานแพทย์แผนไทย) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineThaiTargetId} onChange={(e) => setLineThaiTargetId(e.target.value)} />
+                <p className="mt-1 text-xs text-slate-500">เมื่อมีผู้จองหรือยกเลิกคิวแพทย์แผนไทย ระบบส่งข้อความเข้ากลุ่มนี้ (เชิญบอทเข้ากลุ่มแล้วพิมพ์ข้อความ 1 ครั้ง จะเห็น ID ในรายการด้านล่าง กด "ใช้เป็นกลุ่มแพทย์แผนไทย")</p>
+              </div>
               <div className="rounded-lg border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
                 {lineTargetsError ? (
@@ -234,7 +241,10 @@ export default function SettingsPage() {
                         <div className="flex shrink-0 gap-1.5">
                           <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้ Target ID นี้</button>
                           {t.type !== 'รายบุคคล' && (
+                            <>
                             <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineVehicleTargetId(t.id)}>ใช้เป็นกลุ่มงานรถ</button>
+                            <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineThaiTargetId(t.id)}>ใช้เป็นกลุ่มแพทย์แผนไทย</button>
+                            </>
                           )}
                           {t.type === 'รายบุคคล' && (
                             <button

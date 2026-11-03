@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -92,6 +92,12 @@ export const GROUPS = [
       { key: 'reg-elderly', label: 'ทะเบียนผู้สูงอายุ', path: '/reg-elderly', icon: PersonStanding, ready: true, module: 'reg-elderly', tone: 'from-orange-500 to-amber-500', desc: 'รายชื่อผู้สูงอายุ กรองรายหมู่บ้าน นำเข้า/ส่งออก Excel' },
       { key: 'reg-disabled', label: 'ทะเบียนผู้พิการ', path: '/reg-disabled', icon: Accessibility, ready: true, module: 'reg-disabled', tone: 'from-sky-600 to-blue-600', desc: 'รายชื่อผู้พิการ ประเภท/บัตร/เบี้ยความพิการ กรองรายหมู่บ้าน' },
       { key: 'reg-mental', label: 'ทะเบียนผู้ป่วยจิตเวช', path: '/reg-mental', icon: Brain, ready: true, module: 'reg-mental', tone: 'from-violet-600 to-fuchsia-600', desc: 'รายชื่อผู้ป่วยจิตเวช ความเสี่ยง การกินยา วันนัด กรองรายหมู่บ้าน' },
+    ],
+  },
+  {
+    key: 'thai', title: 'งานคลินิกแพทย์แผนไทย', emoji: '🌿', icon: Leaf, tone: 'from-emerald-600 to-teal-600', soft: 'bg-emerald-50 text-emerald-700',
+    items: [
+      { key: 'thai-booking', label: 'นัดจองคิวออนไลน์', path: '/thai-booking', icon: CalendarCheck, ready: true, module: 'thai-booking', tone: 'from-emerald-500 to-teal-600', desc: 'รับจองคิวผ่าน QR Code/ลิงก์ แจ้งเตือนเข้าไลน์กลุ่มแพทย์แผนไทย จัดการคิวรายวัน' },
     ],
   },
   {

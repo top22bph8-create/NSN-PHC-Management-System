@@ -23,12 +23,14 @@ export async function getLineMeta() {
 
 // บันทึก Channel Access Token และ/หรือ Target ID ใหม่ (ใช้ merge เพื่อแก้ทีละช่องได้ โดยไม่ต้องอ่านค่าเดิมกลับมาก่อน
 // เพราะกฎความปลอดภัยห้ามอ่านเอกสารนี้แม้แต่ Super Admin) — เว้นช่องไหนว่างไว้ = ไม่แตะค่าเดิมของช่องนั้น
-export async function saveLineCredentials({ channelAccessToken, targetId, vehicleTargetId }) {
+export async function saveLineCredentials({ channelAccessToken, targetId, vehicleTargetId, thaiTargetId }) {
   const patch = { updatedAt: serverTimestamp() };
   if (channelAccessToken) patch.channelAccessToken = channelAccessToken;
   if (targetId) patch.targetId = targetId;
   // ไลน์กลุ่มแยกสำหรับระบบขออนุญาตใช้รถ (การ์ดอนุมัติ/ผลพิจารณาของงานรถส่งเข้ากลุ่มนี้ ไม่ปนกับกลุ่มหลัก)
   if (vehicleTargetId) patch.vehicleTargetId = vehicleTargetId;
+  // ไลน์กลุ่มแยกสำหรับคลินิกแพทย์แผนไทย (แจ้งเตือนการจองคิวออนไลน์)
+  if (thaiTargetId) patch.thaiTargetId = thaiTargetId;
   if (Object.keys(patch).length > 1) await setDoc(doc(db, 'settings', 'lineNotify'), patch, { merge: true });
 }
 

@@ -5,6 +5,9 @@ import { can, canRead } from './lib/roles';
 import { REGISTRIES } from './config/registries';
 import { PERSON_REGISTRIES } from './config/personRegistries';
 import PersonRegistry from './pages/PersonRegistry';
+import ThaiBooking from './pages/ThaiBooking';
+import ThaiBookingPublic from './pages/ThaiBookingPublic';
+import PrintThaiQr from './pages/PrintThaiQr';
 import Layout from './components/Layout';
 import RegistryPage from './components/RegistryPage';
 import { Spinner } from './components/ui';
@@ -190,6 +193,7 @@ function Shell() {
           {Object.values(PERSON_REGISTRIES).map((cfg) => (
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><PersonRegistry cfg={cfg} /></Guard>} />
           ))}
+          <Route path="thai-booking" element={<Guard module="thai-booking"><ThaiBooking /></Guard>} />
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
           <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />
           {/* รายงาน/สถิติการลา ย้ายไปเป็นแท็บในหน้าทะเบียนควบคุมวันลา (Leave.jsx) แล้วตามคำขอ — ลิงก์เก่ายังเปิดได้ เด้งไปหน้าทะเบียนวันลาแทน */}
@@ -215,6 +219,9 @@ export default function App() {
     <HashRouter>
       <AuthProvider>
         <Routes>
+          {/* หน้าสาธารณะ (ไม่ต้องล็อกอิน): จองคิวแพทย์แผนไทยผ่าน QR Code + ป้าย QR สำหรับพิมพ์ */}
+          <Route path="/book-thai" element={<ThaiBookingPublic />} />
+          <Route path="/print-thai-qr" element={<PrintThaiQr />} />
           <Route path="/print/:key" element={<PrintGate />} />
           <Route path="/print-personnel" element={<PrintPersonnelGate />} />
           <Route path="/print-leave/:id" element={<PrintLeaveGate />} />

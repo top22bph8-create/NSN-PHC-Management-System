@@ -48,6 +48,7 @@ export const ACCESS = {
   'reg-deeka': { read: ALL, write: ALL },
   'reg-certificate': { read: ALL, write: ALL },
   // ทะเบียนรายบุคคลของงานการพยาบาล (ต้องตรงกับ firestore.rules)
+  'thai-booking': { read: ALL, write: ALL },
   'reg-elderly': { read: ALL, write: ALL },
   'reg-disabled': { read: ALL, write: ALL },
   'reg-mental': { read: ALL, write: ALL },
