@@ -220,7 +220,7 @@ async function analyzeFile(cfg, file, rows) {
   const sheet = wb.Sheets['ข้อมูลนำเข้า'] || wb.Sheets[wb.SheetNames[0]];
   const raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false, dateNF: 'dd/mm/yyyy' });
   const byLabel = new Map(cfg.fields.map((f) => [f.label, f]));
-  const existing = new Map(rows.filter((r) => r.idCard).map((r) => [r.idCard, r]));
+  const existing = new Map(rows.map((r) => [r.idCard || `n:${clean(r.name)}|${mooKey(r.moo)}`, r]));
   const seen = new Set();
   const items = [];
   raw.forEach((rec, idx) => {
@@ -252,16 +252,18 @@ async function analyzeFile(cfg, file, rows) {
     });
     out.moo = mooKey(out.moo);
     if (!out.name) errors.push('ไม่มีชื่อ - สกุล');
-    if (!out.moo) errors.push('ไม่มีหมู่ที่');
-    if (!out.idCard) errors.push('ไม่มีเลขบัตรประชาชน');
+    if (!out.moo && !cfg.idOptional) errors.push('ไม่มีหมู่ที่');
+    if (!out.idCard) { if (!cfg.idOptional) errors.push('ไม่มีเลขบัตรประชาชน'); else warns.push('ยังไม่มีเลขบัตรประชาชน (เติมภายหลังได้)'); }
     else if (out.idCard.length !== 13) errors.push(`เลขบัตรไม่ครบ 13 หลัก (${out.idCard})`);
     else if (!idCardChecksumOk(out.idCard)) warns.push('เลขบัตรไม่ผ่านหลักตรวจสอบ');
+    // กุญแจตรวจซ้ำ: เลขบัตร ถ้าไม่มี (เฉพาะทะเบียนที่ยอมให้ว่าง) ใช้ ชื่อ+หมู่
+    const dkey = out.idCard || `n:${out.name}|${out.moo}`;
     let kind = 'new';
-    if (!errors.length && out.idCard) {
-      if (seen.has(out.idCard)) { errors.push('เลขบัตรซ้ำกับแถวอื่นในไฟล์'); } else seen.add(out.idCard);
-      if (!errors.length && existing.has(out.idCard)) kind = 'dup';
+    if (!errors.length) {
+      if (seen.has(dkey)) { errors.push(out.idCard ? 'เลขบัตรซ้ำกับแถวอื่นในไฟล์' : 'ชื่อ+หมู่ซ้ำกับแถวอื่นในไฟล์'); } else seen.add(dkey);
+      if (!errors.length && existing.has(dkey)) kind = 'dup';
     }
-    items.push({ line, out, errors, warns, kind: errors.length ? 'error' : kind, existingId: existing.get(out.idCard)?.id });
+    items.push({ line, out, errors, warns, kind: errors.length ? 'error' : kind, existingId: existing.get(dkey)?.id });
   });
   return items;
 }
@@ -346,6 +348,7 @@ export default function PersonRegistry({ cfg }) {
   const [q, setQ] = useState('');
   const [moo, setMoo] = useState('all');
   const [extra, setExtra] = useState('all');
+  const [grp, setGrp] = useState('all');
   const [status, setStatus] = useState('all');
   const [form, setForm] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -357,7 +360,7 @@ export default function PersonRegistry({ cfg }) {
   const groupKey = groupOfPath(cfg.path);
 
   useEffect(() => {
-    setRows(null); setError(''); setMoo('all'); setExtra('all'); setStatus('all'); setQ('');
+    setRows(null); setError(''); setMoo('all'); setExtra('all'); setGrp('all'); setStatus('all'); setQ('');
     return onSnapshot(collection(db, cfg.key),
       (s) => setRows(s.docs.map((d) => ({ id: d.id, ...d.data() }))
         .sort((a, b) => mooNum(a.moo) - mooNum(b.moo) || String(a.name || '').localeCompare(String(b.name || ''), 'th'))),
@@ -380,13 +383,14 @@ export default function PersonRegistry({ cfg }) {
 
   const filterField = cfg.fields.find((f) => f.key === cfg.filterKey);
   const shown = useMemo(() => (rows || []).filter((r) => {
+    if (cfg.groupKey && grp !== 'all' && r[cfg.groupKey] !== grp) return false;
     if (moo !== 'all' && (mooKey(r.moo) || '-') !== moo) return false;
     if (extra !== 'all' && r[cfg.filterKey] !== extra) return false;
     if (status !== 'all' && (r.status || 'มีชีวิตอยู่') !== status) return false;
     const t = clean(q).toLowerCase();
     if (!t) return true;
     return `${r.namePrefix || ''}${r.name || ''} ${r.idCard || ''} ${r.houseNo || ''} ${r.village || ''} ${r.phone || ''} ${r.caregiver || ''}`.toLowerCase().includes(t);
-  }), [rows, moo, extra, status, q, cfg.filterKey]);
+  }), [rows, moo, extra, grp, status, q, cfg.filterKey, cfg.groupKey]);
 
   const doDelete = async () => {
     setDeleting(true);
@@ -396,6 +400,11 @@ export default function PersonRegistry({ cfg }) {
       say({ type: 'ok', text: 'ลบรายการแล้ว' });
       setToDelete(null);
     } catch (err) { say({ type: 'error', text: 'ลบไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setDeleting(false); }
+  };
+
+  const doReport = async () => {
+    if (!(rows || []).length) return say({ type: 'error', text: 'ยังไม่มีข้อมูลให้ทำรายงาน' });
+    try { const m = await import('../lib/personReports'); await m.exportMentalReport(cfg, rows, villageOf); say({ type: 'ok', text: 'สร้างรายงานแล้ว' }); } catch (err) { say({ type: 'error', text: 'สร้างรายงานไม่สำเร็จ: ' + (err.message || err) }); }
   };
 
   const doExport = async () => {
@@ -431,10 +440,31 @@ export default function PersonRegistry({ cfg }) {
             {writable && <button className="btn bg-white text-slate-800 hover:bg-slate-50" onClick={() => setForm({})}><Plus className="h-4 w-4" /> เพิ่ม{cfg.noun}</button>}
             {writable && <button className="btn bg-white/90 text-slate-800 hover:bg-white" onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> นำเข้า Excel</button>}
             <button className="btn bg-white/90 text-slate-800 hover:bg-white" onClick={doExport}><Download className="h-4 w-4" /> ส่งออก Excel</button>
+            {cfg.report && <button className="btn bg-white/90 text-slate-800 hover:bg-white" onClick={doReport}><FileDown className="h-4 w-4" /> รายงาน/ทะเบียน</button>}
           </div>
         )}
       />
       {cfg.sensitive && <p className="mb-3 rounded-lg bg-violet-50 p-2 text-sm text-violet-800">🔒 ข้อมูลสุขภาพจิตเป็นข้อมูลอ่อนไหวตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล — ใช้เพื่อการดูแลรักษาเท่านั้น ไม่นำออกนอกหน่วยงาน/ไม่เผยแพร่ต่อสาธารณะ</p>}
+
+      {/* กลุ่มผู้ป่วย (แท็บ) + กลุ่มสี — เฉพาะทะเบียนที่กำหนด groupKey/colorKey */}
+      {cfg.groupKey && (
+        <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="กรองตามกลุ่มผู้ป่วย">
+          {[['all', `ทุกกลุ่ม (${rows?.length ?? 0})`], ...(cfg.fields.find((f) => f.key === cfg.groupKey)?.options || []).map((o) => [o, `${o} (${(rows || []).filter((r) => r[cfg.groupKey] === o).length})`])].map(([k, label]) => (
+            <button key={k} aria-pressed={grp === k} onClick={() => setGrp(k)} className={`rounded-lg px-3 py-1.5 text-sm font-bold ring-1 transition ${grp === k ? 'bg-violet-700 text-white ring-violet-800' : `${cfg.optionStyle?.[cfg.groupKey]?.[k] || 'bg-white text-slate-700'} ring-slate-200 hover:brightness-95`}`}>{label}</button>
+          ))}
+        </div>
+      )}
+      {cfg.colorKey && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="กรองตามกลุ่มสี">
+          <span className="text-sm text-slate-500">กลุ่มสี:</span>
+          {['all', ...cfg.fields.find((f) => f.key === cfg.colorKey).options].map((o) => (
+            <button key={o} aria-pressed={extra === o} onClick={() => setExtra(o)} title={cfg.colorHelp?.[o]} className={`rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-black/10 transition ${o === 'all' ? (extra === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-700') : cfg.optionStyle[cfg.colorKey][o]} ${extra === o && o !== 'all' ? 'outline outline-2 outline-offset-2 outline-slate-800' : o !== 'all' && extra !== 'all' ? 'opacity-50' : ''}`}>
+              {o === 'all' ? 'ทุกสี' : `${o} (${(rows || []).filter((r) => r[cfg.colorKey] === o).length})`}
+            </button>
+          ))}
+          {cfg.colorHelp && <span className="ml-1 text-xs text-slate-500">{Object.entries(cfg.colorHelp).map(([k, v]) => `${k} = ${v}`).join(' · ')}</span>}
+        </div>
+      )}
 
       {/* กรองรายหมู่บ้าน */}
       <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="กรองตามหมู่บ้าน">
@@ -453,7 +483,7 @@ export default function PersonRegistry({ cfg }) {
           <Search className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
           <input className="input !pl-10" placeholder="ค้นหาชื่อ / เลขบัตร / บ้านเลขที่ / เบอร์โทร / ผู้ดูแล" value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหา" />
         </div>
-        {filterField && (
+        {filterField && !cfg.colorKey && (
           <select className="input" value={extra} onChange={(e) => setExtra(e.target.value)} aria-label={cfg.filterLabel}>
             <option value="all">{cfg.filterLabel}: ทั้งหมด</option>
             {filterField.options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -488,7 +518,7 @@ export default function PersonRegistry({ cfg }) {
             <tbody>
               {shown.map((r, i) => (
                 <tr key={r.id} className="border-t border-slate-100 align-top">
-                  <td className="px-3 py-2 text-sm text-slate-400">{i + 1}</td>
+                  <td className={`border-l-4 px-3 py-2 text-sm text-slate-400 ${cfg.colorKey ? (cfg.optionBorder?.[r[cfg.colorKey]] || 'border-l-slate-200') : 'border-l-transparent'}`}>{i + 1}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-sm text-slate-700">{r.idCard || '-'}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-800">{r.namePrefix}{r.name}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-sm">{r.birthday ? fmtDate(r.birthday) : '-'}</td>
@@ -498,7 +528,7 @@ export default function PersonRegistry({ cfg }) {
                   <td className="px-3 py-2 text-sm">{r.village ? <span className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 font-medium ${vcol(r.moo).badge}`}>{r.village}</span> : '-'}</td>
                   {extraCols.map((f) => (
                     <td key={f.key} className="px-3 py-2 text-sm text-slate-600">
-                      {f.type === 'date' ? (r[f.key] ? fmtDate(r[f.key]) : '-') : (r[f.key] || '-')}
+                      {f.type === 'date' ? (r[f.key] ? fmtDate(r[f.key]) : '-') : cfg.optionStyle?.[f.key]?.[r[f.key]] ? <span className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-bold ${cfg.optionStyle[f.key][r[f.key]]}`}>{r[f.key]}</span> : (r[f.key] || '-')}
                     </td>
                   ))}
                   <td className="px-3 py-2">
