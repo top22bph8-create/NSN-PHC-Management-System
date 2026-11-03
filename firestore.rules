@@ -72,6 +72,15 @@ service cloud.firestore {
       allow read: if isActive() && id != 'lineNotify';
       allow write: if hasRole(['super_admin']);
     }
+    // คลินิกแพทย์แผนไทย: เจ้าหน้าที่ที่ล็อกอินแก้ตั้งค่าคลินิกได้ (ไม่ต้องเป็น Super Admin)
+    match /settings/thaiClinic {
+      allow read, write: if isActive();
+    }
+    // รายการจองคิวแพทย์แผนไทย: ประชาชนจองผ่าน Cloud Function (Admin SDK) เท่านั้น ไม่เปิดให้อ่าน/เขียนตรงจากเบราว์เซอร์ที่ไม่ได้ล็อกอิน
+    match /thaiBookings/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /settings/lineNotify {
       allow read: if false;
       allow write: if hasRole(['super_admin']);
