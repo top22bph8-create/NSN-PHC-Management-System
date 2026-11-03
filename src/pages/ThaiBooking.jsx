@@ -11,11 +11,19 @@ import { canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { fmtDate, todayStr } from '../lib/thai';
 import { getHolidays } from '../lib/leave';
-import { THAI_ACTIVE, THAI_DEFAULT_CONFIG, THAI_STATUSES, THAI_STATUS_COLOR, getThaiConfig, saveThaiConfig, thaiPhones, thaiPublicUrl, thaiSlotTimes, thaiTimeRange, THAI_LOAD, thaiLoadClass } from '../lib/thaiClinic';
+import { THAI_ACTIVE, THAI_DEFAULT_CONFIG, THAI_STATUSES, THAI_STATUS_COLOR, getThaiConfig, saveThaiConfig, thaiPhones, thaiPublicUrl, thaiSlotTimes, thaiTimeRange, THAI_LOAD, thaiLoadClass, thaiNextCode } from '../lib/thaiClinic';
 import { PageHeader } from '../components/Logo';
+import ReportTab from './ThaiBookingReport';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
 
+// หัวตารางจันทร์–อาทิตย์ ใช้สีประจำวันตามธรรมเนียมไทย
+const WEEK = [
+  { t: 'จันทร์', cls: 'bg-yellow-200 text-yellow-900' }, { t: 'อังคาร', cls: 'bg-pink-200 text-pink-900' },
+  { t: 'พุธ', cls: 'bg-green-200 text-green-900' }, { t: 'พฤหัสฯ', cls: 'bg-orange-200 text-orange-900' },
+  { t: 'ศุกร์', cls: 'bg-sky-200 text-sky-900' }, { t: 'เสาร์', cls: 'bg-purple-200 text-purple-900' },
+  { t: 'อาทิตย์', cls: 'bg-red-200 text-red-900' },
+];
 const DAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 const addDays = (s, n) => { const d = new Date(`${s}T00:00:00`); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
@@ -29,7 +37,7 @@ function AddBookingModal({ date, cfg, existing, onClose, say, user }) {
     if (f.name.trim().length < 2) return say({ type: 'error', text: 'กรุณากรอกชื่อ-สกุล' });
     setBusy(true);
     try {
-      const code = `T${Math.floor(Math.random() * 900000) + 100000}`;
+      const { code } = await thaiNextCode();
       const endT = times.find((t) => t.time === f.time)?.end || '';
       const data = { code, date: f.date, time: f.time, timeEnd: endT, slotKey: `${f.date}|${f.time}`, service: f.service, name: f.name.trim(), phone: f.phone.replace(/\D/g, ''), note: f.note.trim(), status: 'ยืนยันแล้ว', source: 'เจ้าหน้าที่', createdAt: serverTimestamp(), createdBy: user };
       const ref = await addDoc(collection(db, 'thaiBookings'), data);
@@ -85,7 +93,7 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
   const byDay = useMemo(() => { const m = {}; upcoming.forEach((b) => { m[b.date] = (m[b.date] || 0) + 1; }); return m; }, [upcoming]);
   const calCells = useMemo(() => {
     const [y, mo] = date.split('-').map(Number);
-    const first = new Date(y, mo - 1, 1).getDay(); const len = new Date(y, mo, 0).getDate();
+    const first = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // เริ่มวันจันทร์ const len = new Date(y, mo, 0).getDate();
     return [...Array(first).fill(null), ...Array.from({ length: len }, (_, i) => `${date.slice(0, 7)}-${String(i + 1).padStart(2, '0')}`)];
   }, [date]);
   const shiftMonth = (n) => { const [y, mo] = date.split('-').map(Number); const d = new Date(y, mo - 1 + n, 1); setDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`); };
@@ -133,11 +141,13 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
             {THAI_LOAD.map((l) => <span key={l.n} className={`rounded-full px-2 py-0.5 ring-1 ${l.cls}`}>{l.label}</span>)}
           </div>
         </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d) => <div key={d}>{d}</div>)}</div>
+        <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold">
+          {WEEK.map((w) => <div key={w.t} className={`rounded-md py-1 ${w.cls}`}>{w.t}</div>)}
+        </div>
         <div className="mt-1 grid grid-cols-7 gap-1">
           {calCells.map((d, i) => d ? (
             <button key={d} onClick={() => setDate(d)} aria-label={`${fmtDate(d)} ${byDay[d] || 0} คิว`} title={`${byDay[d] || 0} คิว`}
-              className={`rounded-lg py-1.5 text-sm font-semibold ring-1 ${byDay[d] ? thaiLoadClass(byDay[d]) : 'bg-white text-slate-600 ring-slate-200 hover:bg-emerald-50'} ${d === date ? 'outline outline-2 outline-offset-1 outline-slate-800' : ''} ${d === todayStr() ? 'underline' : ''}`}>
+              className={`rounded-lg py-2 text-sm font-semibold shadow-sm ring-1 ${byDay[d] ? thaiLoadClass(byDay[d]) : (i % 7 >= 5 ? 'bg-rose-50 text-rose-700 ring-rose-100 hover:bg-rose-100' : 'bg-white text-slate-700 ring-slate-200 hover:bg-emerald-50')} ${d === date ? 'outline outline-2 outline-offset-1 outline-slate-800' : ''} ${d === todayStr() ? 'underline decoration-2' : ''}`}>
               {Number(d.slice(8))}{byDay[d] ? <span className="block text-[10px] font-normal leading-none">{byDay[d]} คิว</span> : null}
             </button>
           ) : <div key={`e${i}`} />)}
@@ -154,7 +164,7 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
               {shown.map((b) => (
                 <tr key={b.id} className={`border-t border-slate-100 align-top ${b.status === 'ยกเลิก' ? 'opacity-60' : ''}`}>
                   <td className="px-3 py-2 font-bold text-emerald-800 whitespace-nowrap">{thaiTimeRange(b.time, b.timeEnd)}</td>
-                  <td className="px-3 py-2"><div className="font-medium">{b.name}</div><div className="text-xs text-slate-400">{b.code} · {b.source === 'online' ? 'จองออนไลน์' : b.source}</div></td>
+                  <td className="px-3 py-2"><div className="font-medium">{b.name}</div><div className="text-xs text-slate-400">{b.code} · {b.source === 'online' ? 'จองออนไลน์' : b.source}</div>{b.source === 'online' && b.notifyResult && <div className={`text-xs ${b.notifyResult.startsWith('ส่งเข้า') ? 'text-emerald-600' : 'font-semibold text-red-600'}`}>{b.notifyResult.startsWith('ส่งเข้า') ? '🔔 ' : '⚠️ '}{b.notifyResult}</div>}{b.lineUserId && <div className="text-xs text-green-700">💬 ผูกไลน์ผู้จองแล้ว</div>}</td>
                   <td className="px-3 py-2 text-sm">{b.phone ? <a className="inline-flex items-center gap-1 text-brand-700 underline" href={`tel:${b.phone}`}><Phone className="h-3.5 w-3.5" />{b.phone}</a> : '-'}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">{b.service}{b.note && <div className="text-xs text-slate-400">{b.note}</div>}</td>
                   <td className="px-3 py-2">
@@ -321,11 +331,12 @@ export default function ThaiBooking() {
       <Link to="/group/thai" className="mb-2 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"><ArrowLeft className="h-4 w-4" /> กลับหน้ากลุ่มงาน</Link>
       <PageHeader emoji="🌿" big tone="from-emerald-700 via-teal-600 to-emerald-500" title="ระบบจองคิวบริการแพทย์แผนไทย" subtitle={`คลินิกแพทย์แผนไทย · ${cfg?.providerName || ''} ${cfg?.providerTitle || ''} · ${thaiPhones(cfg).map(([l, n]) => `${l} ${n}`).join(' · ')}`} />
       <div className="mb-4 flex flex-wrap gap-2" role="tablist">
-        {[['queue', '📋 รายการคิว'], ['settings', '⚙️ ตั้งค่าคลินิก'], ['qr', '📱 QR Code / ลิงก์จอง']].map(([k, l]) => (
+        {[['queue', '📋 รายการคิว'], ['report', '📊 รายงาน/ทะเบียน'], ['settings', '⚙️ ตั้งค่าคลินิก'], ['qr', '📱 QR Code / ลิงก์จอง']].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === k ? 'bg-emerald-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-emerald-50'}`}>{l}</button>
         ))}
       </div>
       {!cfg ? <Spinner /> : tab === 'queue' ? <QueueTab cfg={cfg} writable={writable} say={say} profileEmail={profile.email} />
+        : tab === 'report' ? <ReportTab cfg={cfg} />
         : tab === 'settings' ? <SettingsTab cfg={cfg} writable={writable} say={say} onSaved={setCfg} /> : <QrTab cfg={cfg} />}
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>

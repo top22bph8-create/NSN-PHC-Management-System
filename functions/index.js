@@ -667,6 +667,18 @@ async function thaiAvailability(cfg) {
   return days;
 }
 const thaiPublicConfig = (c) => ({ services: c.services, notice: c.notice, providerName: c.providerName, providerTitle: c.providerTitle, phone: c.phone, bookingPhone: c.bookingPhone, lineOaId: c.lineOaId || '' });
+
+// เลขที่การจอง: NSM-THAI-(ลำดับ 4 หลัก)-(พ.ศ.) เช่น NSM-THAI-0001-2569 — รันเลขใหม่ทุกปี พ.ศ. (ปีปฏิทิน เวลาไทย) เก็บตัวนับที่ counters/thai-ปี
+const thaiYearBE = () => Number(bkkParts().date.slice(0, 4)) + 543;
+const thaiCodeText = (n, y) => `NSM-THAI-${String(n).padStart(4, '0')}-${y}`;
+// ต้องเรียก tx.get ตัวนับก่อนการเขียนใดๆ ในธุรกรรม — คืนฟังก์ชันที่ใช้ออกเลขและเขียนตัวนับ
+async function thaiReserveCode(tx) {
+  const y = thaiYearBE();
+  const cref = db.doc(`counters/thai-${y}`);
+  const cs = await tx.get(cref);
+  const n = (cs.exists ? Number(cs.data().last) || 0 : 0) + 1;
+  return () => { tx.set(cref, { last: n, year: y }, { merge: true }); return thaiCodeText(n, y); };
+}
 const cleanText = (v, max) => String(v || '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const normPhone = (v) => String(v || '').replace(/\D/g, '');
 
@@ -697,7 +709,7 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
   const slot = day && day.slots.find((x) => x.time === time);
   if (!slot || slot.left <= 0) throw new HttpsError('failed-precondition', 'ช่วงเวลานี้เต็มแล้วหรือไม่เปิดให้จอง กรุณาเลือกเวลาอื่น');
 
-  const code = `T${String(Math.floor(Math.random() * 900000) + 100000)}`;
+  let code = '';
   const slotKey = `${date}|${time}`;
   const mine = db.collection('thaiBookings').where('phone', '==', phone).where('status', 'in', THAI_ACTIVE);
   let ref;
@@ -708,17 +720,31 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
     const myActive = await tx.get(mine);
     const future = myActive.docs.filter((x) => x.data().date >= bkkParts().date);
     if (future.length >= cfg.maxActivePerPhone) throw new HttpsError('resource-exhausted', `เบอร์นี้มีการจองที่ยังไม่ถึงวันนัดครบ ${cfg.maxActivePerPhone} รายการแล้ว`);
+    const issue = await thaiReserveCode(tx);
     ref = db.collection('thaiBookings').doc();
+    code = issue();
     tx.set(ref, { code, date, time, timeEnd: slot.end, slotKey, service, name, phone, note, status: 'รอยืนยัน', source: 'online', createdAt: FieldValue.serverTimestamp() });
   });
 
+  // ส่งการ์ดเข้าไลน์กลุ่มแพทย์แผนไทยทันที และเก็บผลการส่งไว้ที่ใบจอง (notifyResult) เพื่อให้เจ้าหน้าที่เห็นสาเหตุถ้าไม่ถึงกลุ่ม
+  let notifyResult = 'ส่งเข้าไลน์กลุ่มแล้ว';
   try {
     const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
-    if (channelAccessToken && thaiTargetId && enabled) {
-      await pushLine(channelAccessToken, thaiTargetId, [buildThaiBookingFlex(ref.id, { code, date, time, timeEnd: slot.end, service, name, phone, note })]);
-    }
-  } catch (e) { console.error('thaiBook: ส่งไลน์ไม่สำเร็จ', e.message); }
+    if (!enabled) notifyResult = 'ไม่ได้ส่ง: ปิดการแจ้งเตือนไลน์หลักอยู่';
+    else if (!channelAccessToken) notifyResult = 'ไม่ได้ส่ง: ยังไม่ได้ตั้ง Channel Access Token';
+    else if (!thaiTargetId) notifyResult = 'ไม่ได้ส่ง: ยังไม่ได้ตั้ง Target ID กลุ่มแพทย์แผนไทย';
+    else await pushLineOrThrow(channelAccessToken, thaiTargetId, [buildThaiBookingFlex(ref.id, { code, date, time, timeEnd: slot.end, service, name, phone, note })]);
+  } catch (e) { console.error('thaiBook: ส่งไลน์ไม่สำเร็จ', e.message); notifyResult = `ส่งไม่สำเร็จ: ${String(e.message).slice(0, 160)}`; }
+  try { await ref.update({ notifyResult }); } catch (e) { /* ไม่กระทบการจอง */ }
   return { ok: true, code, date, time, timeEnd: slot.end, service, name };
+});
+
+// เจ้าหน้าที่เพิ่มคิวเอง (โทรศัพท์/Walk-in) ขอเลขที่การจองจากตัวนับเดียวกัน เพื่อให้เลขเรียงต่อเนื่อง
+exports.thaiNextCode = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบ');
+  let code = '';
+  await db.runTransaction(async (tx) => { const issue = await thaiReserveCode(tx); code = issue(); });
+  return { code };
 });
 
 // ผู้จองตรวจสอบ/ยกเลิกเอง ด้วยรหัสการจอง + เบอร์โทร
@@ -784,7 +810,7 @@ function buildThaiBookingFlex(id, b, status = 'รอยืนยัน', by = '
       ],
     };
   }
-  return { type: 'flex', altText: `🌿 จองคิวแพทย์แผนไทย ${b.code}\n${thaiDateShort(b.date)} ${b.time} · ${b.name} · ${b.phone}${b.note ? `\nอาการ: ${b.note}` : ''}`, contents: bubble };
+  return { type: 'flex', altText: `🌿 จองคิวแพทย์แผนไทย ${b.code}\n${thaiDateShort(b.date)} ${b.time} · ${b.name} · ${b.phone}${b.note ? `\nอาการ: ${b.note}` : ''}`.slice(0, 390), contents: bubble };
 }
 
 // ชื่อสมาชิกในกลุ่มที่กดปุ่ม (ถ้าอ่านไม่ได้จะใช้ค่าว่าง)
@@ -831,7 +857,7 @@ async function handleThaiPatientMessage(ev) {
   const src = ev.source || {};
   if (src.groupId || src.roomId || !src.userId) return; // เฉพาะแชทส่วนตัว 1:1
   if (!ev.message || ev.message.type !== 'text') return;
-  const m = String(ev.message.text || '').toUpperCase().match(/T\d{6}/);
+  const m = String(ev.message.text || '').toUpperCase().match(/NSM-THAI-\d{4}-\d{4}|T\d{6}/);
   if (!m) return;
   const { channelAccessToken } = await getLineSettings();
   if (!channelAccessToken || !ev.replyToken) return;

@@ -51,6 +51,7 @@ export const thaiPublicInfo = call('thaiPublicInfo');
 export const thaiBook = call('thaiBook');
 export const thaiLookup = call('thaiLookup');
 export const thaiCancel = call('thaiCancel');
+export const thaiNextCode = call('thaiNextCode');
 
 // ลิงก์หน้าจองสำหรับประชาชน (ใช้สร้าง QR Code)
 export const thaiPublicUrl = () => `${window.location.origin}${window.location.pathname}#/book-thai`;
