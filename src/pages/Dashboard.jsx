@@ -10,7 +10,7 @@ import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { GROUPS } from '../config/menu';
-import { DutyRosterTable, TodayCards } from '../components/DashboardToday';
+import { TodayCards } from '../components/DashboardToday';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import MenuLink from '../components/MenuLink';
 import { getQuota, usage } from '../lib/leave';
@@ -139,7 +139,7 @@ export default function Dashboard() {
         <div className="hidden shrink-0 rounded-2xl bg-white/90 p-2 shadow sm:block"><Logo size={88} /></div>
         <div className="min-w-0">
         <div className="text-sm text-brand-50">{today}</div>
-        <h1 className="mt-1 text-lg font-bold leading-snug sm:text-xl">{SYSTEM_NAME_TH}</h1>
+        <h1 className="mt-1 text-lg font-bold leading-snug !text-white sm:text-xl">{SYSTEM_NAME_TH}</h1>
         <div className="text-sm text-brand-50">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
         <div className="mt-1 text-brand-50">
           {profile.email === 'top22bph8@gmail.com' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[normalizeRole(profile.role)]}`}
@@ -151,7 +151,6 @@ export default function Dashboard() {
       {normalizeRole(profile.role) === 'super_admin' && <LineQuotaStatus />}
 
       <TodayCards />
-      <DutyRosterTable />
 
       {error ? <ErrorState message={error} />
         : !data && readable.length ? <Spinner />
