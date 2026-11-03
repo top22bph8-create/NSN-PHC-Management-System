@@ -255,9 +255,11 @@ exports.lineWebhook = onRequest(async (req, res) => {
 
     // จัดการปุ่มอนุมัติ/ไม่อนุมัติ แยกจากส่วนตรวจจับ Target ID ด้านบน
     for (const ev of events) {
+      if (ev.type === 'message') { await handleThaiPatientMessage(ev); continue; }
       if (ev.type !== 'postback') continue;
       const pd = new URLSearchParams((ev.postback && ev.postback.data) || '');
-      if (pd.get('vehicleId')) await handleVehiclePostback(ev);
+      if (pd.get('thaiBookingId')) await handleThaiPostback(ev);
+      else if (pd.get('vehicleId')) await handleVehiclePostback(ev);
       else await handleLeavePostback(ev);
     }
   } catch (e) {
@@ -600,6 +602,7 @@ const THAI_DEFAULT = {
   services: ['นวดไทยเพื่อการรักษา', 'ประคบสมุนไพร', 'อบไอน้ำสมุนไพร', 'ทับหม้อเกลือ', 'ตรวจรักษา/ให้คำปรึกษาแพทย์แผนไทย', 'อื่นๆ'],
   notice: '', dailySummary: false,
   providerName: 'พท.อาระยา ใจอุ่น', providerTitle: 'แพทย์แผนไทย', phone: '042-704651', bookingPhone: '080-481-0290',
+  lineOaId: '', // LINE OA Basic ID เช่น @123abcde (ใช้ทำปุ่ม "รับข้อความยืนยันทางไลน์" หลังจอง)
 };
 const THAI_ACTIVE = ['รอยืนยัน', 'ยืนยันแล้ว'];
 
@@ -663,7 +666,7 @@ async function thaiAvailability(cfg) {
   }
   return days;
 }
-const thaiPublicConfig = (c) => ({ services: c.services, notice: c.notice, providerName: c.providerName, providerTitle: c.providerTitle, phone: c.phone, bookingPhone: c.bookingPhone });
+const thaiPublicConfig = (c) => ({ services: c.services, notice: c.notice, providerName: c.providerName, providerTitle: c.providerTitle, phone: c.phone, bookingPhone: c.bookingPhone, lineOaId: c.lineOaId || '' });
 const cleanText = (v, max) => String(v || '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const normPhone = (v) => String(v || '').replace(/\D/g, '');
 
@@ -712,7 +715,7 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
   try {
     const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
     if (channelAccessToken && thaiTargetId && enabled) {
-      await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 มีผู้จองคิวแพทย์แผนไทย (ออนไลน์)\nรหัส: ${code}\nวันที่: ${thaiDateShort(date)} เวลา ${time}-${slot.end} น.\nบริการ: ${service}\nชื่อ: ${name}\nโทร: ${phone}${note ? `\nอาการ/หมายเหตุ: ${note}` : ''}` }]);
+      await pushLine(channelAccessToken, thaiTargetId, [buildThaiBookingFlex(ref.id, { code, date, time, timeEnd: slot.end, service, name, phone, note })]);
     }
   } catch (e) { console.error('thaiBook: ส่งไลน์ไม่สำเร็จ', e.message); }
   return { ok: true, code, date, time, timeEnd: slot.end, service, name };
@@ -745,6 +748,123 @@ exports.thaiCancel = onCall({ cors: true }, async (request) => {
     }
   } catch (e) { console.error('thaiCancel: ส่งไลน์ไม่สำเร็จ', e.message); }
   return { ok: true };
+});
+
+// ---------- ระบบจองคิวบริการแพทย์แผนไทย: การ์ดยืนยันในไลน์กลุ่ม + แจ้งผู้จองอัตโนมัติ ----------
+// การ์ดจองเข้าไลน์กลุ่มแพทย์แผนไทย (thaiTargetId) มีปุ่ม "ยืนยันรับจอง/ไม่สะดวก" — สมาชิกทุกคนในกลุ่มนั้นกดได้
+// ผู้จองผูกไลน์ของตัวเองโดยส่งรหัสจอง (Txxxxxx) ให้ไลน์ OA ในแชทส่วนตัว → ระบบเก็บ lineUserId ไว้ในใบจอง
+// เมื่อสถานะเปลี่ยนเป็นยืนยันแล้ว/ยกเลิก (ไม่ว่ากดจากไลน์หรือจากหน้าเว็บ) ระบบส่งข้อความหาผู้จองอัตโนมัติ
+function buildThaiBookingFlex(id, b, status = 'รอยืนยัน', by = '') {
+  const rows = [
+    ['รหัส', b.code], ['วันที่', thaiDateShort(b.date)], ['เวลา', `${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} น.`],
+    ['บริการ', b.service], ['ผู้จอง', b.name], ['โทร', b.phone], ['อาการ', b.note || '-'],
+  ];
+  const pending = status === 'รอยืนยัน';
+  const color = status === 'ยืนยันแล้ว' ? '#15803d' : status === 'ยกเลิก' ? '#b91c1c' : '#b45309';
+  const bubble = {
+    type: 'bubble',
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'sm',
+      contents: [
+        { type: 'text', text: '🌿 ระบบจองคิวบริการแพทย์แผนไทย', weight: 'bold', size: 'md', wrap: true, color: '#047857' },
+        ...rows.map(([k, v]) => ({
+          type: 'box', layout: 'baseline', spacing: 'sm',
+          contents: [{ type: 'text', text: k, size: 'sm', color: '#64748b', flex: 2 }, { type: 'text', text: String(v), size: 'sm', wrap: true, flex: 5 }],
+        })),
+        { type: 'text', text: `สถานะ: ${status}${by ? ` (โดย ${by})` : ''}`, wrap: true, size: 'sm', weight: 'bold', color },
+      ],
+    },
+  };
+  if (pending) {
+    bubble.footer = {
+      type: 'box', layout: 'horizontal', spacing: 'sm',
+      contents: [
+        { type: 'button', style: 'primary', color: '#16a34a', height: 'sm', action: { type: 'postback', label: '✅ ยืนยันรับจอง', data: `action=confirm&thaiBookingId=${id}`, displayText: `ยืนยันรับจอง ${b.code}` } },
+        { type: 'button', style: 'primary', color: '#dc2626', height: 'sm', action: { type: 'postback', label: '❌ ไม่สะดวก', data: `action=reject&thaiBookingId=${id}`, displayText: `ไม่สะดวก ${b.code}` } },
+      ],
+    };
+  }
+  return { type: 'flex', altText: `🌿 จองคิวแพทย์แผนไทย ${b.code}\n${thaiDateShort(b.date)} ${b.time} · ${b.name} · ${b.phone}${b.note ? `\nอาการ: ${b.note}` : ''}`, contents: bubble };
+}
+
+// ชื่อสมาชิกในกลุ่มที่กดปุ่ม (ถ้าอ่านไม่ได้จะใช้ค่าว่าง)
+async function lineMemberName(token, src) {
+  try {
+    if (!src.userId) return '';
+    const base = src.groupId ? `group/${src.groupId}` : src.roomId ? `room/${src.roomId}` : '';
+    if (!base) return '';
+    const r = await fetch(`https://api.line.me/v2/bot/${base}/member/${src.userId}`, { headers: { Authorization: `Bearer ${token}` } });
+    return r.ok ? ((await r.json()).displayName || '') : '';
+  } catch (e) { return ''; }
+}
+
+async function handleThaiPostback(ev) {
+  const params = new URLSearchParams((ev.postback && ev.postback.data) || '');
+  const action = params.get('action');
+  const id = params.get('thaiBookingId');
+  const replyToken = ev.replyToken;
+  if (!action || !id) return;
+  const { channelAccessToken, thaiTargetId } = await getLineSettings();
+  if (!channelAccessToken) return;
+  const reply = (text) => replyToken && replyLine(channelAccessToken, replyToken, text);
+  const src = ev.source || {};
+  // ทุกคนในกลุ่ม/ห้อง "ระบบจองคิวบริการแพทย์แผนไทย" กดได้ — ตรวจว่าการกดมาจากกลุ่มที่ตั้งไว้เท่านั้น
+  const fromId = src.groupId || src.roomId || src.userId;
+  if (!thaiTargetId || fromId !== thaiTargetId) { await reply('⚠️ ปุ่มนี้ใช้ได้เฉพาะในไลน์กลุ่มระบบจองคิวบริการแพทย์แผนไทย'); return; }
+  const ref = db.doc(`thaiBookings/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) { await reply('ไม่พบคิวนี้ในระบบแล้ว (อาจถูกลบไปก่อนหน้านี้)'); return; }
+  const cur = snap.data();
+  if (cur.status !== 'รอยืนยัน') { await reply(`คิว ${cur.code} (${cur.name}) ถูกดำเนินการไปแล้ว สถานะ: ${cur.status}`); return; }
+  const who = (await lineMemberName(channelAccessToken, src)) || 'เจ้าหน้าที่ (ผ่านไลน์)';
+  const ok = action === 'confirm';
+  await ref.update(ok
+    ? { status: 'ยืนยันแล้ว', confirmedBy: who, confirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), updatedBy: `${who} (ไลน์)` }
+    : { status: 'ยกเลิก', cancelledBy: `${who} (ไลน์)`, cancelledAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), updatedBy: `${who} (ไลน์)` });
+  // onThaiBookingUpdated จะส่งข้อความแจ้งผู้จองต่อเอง (ถ้าผู้จองผูกไลน์ไว้)
+  const linked = cur.lineUserId ? 'แจ้งผู้จองทางไลน์อัตโนมัติแล้ว' : 'ผู้จองยังไม่ได้ผูกไลน์ — กรุณาโทรแจ้ง ' + cur.phone;
+  await reply(ok ? `✅ ${who} ยืนยันรับจองคิว ${cur.code} (${cur.name}, ${thaiDateShort(cur.date)} ${cur.time}) แล้ว\n${linked}` : `❌ ${who} แจ้งไม่สะดวกรับคิว ${cur.code} (${cur.name})\n${linked}`);
+}
+
+// ผู้จองส่งรหัสจอง (Txxxxxx) เข้าแชทส่วนตัวของไลน์ OA → ผูก lineUserId กับใบจอง เพื่อรับข้อความยืนยันอัตโนมัติ
+async function handleThaiPatientMessage(ev) {
+  const src = ev.source || {};
+  if (src.groupId || src.roomId || !src.userId) return; // เฉพาะแชทส่วนตัว 1:1
+  if (!ev.message || ev.message.type !== 'text') return;
+  const m = String(ev.message.text || '').toUpperCase().match(/T\d{6}/);
+  if (!m) return;
+  const { channelAccessToken } = await getLineSettings();
+  if (!channelAccessToken || !ev.replyToken) return;
+  const snap = await db.collection('thaiBookings').where('code', '==', m[0]).limit(1).get();
+  if (snap.empty) { await replyLine(channelAccessToken, ev.replyToken, `ไม่พบรหัสจอง ${m[0]} กรุณาตรวจสอบรหัสอีกครั้ง`); return; }
+  const doc = snap.docs[0]; const b = doc.data();
+  if (b.lineUserId && b.lineUserId !== src.userId) { await replyLine(channelAccessToken, ev.replyToken, 'รหัสจองนี้ผูกกับไลน์อื่นแล้ว หากต้องการเปลี่ยนกรุณาโทรติดต่อคลินิก'); return; }
+  await doc.ref.update({ lineUserId: src.userId });
+  const msg = {
+    'รอยืนยัน': 'เจ้าหน้าที่กำลังตรวจสอบคิวของท่าน เมื่อยืนยันแล้วระบบจะแจ้งทางไลน์นี้ทันที',
+    'ยืนยันแล้ว': 'คิวของท่านได้รับการยืนยันแล้ว ✅',
+    'ยกเลิก': 'คิวนี้ถูกยกเลิกแล้ว',
+  }[b.status] || `สถานะปัจจุบัน: ${b.status}`;
+  await replyLine(channelAccessToken, ev.replyToken, `🌿 เชื่อมไลน์สำเร็จ\nรหัส ${b.code}\n${thaiDateShort(b.date)} เวลา ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} น.\nบริการ: ${b.service}\n\n${msg}`);
+}
+
+// แจ้งผู้จองอัตโนมัติเมื่อแพทย์แผนไทยยืนยัน/ปฏิเสธ (เฉพาะผู้ที่ผูกไลน์แล้ว) และอัปเดตการ์ดในกลุ่มไม่ได้ (LINE ไม่รองรับ) จึงตอบสรุปในกลุ่มแทน
+exports.onThaiBookingUpdated = onDocumentUpdated('thaiBookings/{id}', async (event) => {
+  const before = event.data.before.data(); const after = event.data.after.data();
+  if (before.status === after.status || !after.lineUserId) return;
+  if (after.status === 'ยกเลิก' && String(after.cancelledBy || '') === 'ผู้จอง') return; // ผู้จองยกเลิกเอง ไม่ต้องแจ้งซ้ำ
+  const { channelAccessToken, enabled } = await getLineSettings();
+  if (!channelAccessToken || !enabled) return;
+  const cfg = await getThaiConfig();
+  const when = `${thaiDateShort(after.date)} เวลา ${after.time}${after.timeEnd ? `-${after.timeEnd}` : ''} น.`;
+  const tel = cfg.bookingPhone || cfg.phone;
+  let text = '';
+  if (after.status === 'ยืนยันแล้ว') {
+    text = `✅ ยืนยันรับจองคิวแล้ว\n${cfg.providerName} ${cfg.providerTitle}\n\nรหัส: ${after.code}\nวันที่: ${when}\nบริการ: ${after.service}\nผู้จอง: ${after.name}\n\nกรุณามาก่อนเวลานัดประมาณ 10 นาที หากมาไม่ได้โปรดแจ้งยกเลิกล่วงหน้า โทร ${tel}`;
+  } else if (after.status === 'ยกเลิก') {
+    text = `❌ ขออภัย คลินิกไม่สะดวกรับคิวนี้\nรหัส: ${after.code}\nวันที่: ${when}\n\nกรุณาจองคิวใหม่ในวัน/เวลาอื่น หรือโทร ${tel}`;
+  } else return;
+  await pushLine(channelAccessToken, after.lineUserId, [{ type: 'text', text }]);
 });
 
 // สรุปคิววันนี้เข้าไลน์กลุ่มงานแพทย์แผนไทย เวลา 07:30 (ปิดไว้เป็นค่าเริ่มต้น เปิดที่หน้าตั้งค่าคลินิก — ใช้โควตาข้อความไลน์ 1 ข้อความ/วันที่มีคิว)

@@ -11,7 +11,7 @@ import { canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { fmtDate, todayStr } from '../lib/thai';
 import { getHolidays } from '../lib/leave';
-import { THAI_ACTIVE, THAI_DEFAULT_CONFIG, THAI_STATUSES, THAI_STATUS_COLOR, getThaiConfig, saveThaiConfig, thaiPhones, thaiPublicUrl, thaiSlotTimes, thaiTimeRange } from '../lib/thaiClinic';
+import { THAI_ACTIVE, THAI_DEFAULT_CONFIG, THAI_STATUSES, THAI_STATUS_COLOR, getThaiConfig, saveThaiConfig, thaiPhones, thaiPublicUrl, thaiSlotTimes, thaiTimeRange, THAI_LOAD, thaiLoadClass } from '../lib/thaiClinic';
 import { PageHeader } from '../components/Logo';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
@@ -73,11 +73,23 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
       (s) => setRows(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.time).localeCompare(String(b.time)))),
       (e) => setError(e.code === 'permission-denied' ? 'ไม่มีสิทธิ์เข้าถึง (ต้องเผยแพร่ Firestore Rules เวอร์ชันล่าสุดก่อน)' : e.message));
   }, [date]);
-  // จำนวนคิวที่ยังไม่ถึง 7 วันข้างหน้า (แสดงเป็นชิป)
-  useEffect(() => onSnapshot(query(collection(db, 'thaiBookings'), where('date', '>=', todayStr()), where('date', '<=', addDays(todayStr(), 7))),
-    (s) => setUpcoming(s.docs.map((d) => d.data()).filter((b) => THAI_ACTIVE.includes(b.status))), () => {}), []);
+  // จำนวนคิวที่ใช้งานอยู่ของเดือนที่เปิดดู + 7 วันข้างหน้า (ใช้ระบายสีปฏิทิน/ชิป)
+  const monthStart = `${date.slice(0, 7)}-01`;
+  const monthEnd = `${date.slice(0, 7)}-31`;
+  useEffect(() => {
+    const t = todayStr(); const t7 = addDays(t, 7);
+    const lo = monthStart < t ? monthStart : t; const hi = monthEnd > t7 ? monthEnd : t7;
+    return onSnapshot(query(collection(db, 'thaiBookings'), where('date', '>=', lo), where('date', '<=', hi)),
+      (s) => setUpcoming(s.docs.map((d) => d.data()).filter((b) => THAI_ACTIVE.includes(b.status))), () => {});
+  }, [monthStart, monthEnd]);
   const byDay = useMemo(() => { const m = {}; upcoming.forEach((b) => { m[b.date] = (m[b.date] || 0) + 1; }); return m; }, [upcoming]);
-  const pendingTotal = upcoming.filter((b) => b.status === 'รอยืนยัน').length;
+  const calCells = useMemo(() => {
+    const [y, mo] = date.split('-').map(Number);
+    const first = new Date(y, mo - 1, 1).getDay(); const len = new Date(y, mo, 0).getDate();
+    return [...Array(first).fill(null), ...Array.from({ length: len }, (_, i) => `${date.slice(0, 7)}-${String(i + 1).padStart(2, '0')}`)];
+  }, [date]);
+  const shiftMonth = (n) => { const [y, mo] = date.split('-').map(Number); const d = new Date(y, mo - 1 + n, 1); setDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`); };
+  const pendingTotal = upcoming.filter((b) => b.status === 'รอยืนยัน' && b.date >= todayStr() && b.date <= addDays(todayStr(), 7)).length;
 
   const shown = (rows || []).filter((b) => statusF === 'all' || b.status === statusF);
   const setStatus = async (b, status) => {
@@ -105,11 +117,31 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5 text-sm">
         {Array.from({ length: 8 }, (_, i) => addDays(todayStr(), i)).map((d) => (
-          <button key={d} onClick={() => setDate(d)} className={`rounded-full px-3 py-1 ${d === date ? 'bg-emerald-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-emerald-50'}`}>
+          <button key={d} onClick={() => setDate(d)} className={`rounded-full px-3 py-1 font-medium ring-1 ${byDay[d] ? thaiLoadClass(byDay[d]) : 'bg-white text-slate-600 ring-slate-200 hover:bg-emerald-50'} ${d === date ? 'outline outline-2 outline-offset-2 outline-slate-800' : ''}`}>
             {d === todayStr() ? 'วันนี้' : fmtDate(d).slice(0, 5)} · {byDay[d] || 0} คิว
           </button>
         ))}
         {pendingTotal > 0 && <span className="ml-auto rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-800">รอยืนยัน {pendingTotal} คิว (7 วันนี้)</span>}
+      </div>
+
+      <div className="card mb-3 p-3">
+        <div className="mb-2 flex items-center gap-2">
+          <button className="btn btn-outline !px-2 !py-1" onClick={() => shiftMonth(-1)} aria-label="เดือนก่อนหน้า">‹</button>
+          <b className="min-w-36 text-center">{new Date(`${date.slice(0, 7)}-01T00:00:00`).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</b>
+          <button className="btn btn-outline !px-2 !py-1" onClick={() => shiftMonth(1)} aria-label="เดือนถัดไป">›</button>
+          <div className="ml-auto flex flex-wrap gap-1.5 text-xs">
+            {THAI_LOAD.map((l) => <span key={l.n} className={`rounded-full px-2 py-0.5 ring-1 ${l.cls}`}>{l.label}</span>)}
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d) => <div key={d}>{d}</div>)}</div>
+        <div className="mt-1 grid grid-cols-7 gap-1">
+          {calCells.map((d, i) => d ? (
+            <button key={d} onClick={() => setDate(d)} aria-label={`${fmtDate(d)} ${byDay[d] || 0} คิว`} title={`${byDay[d] || 0} คิว`}
+              className={`rounded-lg py-1.5 text-sm font-semibold ring-1 ${byDay[d] ? thaiLoadClass(byDay[d]) : 'bg-white text-slate-600 ring-slate-200 hover:bg-emerald-50'} ${d === date ? 'outline outline-2 outline-offset-1 outline-slate-800' : ''} ${d === todayStr() ? 'underline' : ''}`}>
+              {Number(d.slice(8))}{byDay[d] ? <span className="block text-[10px] font-normal leading-none">{byDay[d]} คิว</span> : null}
+            </button>
+          ) : <div key={`e${i}`} />)}
+        </div>
       </div>
 
       <div className="card overflow-x-auto">
@@ -230,6 +262,11 @@ function SettingsTab({ cfg, writable, say, onSaved }) {
           <div><label className={lbl}>เบอร์โทรสอบถาม</label><input className="input" inputMode="tel" value={c.phone} onChange={set('phone')} /></div>
           <div><label className={lbl}>เบอร์โทรจองคิว</label><input className="input" inputMode="tel" value={c.bookingPhone || ''} onChange={set('bookingPhone')} /></div>
         </div>
+        <div>
+          <label className={lbl}>LINE OA ID ของระบบ (เช่น @123abcde) — ใช้ทำปุ่ม "รับข้อความยืนยันทางไลน์" หลังจอง</label>
+          <input className="input" placeholder="@xxxxxxxx" value={c.lineOaId || ''} onChange={set('lineOaId')} />
+          <p className="mt-1 text-xs text-slate-500">ดูได้ที่ LINE Official Account Manager → หน้าแรก (Basic ID ขึ้นต้นด้วย @) ถ้าเว้นว่าง ผู้จองจะไม่เห็นปุ่มนี้</p>
+        </div>
         <div><label className={lbl}>รายการบริการ (1 บรรทัด = 1 บริการ)</label><textarea rows={6} className="input" value={servicesText} onChange={(e) => setServicesText(e.target.value)} /></div>
         <div><label className={lbl}>ประกาศบนหน้าจอง (ถ้ามี เช่น ปิดปรับปรุง/ข้อควรปฏิบัติ)</label><textarea rows={2} className="input" value={c.notice} onChange={set('notice')} /></div>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={!!c.dailySummary} onChange={set('dailySummary')} /><span>ส่งสรุปคิวของวันนี้เข้าไลน์กลุ่มแพทย์แผนไทยทุกเช้า 07:30 (ใช้โควตาไลน์ 1 ข้อความต่อวันที่มีคิว) — การแจ้งเตือนเมื่อมีผู้จอง/ยกเลิกส่งทันทีอยู่แล้ว</span></label>
@@ -282,7 +319,7 @@ export default function ThaiBooking() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <Link to="/group/thai" className="mb-2 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"><ArrowLeft className="h-4 w-4" /> กลับหน้ากลุ่มงาน</Link>
-      <PageHeader emoji="🌿" big tone="from-emerald-700 via-teal-600 to-emerald-500" title="นัดจองคิวออนไลน์" subtitle={`คลินิกแพทย์แผนไทย · ${cfg?.providerName || ''} ${cfg?.providerTitle || ''} · ${thaiPhones(cfg).map(([l, n]) => `${l} ${n}`).join(' · ')}`} />
+      <PageHeader emoji="🌿" big tone="from-emerald-700 via-teal-600 to-emerald-500" title="ระบบจองคิวบริการแพทย์แผนไทย" subtitle={`คลินิกแพทย์แผนไทย · ${cfg?.providerName || ''} ${cfg?.providerTitle || ''} · ${thaiPhones(cfg).map(([l, n]) => `${l} ${n}`).join(' · ')}`} />
       <div className="mb-4 flex flex-wrap gap-2" role="tablist">
         {[['queue', '📋 รายการคิว'], ['settings', '⚙️ ตั้งค่าคลินิก'], ['qr', '📱 QR Code / ลิงก์จอง']].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === k ? 'bg-emerald-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-emerald-50'}`}>{l}</button>

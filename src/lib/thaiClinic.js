@@ -29,7 +29,7 @@ export const THAI_DEFAULT_CONFIG = {
   maxAdvanceDays: 30, minLeadMinutes: 60, maxActivePerPhone: 2,
   closedDates: [], closeOnHolidays: true,
   services: ['นวดไทยเพื่อการรักษา', 'ประคบสมุนไพร', 'อบไอน้ำสมุนไพร', 'ทับหม้อเกลือ', 'ตรวจรักษา/ให้คำปรึกษาแพทย์แผนไทย', 'อื่นๆ'],
-  notice: '', dailySummary: false,
+  notice: '', dailySummary: false, lineOaId: '',
   ...THAI_CLINIC,
 };
 
@@ -75,3 +75,14 @@ export function thaiSlotTimes(cfg) {
 export const thaiTimeRange = (time, end) => (end ? `${time} - ${end}` : time);
 // เบอร์โทรที่แสดง: [ป้ายกำกับ, เบอร์] (โทรจองคิว + โทรสอบถาม)
 export const thaiPhones = (c) => [['โทรจองคิว', c?.bookingPhone || THAI_CLINIC.bookingPhone], ['โทรสอบถาม', c?.phone || THAI_CLINIC.phone]].filter((x) => x[1]);
+
+// สีตามจำนวนคิวต่อวัน: 1 เขียว · 2 เหลือง · 3 ชมพู · 4 ขึ้นไป น้ำเงิน (0 = ไม่มีสี)
+export const THAI_LOAD = [
+  { n: 1, label: '1 คิว', cls: 'bg-green-500 text-white ring-green-600' },
+  { n: 2, label: '2 คิว', cls: 'bg-yellow-300 text-yellow-950 ring-yellow-500' },
+  { n: 3, label: '3 คิว', cls: 'bg-pink-400 text-white ring-pink-500' },
+  { n: 4, label: '4 คิวขึ้นไป', cls: 'bg-blue-600 text-white ring-blue-700' },
+];
+export const thaiLoadClass = (n) => (n > 0 ? THAI_LOAD[Math.min(n, 4) - 1].cls : '');
+// ลิงก์เปิดแชทไลน์ OA พร้อมข้อความรหัสจอง (ผู้จองกดส่งเพื่อรับข้อความยืนยันอัตโนมัติ)
+export const thaiLineLink = (oaId, code) => (oaId ? `https://line.me/R/oaMessage/${encodeURIComponent(oaId.startsWith('@') ? oaId : `@${oaId}`)}/?${encodeURIComponent(code)}` : '');

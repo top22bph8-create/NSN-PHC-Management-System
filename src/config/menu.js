@@ -97,7 +97,7 @@ export const GROUPS = [
   {
     key: 'thai', title: 'งานคลินิกแพทย์แผนไทย', emoji: '🌿', icon: Leaf, tone: 'from-emerald-600 to-teal-600', soft: 'bg-emerald-50 text-emerald-700',
     items: [
-      { key: 'thai-booking', label: 'นัดจองคิวออนไลน์', path: '/thai-booking', icon: CalendarCheck, ready: true, module: 'thai-booking', tone: 'from-emerald-500 to-teal-600', desc: 'รับจองคิวผ่าน QR Code/ลิงก์ แจ้งเตือนเข้าไลน์กลุ่มแพทย์แผนไทย จัดการคิวรายวัน' },
+      { key: 'thai-booking', label: 'ระบบจองคิวบริการแพทย์แผนไทย', path: '/thai-booking', icon: CalendarCheck, ready: true, module: 'thai-booking', tone: 'from-emerald-500 to-teal-600', desc: 'รับจองคิวผ่าน QR Code/ลิงก์ แจ้งเตือนเข้าไลน์กลุ่มแพทย์แผนไทย จัดการคิวรายวัน' },
     ],
   },
   {
