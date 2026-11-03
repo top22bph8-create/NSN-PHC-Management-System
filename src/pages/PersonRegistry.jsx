@@ -45,6 +45,21 @@ function parseDateText(v) {
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+// สีประจำหมู่บ้าน (คงที่ตามเลขหมู่) — ใช้กับแถบกรองหมู่บ้านและป้ายหมู่/บ้านในตาราง
+const VCOL = [
+  { chip: 'bg-rose-100 text-rose-900 ring-rose-300 hover:bg-rose-200', on: 'bg-rose-600 text-white ring-rose-700', badge: 'bg-rose-100 text-rose-800' },
+  { chip: 'bg-orange-100 text-orange-900 ring-orange-300 hover:bg-orange-200', on: 'bg-orange-500 text-white ring-orange-600', badge: 'bg-orange-100 text-orange-800' },
+  { chip: 'bg-amber-100 text-amber-900 ring-amber-300 hover:bg-amber-200', on: 'bg-amber-500 text-white ring-amber-600', badge: 'bg-amber-100 text-amber-800' },
+  { chip: 'bg-lime-100 text-lime-900 ring-lime-300 hover:bg-lime-200', on: 'bg-lime-600 text-white ring-lime-700', badge: 'bg-lime-100 text-lime-800' },
+  { chip: 'bg-emerald-100 text-emerald-900 ring-emerald-300 hover:bg-emerald-200', on: 'bg-emerald-600 text-white ring-emerald-700', badge: 'bg-emerald-100 text-emerald-800' },
+  { chip: 'bg-cyan-100 text-cyan-900 ring-cyan-300 hover:bg-cyan-200', on: 'bg-cyan-600 text-white ring-cyan-700', badge: 'bg-cyan-100 text-cyan-800' },
+  { chip: 'bg-sky-100 text-sky-900 ring-sky-300 hover:bg-sky-200', on: 'bg-sky-600 text-white ring-sky-700', badge: 'bg-sky-100 text-sky-800' },
+  { chip: 'bg-indigo-100 text-indigo-900 ring-indigo-300 hover:bg-indigo-200', on: 'bg-indigo-600 text-white ring-indigo-700', badge: 'bg-indigo-100 text-indigo-800' },
+  { chip: 'bg-violet-100 text-violet-900 ring-violet-300 hover:bg-violet-200', on: 'bg-violet-600 text-white ring-violet-700', badge: 'bg-violet-100 text-violet-800' },
+  { chip: 'bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-300 hover:bg-fuchsia-200', on: 'bg-fuchsia-600 text-white ring-fuchsia-700', badge: 'bg-fuchsia-100 text-fuchsia-800' },
+];
+const vcol = (k) => VCOL[(Number(String(k).replace(/\D/g, '')) || 0) % VCOL.length];
+
 const ageOf = (birthday) => { const d = birthday ? calcDuration(birthday) : null; return d ? d.years : null; };
 
 function FieldInput({ f, value, onChange, mooOptions }) {
@@ -427,7 +442,7 @@ export default function PersonRegistry({ cfg }) {
           ทุกหมู่บ้าน ({rows?.length ?? 0})
         </button>
         {villages.map((v) => (
-          <button key={v.k} className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${moo === v.k ? 'bg-brand-700 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-brand-50'}`} onClick={() => setMoo(v.k)}>
+          <button key={v.k} className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 transition ${moo === v.k ? `${vcol(v.k).on} shadow-md` : vcol(v.k).chip}`} aria-pressed={moo === v.k} onClick={() => setMoo(v.k)}>
             {v.k === '-' ? 'ไม่ระบุหมู่' : `หมู่ ${v.k}`}{v.name ? ` ${v.name}` : ''} ({v.n})
           </button>
         ))}
@@ -454,13 +469,17 @@ export default function PersonRegistry({ cfg }) {
         {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : shown.length === 0 ? (
           <EmptyState title={rows.length === 0 ? `ยังไม่มีข้อมูล${cfg.noun}` : 'ไม่พบรายการตามเงื่อนไข'} hint={rows.length === 0 && writable ? 'กด "เพิ่ม" หรือ "นำเข้า Excel" (ดาวน์โหลดแบบฟอร์มได้ในหน้านำเข้า)' : undefined} />
         ) : (
-          <table className="w-full min-w-[860px] text-left">
+          <table className="w-full min-w-[1400px] text-left [&_th]:whitespace-nowrap">
             <thead className="bg-slate-100 text-sm text-slate-600">
               <tr>
                 <th className="w-12 px-3 py-2">#</th>
+                <th className="px-3 py-2">CID (เลขบัตรประชาชน)</th>
                 <th className="px-3 py-2">ชื่อ - สกุล</th>
+                <th className="px-3 py-2">วันเดือนปีเกิด</th>
                 <th className="w-16 px-3 py-2">อายุ</th>
-                <th className="px-3 py-2">ที่อยู่</th>
+                <th className="px-3 py-2">บ้านเลขที่</th>
+                <th className="w-16 px-3 py-2">หมู่</th>
+                <th className="px-3 py-2">บ้าน</th>
                 {extraCols.map((f) => <th key={f.key} className="px-3 py-2">{f.label}</th>)}
                 <th className="w-28 px-3 py-2">สถานะ</th>
                 {writable && <th className="w-24 px-3 py-2" />}
@@ -470,12 +489,13 @@ export default function PersonRegistry({ cfg }) {
               {shown.map((r, i) => (
                 <tr key={r.id} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2 text-sm text-slate-400">{i + 1}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-slate-800">{r.namePrefix}{r.name}</div>
-                    <div className="text-xs text-slate-400">{r.idCard || '-'}</div>
-                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-sm text-slate-700">{r.idCard || '-'}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-800">{r.namePrefix}{r.name}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-sm">{r.birthday ? fmtDate(r.birthday) : '-'}</td>
                   <td className="px-3 py-2 text-sm">{ageOf(r.birthday) ?? '-'}</td>
-                  <td className="px-3 py-2 text-sm text-slate-600">{r.houseNo ? `${r.houseNo} ` : ''}หมู่ {mooKey(r.moo) || '-'}{r.village ? ` ${r.village}` : ''}</td>
+                  <td className="px-3 py-2 text-sm text-slate-600">{r.houseNo || '-'}</td>
+                  <td className="px-3 py-2 text-sm"><span className={`inline-block min-w-8 rounded-md px-2 py-0.5 text-center font-bold ${vcol(r.moo).badge}`}>{mooKey(r.moo) || '-'}</span></td>
+                  <td className="px-3 py-2 text-sm">{r.village ? <span className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 font-medium ${vcol(r.moo).badge}`}>{r.village}</span> : '-'}</td>
                   {extraCols.map((f) => (
                     <td key={f.key} className="px-3 py-2 text-sm text-slate-600">
                       {f.type === 'date' ? (r[f.key] ? fmtDate(r[f.key]) : '-') : (r[f.key] || '-')}
