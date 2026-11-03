@@ -116,6 +116,7 @@ async function pushLineOrThrow(channelAccessToken, targetId, messages) {
     await recordLineResult(false, res.status, bodyText);
     throw new Error(`LINE ปฏิเสธการส่งข้อความ (HTTP ${res.status}): ${bodyText || 'ไม่มีรายละเอียดเพิ่มเติม'}`);
   }
+  await recordLineResult(true); // ส่งสำเร็จ → ล้างแบนเนอร์แจ้งเตือนสีแดงบนแดชบอร์ด
 }
 
 async function replyLine(channelAccessToken, replyToken, text) {

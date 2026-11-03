@@ -10,6 +10,7 @@ import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { GROUPS } from '../config/menu';
+import { DutyRosterTable, TodayCards } from '../components/DashboardToday';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import MenuLink from '../components/MenuLink';
 import { getQuota, usage } from '../lib/leave';
@@ -148,6 +149,9 @@ export default function Dashboard() {
       </div>
 
       {normalizeRole(profile.role) === 'super_admin' && <LineQuotaStatus />}
+
+      <TodayCards />
+      <DutyRosterTable />
 
       {error ? <ErrorState message={error} />
         : !data && readable.length ? <Spinner />
