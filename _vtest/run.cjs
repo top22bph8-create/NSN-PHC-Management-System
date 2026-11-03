@@ -1,0 +1,2 @@
+const {chromium}=require('playwright');(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1300,height:500}});const e=[];p.on('pageerror',x=>e.push(x.message));
+await p.goto('http://localhost:5199/');await p.waitForTimeout(1500);await p.click('text=แก้ไขตารางเวร');await p.waitForTimeout(500);await p.screenshot({path:'/tmp/f.png'});console.log('ERR',JSON.stringify(e));await b.close()})();
