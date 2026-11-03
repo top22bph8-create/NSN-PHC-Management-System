@@ -47,6 +47,10 @@ export const ACCESS = {
   'reg-receipt': { read: ALL, write: ALL },
   'reg-deeka': { read: ALL, write: ALL },
   'reg-certificate': { read: ALL, write: ALL },
+  // ทะเบียนรายบุคคลของงานการพยาบาล (ต้องตรงกับ firestore.rules)
+  'reg-elderly': { read: ALL, write: ALL },
+  'reg-disabled': { read: ALL, write: ALL },
+  'reg-mental': { read: ALL, write: ALL },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },
   audit: { read: ['super_admin'], write: [] },

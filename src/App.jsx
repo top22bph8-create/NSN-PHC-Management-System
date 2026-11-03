@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { FiscalYearProvider } from './context/FiscalYearContext';
 import { can, canRead } from './lib/roles';
 import { REGISTRIES } from './config/registries';
+import { PERSON_REGISTRIES } from './config/personRegistries';
+import PersonRegistry from './pages/PersonRegistry';
 import Layout from './components/Layout';
 import RegistryPage from './components/RegistryPage';
 import { Spinner } from './components/ui';
@@ -184,6 +186,9 @@ function Shell() {
           <Route path="search" element={<GlobalSearch />} />
           {Object.values(REGISTRIES).map((cfg) => (
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><RegistryPage cfg={cfg} /></Guard>} />
+          ))}
+          {Object.values(PERSON_REGISTRIES).map((cfg) => (
+            <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><PersonRegistry cfg={cfg} /></Guard>} />
           ))}
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
           <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />

@@ -9,7 +9,7 @@ import { fmtDateTime } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import { Toast } from '../components/ui';
 
-const LABEL = { users: 'บุคลากรและสิทธิ์', credentials: 'รหัสผ่านผู้ใช้งาน', settings: 'การตั้งค่า', counters: 'ตัวนับเลขทะเบียน', incoming: 'หนังสือรับ', outgoing: 'หนังสือส่ง', leaves: 'ใบลา', vehicle: 'ยานพาหนะ', duty: 'แผนเวร', homevisit: 'เยี่ยมบ้าน', assignments: 'ปฏิทินมอบหมายงาน', 'reg-orders': 'ทะเบียนคำสั่ง', 'reg-announce': 'ทะเบียนประกาศ', 'reg-procurement': 'สั่งซื้อสั่งจ้าง', 'reg-contract-no': 'เลขหนังสือสัญญา', 'reg-loan': 'สัญญายืมเงิน', 'reg-cheque': 'เล่มเช็ค', 'reg-receipt': 'ใบเสร็จรับเงิน', 'reg-deeka': 'ฎีกาเบิกจ่าย', 'reg-certificate': 'เกียรติบัตร' };
+const LABEL = { users: 'บุคลากรและสิทธิ์', credentials: 'รหัสผ่านผู้ใช้งาน', settings: 'การตั้งค่า', counters: 'ตัวนับเลขทะเบียน', incoming: 'หนังสือรับ', outgoing: 'หนังสือส่ง', leaves: 'ใบลา', vehicle: 'ยานพาหนะ', duty: 'แผนเวร', homevisit: 'เยี่ยมบ้าน', assignments: 'ปฏิทินมอบหมายงาน', 'reg-orders': 'ทะเบียนคำสั่ง', 'reg-announce': 'ทะเบียนประกาศ', 'reg-procurement': 'สั่งซื้อสั่งจ้าง', 'reg-contract-no': 'เลขหนังสือสัญญา', 'reg-loan': 'สัญญายืมเงิน', 'reg-cheque': 'เล่มเช็ค', 'reg-receipt': 'ใบเสร็จรับเงิน', 'reg-deeka': 'ฎีกาเบิกจ่าย', 'reg-certificate': 'เกียรติบัตร', 'reg-elderly': 'ทะเบียนผู้สูงอายุ', 'reg-disabled': 'ทะเบียนผู้พิการ', 'reg-mental': 'ทะเบียนผู้ป่วยจิตเวช' };
 
 export default function Backup() {
   const { profile } = useAuth();

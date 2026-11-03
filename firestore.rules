@@ -144,6 +144,19 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isActive();
     }
+    // ทะเบียนรายบุคคลงานการพยาบาล: ผู้สูงอายุ / ผู้พิการ / ผู้ป่วยจิตเวช
+    match /reg-elderly/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    match /reg-disabled/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    match /reg-mental/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /reg-loan/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

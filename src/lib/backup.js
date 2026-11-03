@@ -6,6 +6,7 @@ import { db } from '../firebase';
 export const BACKUP_COLLECTIONS = [
   'users', 'credentials', 'counters', 'incoming', 'outgoing', 'leaves', 'vehicle', 'duty', 'homevisit', 'assignments',
   'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate',
+  'reg-elderly', 'reg-disabled', 'reg-mental',
 ];
 // เอกสารใน settings ที่สำรอง (ไม่รวม lineNotify = โทเคนไลน์, nameIndex/lineWebhookLog = สร้างใหม่ได้เอง)
 export const SETTINGS_DOCS = ['numbering', 'holidays', 'leaveQuota', 'lineNotifyMeta', 'vehicleDestinations', 'vehicleFleet', 'vehicleMissionTypes'];
