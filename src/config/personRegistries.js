@@ -63,6 +63,7 @@ export const PERSON_REGISTRIES = {
     fields: [
       ...COMMON_HEAD,
       { key: 'disabilityCardNo', label: 'เลขที่บัตรประจำตัวคนพิการ', type: 'text' },
+      { key: 'registerDate', label: 'วันที่ขึ้นทะเบียนคนพิการ', type: 'date', list: true },
       {
         key: 'disabilityType', label: 'ประเภทความพิการ', type: 'select', list: true,
         options: [
@@ -70,7 +71,10 @@ export const PERSON_REGISTRIES = {
           'ทางสติปัญญา', 'ทางการเรียนรู้', 'ทางออทิสติก',
         ],
       },
-      { key: 'severity', label: 'ระดับความรุนแรง', type: 'select', options: ['เล็กน้อย', 'ปานกลาง', 'รุนแรง'], list: true },
+      { key: 'disabilityDetail', label: 'ลักษณะความพิการ', type: 'text', list: true, hint: 'อธิบายอาการ/ลักษณะความพิการ เช่น ตาบอด 2 ข้าง, ขาลีบ เดินลำบาก' },
+      { key: 'severity', label: 'ระดับความรุนแรง', type: 'select', options: ['เล็กน้อย', 'ปานกลาง', 'รุนแรง'] },
+      { key: 'level', label: 'ระดับ (ตามทะเบียนเดิม 1-5)', type: 'select', options: ['1', '2', '3', '4', '5'], list: true, hint: 'ค่าระดับ 1-5 จากทะเบียนเดิมของ รพ.สต. (ยังไม่ได้กำหนดความหมาย)' },
+      { key: 'hn', label: 'HN', type: 'text', hint: 'เลขประจำตัวผู้ป่วย (Hospital Number)' },
       { key: 'cardIssue', label: 'วันที่ออกบัตร', type: 'date' },
       { key: 'cardExpire', label: 'วันหมดอายุบัตร', type: 'date', list: true },
       { key: 'allowance', label: 'เบี้ยความพิการ', type: 'select', options: ['ได้รับ', 'ไม่ได้รับ'] },
