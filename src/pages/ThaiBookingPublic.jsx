@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, CheckCircle2, Loader2, Phone, Search, XCircle } from 'lucide-react';
 import Logo from '../components/Logo';
 import { ORG_SHORT, ORG_UNDER } from '../config/brand';
-import { THAI_CLINIC, thaiBook, thaiCancel, thaiLookup, thaiPublicInfo } from '../lib/thaiClinic';
+import { THAI_CLINIC, thaiBook, thaiCancel, thaiLookup, thaiPhones, thaiPublicInfo, thaiTimeRange } from '../lib/thaiClinic';
 
 const WD = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
 const MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -61,7 +61,6 @@ export default function ThaiBookingPublic() {
   };
 
   const cfg = info?.config || {};
-  const phone = cfg.phone || THAI_CLINIC.phone;
   const provider = `${cfg.providerName || THAI_CLINIC.providerName} ${cfg.providerTitle || THAI_CLINIC.providerTitle}`;
 
   return (
@@ -77,7 +76,9 @@ export default function ThaiBookingPublic() {
         </div>
         <div className="mx-auto mt-4 max-w-xl rounded-xl bg-white/15 p-3 text-sm backdrop-blur">
           <p>บริการโดย <b>{provider}</b></p>
-          <a href={`tel:${phone.replace(/\D/g, '')}`} className="mt-1 inline-flex items-center gap-1.5 font-semibold underline"><Phone className="h-4 w-4" /> โทรสอบถาม/จองทางโทรศัพท์ {phone}</a>
+          <div className="mt-1 space-y-0.5 font-semibold">
+            {thaiPhones(cfg).map(([l, n]) => <a key={n} href={`tel:${n.replace(/\D/g, '')}`} className="flex items-center gap-1.5 underline"><Phone className="h-4 w-4" /> {l} {n}</a>)}
+          </div>
         </div>
       </header>
 
@@ -91,11 +92,11 @@ export default function ThaiBookingPublic() {
               <div className="text-xs text-slate-500">รหัสการจอง (จดหรือแคปหน้าจอไว้)</div>
               <div className="text-2xl font-extrabold tracking-wider text-emerald-800">{done.code}</div>
               <div className="mt-2">{longDate(done.date)}</div>
-              <div>เวลา <b>{done.time} น.</b></div>
+              <div>เวลา <b>{thaiTimeRange(done.time, done.timeEnd)} น.</b></div>
               <div>บริการ: {done.service}</div>
               <div>ชื่อ: {done.name}</div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">ถ้าติดธุระมาไม่ได้ กรุณายกเลิกด้วยรหัสการจอง + เบอร์โทร (ด้านล่างของหน้านี้) หรือโทร {phone}</p>
+            <p className="mt-3 text-xs text-slate-500">ถ้าติดธุระมาไม่ได้ กรุณายกเลิกด้วยรหัสการจอง + เบอร์โทร (ด้านล่างของหน้านี้) หรือโทร {thaiPhones(cfg).map((x) => x[1]).join(' / ')}</p>
             <button className="btn btn-outline mt-4" onClick={() => { setDone(null); setService(''); setDate(''); setTime(''); setF({ name: '', phone: '', note: '', hp: '' }); setAgree(false); load(); }}>จองคิวเพิ่ม</button>
           </section>
         ) : loadErr ? (
@@ -108,7 +109,7 @@ export default function ThaiBookingPublic() {
         ) : !info.enabled ? (
           <section className="rounded-2xl bg-white p-5 text-center shadow-lg">
             <p className="font-semibold text-slate-700">ขณะนี้ปิดรับจองออนไลน์ชั่วคราว</p>
-            <p className="text-sm text-slate-500">กรุณาโทรจองที่ {phone}</p>
+            <p className="text-sm text-slate-500">กรุณาโทรจองที่ {thaiPhones(cfg).map((x) => x[1]).join(' / ')}</p>
           </section>
         ) : (
           <form onSubmit={submit} className="space-y-4">
@@ -126,7 +127,7 @@ export default function ThaiBookingPublic() {
 
             <section className="rounded-2xl bg-white p-4 shadow-lg">
               <h2 className="mb-2 font-bold text-slate-800"><span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-sm text-white">2</span>เลือกวันที่</h2>
-              {info.days.length === 0 ? <p className="text-sm text-slate-500">ขณะนี้ไม่มีคิวว่างในช่วงที่เปิดจอง กรุณาโทร {phone}</p> : (
+              {info.days.length === 0 ? <p className="text-sm text-slate-500">ขณะนี้ไม่มีคิวว่างในช่วงที่เปิดจอง กรุณาโทร {thaiPhones(cfg).map((x) => x[1]).join(' / ')}</p> : (
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {info.days.map((d) => {
                     const p = dparts(d.date); const left = d.slots.reduce((n, x) => n + (x.left > 0 ? 1 : 0), 0);
@@ -147,12 +148,12 @@ export default function ThaiBookingPublic() {
             {date && day && (
               <section className="rounded-2xl bg-white p-4 shadow-lg">
                 <h2 className="mb-1 font-bold text-slate-800"><span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-sm text-white">3</span>เลือกเวลา</h2>
-                <p className="mb-2 text-xs text-slate-500">{longDate(date)} · ช่วงละ {cfg.slotMinutes} นาที</p>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <p className="mb-2 text-xs text-slate-500">{longDate(date)} · เลือกช่วงเวลาที่ว่าง</p>
+                <div className="grid grid-cols-2 gap-2">
                   {day.slots.map((s) => (
                     <button type="button" key={s.time} disabled={s.left <= 0} onClick={() => setTime(s.time)} aria-pressed={time === s.time}
                       className={`rounded-lg py-2 text-sm font-semibold transition ${s.left <= 0 ? 'cursor-not-allowed bg-slate-100 text-slate-300 line-through' : time === s.time ? 'bg-emerald-600 text-white shadow' : 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 hover:bg-emerald-100'}`}>
-                      {s.time}
+                      {thaiTimeRange(s.time, s.end)} น.
                     </button>
                   ))}
                 </div>
@@ -203,7 +204,7 @@ export default function ThaiBookingPublic() {
           {found && (
             <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm">
               <div><b>{found.code}</b> · {found.name}</div>
-              <div>{longDate(found.date)} เวลา {found.time} น. · {found.service}</div>
+              <div>{longDate(found.date)} เวลา {thaiTimeRange(found.time, found.timeEnd)} น. · {found.service}</div>
               <div className="mt-1">สถานะ: <b>{found.status}</b></div>
               {['รอยืนยัน', 'ยืนยันแล้ว'].includes(found.status) && (
                 <button className="btn mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50" onClick={doCancel} disabled={lookBusy}><XCircle className="h-4 w-4" /> ยกเลิกการจองนี้</button>

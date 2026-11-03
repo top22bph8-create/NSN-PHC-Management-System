@@ -11,7 +11,7 @@ import { canWrite } from '../lib/roles';
 import { writeAudit } from '../lib/audit';
 import { fmtDate, todayStr } from '../lib/thai';
 import { getHolidays } from '../lib/leave';
-import { THAI_ACTIVE, THAI_DEFAULT_CONFIG, THAI_STATUSES, THAI_STATUS_COLOR, getThaiConfig, saveThaiConfig, thaiPublicUrl, thaiSlotTimes } from '../lib/thaiClinic';
+import { THAI_ACTIVE, THAI_DEFAULT_CONFIG, THAI_STATUSES, THAI_STATUS_COLOR, getThaiConfig, saveThaiConfig, thaiPhones, thaiPublicUrl, thaiSlotTimes, thaiTimeRange } from '../lib/thaiClinic';
 import { PageHeader } from '../components/Logo';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Spinner, Toast } from '../components/ui';
@@ -21,7 +21,7 @@ const addDays = (s, n) => { const d = new Date(`${s}T00:00:00`); d.setDate(d.get
 
 function AddBookingModal({ date, cfg, existing, onClose, say, user }) {
   const times = useMemo(() => thaiSlotTimes(cfg), [cfg]);
-  const [f, setF] = useState({ date, time: times[0] || '', service: (cfg.services || [])[0] || '', name: '', phone: '', note: '' });
+  const [f, setF] = useState({ date, time: times[0]?.time || '', service: (cfg.services || [])[0] || '', name: '', phone: '', note: '' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const taken = existing.filter((b) => b.date === f.date && b.time === f.time && THAI_ACTIVE.includes(b.status)).length;
@@ -30,7 +30,8 @@ function AddBookingModal({ date, cfg, existing, onClose, say, user }) {
     setBusy(true);
     try {
       const code = `T${Math.floor(Math.random() * 900000) + 100000}`;
-      const data = { code, date: f.date, time: f.time, slotKey: `${f.date}|${f.time}`, service: f.service, name: f.name.trim(), phone: f.phone.replace(/\D/g, ''), note: f.note.trim(), status: 'ยืนยันแล้ว', source: 'เจ้าหน้าที่', createdAt: serverTimestamp(), createdBy: user };
+      const endT = times.find((t) => t.time === f.time)?.end || '';
+      const data = { code, date: f.date, time: f.time, timeEnd: endT, slotKey: `${f.date}|${f.time}`, service: f.service, name: f.name.trim(), phone: f.phone.replace(/\D/g, ''), note: f.note.trim(), status: 'ยืนยันแล้ว', source: 'เจ้าหน้าที่', createdAt: serverTimestamp(), createdBy: user };
       const ref = await addDoc(collection(db, 'thaiBookings'), data);
       await writeAudit({ action: 'create', module: 'thai-booking', docId: ref.id, label: `${data.name} ${data.date} ${data.time}` });
       say({ type: 'ok', text: `เพิ่มคิวแล้ว (รหัส ${code})` });
@@ -44,7 +45,7 @@ function AddBookingModal({ date, cfg, existing, onClose, say, user }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="mb-1 block text-sm text-slate-600">วันที่</label><ThaiDateInput value={f.date} onChange={(v) => setF({ ...f, date: v })} yearsBack={0} yearsForward={2} /></div>
           <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ab-t">เวลา</label>
-            <select id="ab-t" className="input" value={f.time} onChange={set('time')}>{times.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <select id="ab-t" className="input" value={f.time} onChange={set('time')}>{times.map((t) => <option key={t.time} value={t.time}>{thaiTimeRange(t.time, t.end)} น.</option>)}</select></div>
         </div>
         {taken >= cfg.capacity && <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-800">⚠ ช่วงเวลานี้มีคิวครบจำนวนแล้ว ({taken}/{cfg.capacity}) — บันทึกซ้อนได้ ถ้าเจ้าหน้าที่รับไหว</p>}
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ab-s">บริการ</label>
@@ -115,12 +116,12 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
         {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : shown.length === 0 ? <EmptyState title="ไม่มีคิวในวันนี้" hint="คิวที่ประชาชนจองออนไลน์จะแสดงที่นี่อัตโนมัติ" /> : (
           <table className="w-full min-w-[820px] text-left">
             <thead className="bg-slate-100 text-sm text-slate-600"><tr>
-              <th className="w-20 px-3 py-2">เวลา</th><th className="px-3 py-2">ชื่อ - สกุล</th><th className="px-3 py-2">โทร</th><th className="px-3 py-2">บริการ / อาการ</th><th className="w-36 px-3 py-2">สถานะ</th>{writable && <th className="w-12" />}
+              <th className="w-32 px-3 py-2">เวลา</th><th className="px-3 py-2">ชื่อ - สกุล</th><th className="px-3 py-2">โทร</th><th className="px-3 py-2">บริการ / อาการ</th><th className="w-36 px-3 py-2">สถานะ</th>{writable && <th className="w-12" />}
             </tr></thead>
             <tbody>
               {shown.map((b) => (
                 <tr key={b.id} className={`border-t border-slate-100 align-top ${b.status === 'ยกเลิก' ? 'opacity-60' : ''}`}>
-                  <td className="px-3 py-2 font-bold text-emerald-800">{b.time}</td>
+                  <td className="px-3 py-2 font-bold text-emerald-800 whitespace-nowrap">{thaiTimeRange(b.time, b.timeEnd)}</td>
                   <td className="px-3 py-2"><div className="font-medium">{b.name}</div><div className="text-xs text-slate-400">{b.code} · {b.source === 'online' ? 'จองออนไลน์' : b.source}</div></td>
                   <td className="px-3 py-2 text-sm">{b.phone ? <a className="inline-flex items-center gap-1 text-brand-700 underline" href={`tel:${b.phone}`}><Phone className="h-3.5 w-3.5" />{b.phone}</a> : '-'}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">{b.service}{b.note && <div className="text-xs text-slate-400">{b.note}</div>}</td>
@@ -140,7 +141,7 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
       </div>
       <p className="mt-2 text-sm text-slate-500">วันนี้ที่เลือก: คิวที่ยังรับบริการ {active} คิว · ทั้งหมด {rows?.length ?? 0} รายการ</p>
       {adding && <AddBookingModal date={date} cfg={cfg} existing={rows || []} onClose={() => setAdding(false)} say={say} user={profileEmail} />}
-      {toDelete && <ConfirmDialog message={`ลบคิวของ "${toDelete.name}" (${toDelete.time}) ออกถาวรหรือไม่?`} onConfirm={doDelete} onCancel={() => setToDelete(null)} />}
+      {toDelete && <ConfirmDialog message={`ลบคิวของ "${toDelete.name}" (${thaiTimeRange(toDelete.time, toDelete.timeEnd)}) ออกถาวรหรือไม่?`} onConfirm={doDelete} onCancel={() => setToDelete(null)} />}
     </div>
   );
 }
@@ -153,6 +154,8 @@ function SettingsTab({ cfg, writable, say, onSaved }) {
   const set = (k) => (e) => setC({ ...c, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const toggleDay = (i) => setC({ ...c, openDays: c.openDays.includes(i) ? c.openDays.filter((x) => x !== i) : [...c.openDays, i].sort() });
   const slots = useMemo(() => thaiSlotTimes(c), [c]);
+  const setSlot = (i, patch) => setC({ ...c, slots: c.slots.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+  const toMinStr = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
   const save = async () => {
     const services = servicesText.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!services.length) return say({ type: 'error', text: 'ต้องมีบริการอย่างน้อย 1 รายการ' });
@@ -180,19 +183,28 @@ function SettingsTab({ cfg, writable, say, onSaved }) {
             <button type="button" key={d} onClick={() => toggleDay(i)} className={`rounded-full px-3 py-1.5 text-sm ${c.openDays.includes(i) ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{d}</button>
           ))}</div>
         </div>
+        <div>
+          <p className={lbl}>ช่วงเวลาให้จอง (แต่ละช่วงรับตามจำนวนคิวด้านล่าง)</p>
+          <div className="space-y-2">
+            {(c.slots || []).map((sl, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <span className="w-14 text-sm text-slate-500">{toMinStr(sl.start) >= 720 ? 'บ่าย' : 'เช้า'}</span>
+                <input type="time" className="input !w-40" value={sl.start} onChange={(e) => setSlot(i, { start: e.target.value })} aria-label={`ช่วงที่ ${i + 1} เริ่ม`} />
+                <span>ถึง</span>
+                <input type="time" className="input !w-40" value={sl.end} onChange={(e) => setSlot(i, { end: e.target.value })} aria-label={`ช่วงที่ ${i + 1} สิ้นสุด`} />
+                <button type="button" className="btn btn-outline !px-2 !py-1 text-red-600" onClick={() => setC({ ...c, slots: c.slots.filter((_, k) => k !== i) })} aria-label="ลบช่วงเวลา"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="btn btn-outline mt-2" onClick={() => setC({ ...c, slots: [...(c.slots || []), { start: '15:30', end: '16:30' }] })}><Plus className="h-4 w-4" /> เพิ่มช่วงเวลา</button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-4">
-          <div><label className={lbl}>เวลาเริ่ม</label><input type="time" className="input" value={c.start} onChange={set('start')} /></div>
-          <div><label className={lbl}>เวลาสิ้นสุด</label><input type="time" className="input" value={c.end} onChange={set('end')} /></div>
-          <div><label className={lbl}>พักเที่ยง เริ่ม</label><input type="time" className="input" value={c.lunchStart} onChange={set('lunchStart')} /></div>
-          <div><label className={lbl}>พักเที่ยง สิ้นสุด</label><input type="time" className="input" value={c.lunchEnd} onChange={set('lunchEnd')} /></div>
-          <div><label className={lbl}>ความยาวต่อคิว (นาที)</label>
-            <select className="input" value={c.slotMinutes} onChange={(e) => setC({ ...c, slotMinutes: Number(e.target.value) })}>{[15, 20, 30, 45, 60, 90].map((n) => <option key={n} value={n}>{n}</option>)}</select></div>
           <div><label className={lbl}>รับได้กี่คิว/ช่วงเวลา</label><input type="number" min="1" max="20" className="input" value={c.capacity} onChange={set('capacity')} /></div>
           <div><label className={lbl}>จองล่วงหน้าได้ (วัน)</label><input type="number" min="1" max="120" className="input" value={c.maxAdvanceDays} onChange={set('maxAdvanceDays')} /></div>
           <div><label className={lbl}>ต้องจองก่อนถึงเวลา (นาที)</label><input type="number" min="0" max="1440" className="input" value={c.minLeadMinutes} onChange={set('minLeadMinutes')} /></div>
           <div><label className={lbl}>จองค้างได้ต่อ 1 เบอร์ (คิว)</label><input type="number" min="1" max="10" className="input" value={c.maxActivePerPhone} onChange={set('maxActivePerPhone')} /></div>
         </div>
-        <p className="text-xs text-slate-500">ช่วงเวลาที่เปิดจอง ({slots.length} ช่วง/วัน): {slots.join(', ') || '— ไม่มี —'}</p>
+        <p className="text-xs text-slate-500">ช่วงที่เปิดจอง ({slots.length} ช่วง/วัน): {slots.map((x) => thaiTimeRange(x.time, x.end)).join(', ') || '— ไม่มี —'}</p>
       </section>
 
       <section className="card space-y-3 p-4">
@@ -212,10 +224,11 @@ function SettingsTab({ cfg, writable, say, onSaved }) {
       </section>
 
       <section className="card space-y-3 p-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div><label className={lbl}>ชื่อผู้ให้บริการ</label><input className="input" value={c.providerName} onChange={set('providerName')} /></div>
           <div><label className={lbl}>ตำแหน่ง</label><input className="input" value={c.providerTitle} onChange={set('providerTitle')} /></div>
           <div><label className={lbl}>เบอร์โทรสอบถาม</label><input className="input" inputMode="tel" value={c.phone} onChange={set('phone')} /></div>
+          <div><label className={lbl}>เบอร์โทรจองคิว</label><input className="input" inputMode="tel" value={c.bookingPhone || ''} onChange={set('bookingPhone')} /></div>
         </div>
         <div><label className={lbl}>รายการบริการ (1 บรรทัด = 1 บริการ)</label><textarea rows={6} className="input" value={servicesText} onChange={(e) => setServicesText(e.target.value)} /></div>
         <div><label className={lbl}>ประกาศบนหน้าจอง (ถ้ามี เช่น ปิดปรับปรุง/ข้อควรปฏิบัติ)</label><textarea rows={2} className="input" value={c.notice} onChange={set('notice')} /></div>
@@ -237,7 +250,7 @@ function QrTab({ cfg }) {
       <div className="card flex flex-col items-center p-4">
         {qr ? <img src={qr} alt="QR Code หน้าจองคิวแพทย์แผนไทย" className="h-56 w-56" /> : <Spinner />}
         <p className="mt-2 text-center text-sm font-semibold text-emerald-800">สแกนเพื่อจองคิวแพทย์แผนไทย</p>
-        <p className="text-xs text-slate-500">โทร {cfg.phone}</p>
+        <p className="text-xs text-slate-500">{thaiPhones(cfg).map(([l, n]) => `${l} ${n}`).join(' · ')}</p>
       </div>
       <div className="card space-y-3 p-4 text-sm">
         <p className="font-semibold text-slate-700">ลิงก์หน้าจองสำหรับประชาชน (ไม่ต้องล็อกอิน)</p>
@@ -269,7 +282,7 @@ export default function ThaiBooking() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <Link to="/group/thai" className="mb-2 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"><ArrowLeft className="h-4 w-4" /> กลับหน้ากลุ่มงาน</Link>
-      <PageHeader emoji="🌿" big tone="from-emerald-700 via-teal-600 to-emerald-500" title="นัดจองคิวออนไลน์" subtitle={`คลินิกแพทย์แผนไทย · ${cfg?.providerName || ''} ${cfg?.providerTitle || ''} · โทร ${cfg?.phone || ''}`} />
+      <PageHeader emoji="🌿" big tone="from-emerald-700 via-teal-600 to-emerald-500" title="นัดจองคิวออนไลน์" subtitle={`คลินิกแพทย์แผนไทย · ${cfg?.providerName || ''} ${cfg?.providerTitle || ''} · ${thaiPhones(cfg).map(([l, n]) => `${l} ${n}`).join(' · ')}`} />
       <div className="mb-4 flex flex-wrap gap-2" role="tablist">
         {[['queue', '📋 รายการคิว'], ['settings', '⚙️ ตั้งค่าคลินิก'], ['qr', '📱 QR Code / ลิงก์จอง']].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === k ? 'bg-emerald-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-emerald-50'}`}>{l}</button>

@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, functions } from '../firebase';
 
 export const THAI_CLINIC = {
-  providerName: 'พท.อาระยา ใจอุ่น', providerTitle: 'แพทย์แผนไทย', phone: '042-704651',
+  providerName: 'พท.อาระยา ใจอุ่น', providerTitle: 'แพทย์แผนไทย', phone: '042-704651', bookingPhone: '080-481-0290',
 };
 export const THAI_STATUSES = ['รอยืนยัน', 'ยืนยันแล้ว', 'มารับบริการแล้ว', 'ไม่มาตามนัด', 'ยกเลิก'];
 export const THAI_STATUS_COLOR = {
@@ -22,6 +22,8 @@ export const THAI_ACTIVE = ['รอยืนยัน', 'ยืนยันแ�
 export const THAI_DEFAULT_CONFIG = {
   enabled: true,
   openDays: [1, 2, 3, 4, 5],
+  // เช้า 2 คิว (09:00-10:00, 10:30-11:30) บ่าย 2 คิว (13:00-14:00, 14:30-15:30)
+  slots: [{ start: '09:00', end: '10:00' }, { start: '10:30', end: '11:30' }, { start: '13:00', end: '14:00' }, { start: '14:30', end: '15:30' }],
   start: '08:30', end: '15:30', slotMinutes: 30, capacity: 1,
   lunchStart: '12:00', lunchEnd: '13:00',
   maxAdvanceDays: 30, minLeadMinutes: 60, maxActivePerPhone: 2,
@@ -53,17 +55,23 @@ export const thaiCancel = call('thaiCancel');
 // ลิงก์หน้าจองสำหรับประชาชน (ใช้สร้าง QR Code)
 export const thaiPublicUrl = () => `${window.location.origin}${window.location.pathname}#/book-thai`;
 
-// ช่วงเวลาให้จองในแต่ละวัน (ตรงกับ thaiSlotTimes ใน functions/index.js) ข้ามช่วงพักเที่ยง
+// ช่วงเวลาให้จองในแต่ละวัน -> [{ time: 'เริ่ม', end: 'สิ้นสุด' }] (ตรงกับ thaiSlotTimes ใน functions/index.js)
 const toMin = (hhmm) => { const [h, m] = String(hhmm || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
 const fmtHM = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 export function thaiSlotTimes(cfg) {
+  const valid = Array.isArray(cfg.slots) ? cfg.slots.filter((x) => x && /^\d{2}:\d{2}$/.test(x.start) && /^\d{2}:\d{2}$/.test(x.end) && x.start < x.end) : [];
+  if (valid.length) return valid.map((x) => ({ time: x.start, end: x.end })).sort((a, b) => a.time.localeCompare(b.time));
   const out = [];
   const step = Math.max(10, Number(cfg.slotMinutes) || 30);
   const ls = cfg.lunchStart ? toMin(cfg.lunchStart) : null;
   const le = cfg.lunchEnd ? toMin(cfg.lunchEnd) : null;
   for (let t = toMin(cfg.start); t + step <= toMin(cfg.end); t += step) {
     if (ls !== null && le !== null && t < le && t + step > ls) continue;
-    out.push(fmtHM(t));
+    out.push({ time: fmtHM(t), end: fmtHM(t + step) });
   }
   return out;
 }
+// "09:00 - 10:00" (ถ้ามีเวลาสิ้นสุด)
+export const thaiTimeRange = (time, end) => (end ? `${time} - ${end}` : time);
+// เบอร์โทรที่แสดง: [ป้ายกำกับ, เบอร์] (โทรจองคิว + โทรสอบถาม)
+export const thaiPhones = (c) => [['โทรจองคิว', c?.bookingPhone || THAI_CLINIC.bookingPhone], ['โทรสอบถาม', c?.phone || THAI_CLINIC.phone]].filter((x) => x[1]);

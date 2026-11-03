@@ -52,6 +52,8 @@ async function getLineSettings() {
     // ระบบขออนุญาตใช้รถ: ใช้ไลน์กลุ่มแยกต่างหาก (vehicleTargetId เก็บใน settings/lineNotify เขียนได้ฝ่ายเดียวเหมือน targetId)
     // ผู้กดอนุมัติการใช้รถในไลน์ได้ = ผู้อำนวยการ (directorUserId เดียวกับระบบใบลา) เท่านั้น
     vehicleTargetId: cred.vehicleTargetId || '',
+    // คลินิกแพทย์แผนไทย: ไลน์กลุ่มแยกสำหรับแจ้งเตือนการจองคิวออนไลน์
+    thaiTargetId: cred.thaiTargetId || '',
   };
 }
 
@@ -579,6 +581,183 @@ exports.adminAccountOp = onCall(async (request) => {
     return { ok: true };
   }
   throw new HttpsError('invalid-argument', 'op ไม่ถูกต้อง');
+});
+
+
+// ===================== คลินิกแพทย์แผนไทย: ระบบนัดจองคิวออนไลน์ =====================
+// หน้าจองสำหรับประชาชน (#/book-thai) ไม่ต้องล็อกอิน เรียกผ่าน Cloud Functions (onCall) เท่านั้น — ไม่เปิดให้เขียน/อ่าน Firestore ตรงๆ
+// เก็บข้อมูลที่ thaiBookings (เจ้าหน้าที่ที่ล็อกอินเท่านั้นอ่านได้) ตั้งค่าคลินิกที่ settings/thaiClinic
+// แจ้งเตือนเข้า "ไลน์กลุ่มงานแพทย์แผนไทย" แยกจากกลุ่มอื่น (thaiTargetId ใน settings/lineNotify — ตั้งที่หน้าตั้งค่าระบบ)
+const THAI_DEFAULT = {
+  enabled: true,
+  openDays: [1, 2, 3, 4, 5], // 0=อาทิตย์ ... 6=เสาร์
+  // ช่วงเวลาให้จอง (กำหนดเป็นรายการช่วงเวลาตายตัว): เช้า 2 คิว บ่าย 2 คิว — แต่ละช่วงรับ capacity คิว
+  slots: [{ start: '09:00', end: '10:00' }, { start: '10:30', end: '11:30' }, { start: '13:00', end: '14:00' }, { start: '14:30', end: '15:30' }],
+  start: '08:30', end: '15:30', slotMinutes: 30, capacity: 1,
+  lunchStart: '12:00', lunchEnd: '13:00',
+  maxAdvanceDays: 30, minLeadMinutes: 60, maxActivePerPhone: 2,
+  closedDates: [],
+  services: ['นวดไทยเพื่อการรักษา', 'ประคบสมุนไพร', 'อบไอน้ำสมุนไพร', 'ทับหม้อเกลือ', 'ตรวจรักษา/ให้คำปรึกษาแพทย์แผนไทย', 'อื่นๆ'],
+  notice: '', dailySummary: false,
+  providerName: 'พท.อาระยา ใจอุ่น', providerTitle: 'แพทย์แผนไทย', phone: '042-704651', bookingPhone: '080-481-0290',
+};
+const THAI_ACTIVE = ['รอยืนยัน', 'ยืนยันแล้ว'];
+
+async function getThaiConfig() {
+  const snap = await db.doc('settings/thaiClinic').get();
+  const c = { ...THAI_DEFAULT, ...(snap.exists ? snap.data() : {}) };
+  c.slotMinutes = Math.max(10, Number(c.slotMinutes) || 30);
+  c.capacity = Math.max(1, Number(c.capacity) || 1);
+  return c;
+}
+const bkkParts = (d = new Date()) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) };
+};
+const toMin = (hhmm) => { const [h, m] = String(hhmm || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+const fmtHM = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const addDaysStr = (dateStr, n) => { const d = new Date(`${dateStr}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const dowOf = (dateStr) => new Date(`${dateStr}T00:00:00Z`).getUTCDay();
+const thaiDateShort = (dateStr) => { const [y, m, d] = dateStr.split('-'); return `${Number(d)}/${Number(m)}/${Number(y) + 543}`; };
+
+// ช่วงเวลาให้จอง: ใช้รายการ cfg.slots ถ้ามี (เรียงตามเวลาเริ่ม) ไม่เช่นนั้นสร้างจากเวลาเปิด-ปิดแบบเดิม
+function thaiSlotTimes(cfg) {
+  const valid = Array.isArray(cfg.slots) ? cfg.slots.filter((x) => x && /^\d{2}:\d{2}$/.test(x.start) && /^\d{2}:\d{2}$/.test(x.end) && x.start < x.end) : [];
+  if (valid.length) return valid.map((x) => ({ time: x.start, end: x.end })).sort((a, b) => a.time.localeCompare(b.time));
+  const out = [];
+  const lunchS = cfg.lunchStart ? toMin(cfg.lunchStart) : null;
+  const lunchE = cfg.lunchEnd ? toMin(cfg.lunchEnd) : null;
+  for (let t = toMin(cfg.start); t + cfg.slotMinutes <= toMin(cfg.end); t += cfg.slotMinutes) {
+    if (lunchS !== null && lunchE !== null && t < lunchE && t + cfg.slotMinutes > lunchS) continue;
+    out.push({ time: fmtHM(t), end: fmtHM(t + cfg.slotMinutes) });
+  }
+  return out;
+}
+async function thaiClosedSet(cfg) {
+  const set = new Set(cfg.closedDates || []);
+  try {
+    const h = await db.doc('settings/holidays').get();
+    if (h.exists && cfg.closeOnHolidays !== false && Array.isArray(h.data().list)) h.data().list.forEach((x) => x && x.date && set.add(x.date));
+  } catch (e) { /* ไม่มีเอกสารวันหยุด: ใช้เฉพาะวันปิดที่ตั้งเอง */ }
+  return set;
+}
+// วันที่เปิดให้จองได้ (นับตั้งแต่วันนี้ ถึง maxAdvanceDays) พร้อมเวลาที่ยังว่างของแต่ละวัน
+async function thaiAvailability(cfg) {
+  const now = bkkParts();
+  const last = addDaysStr(now.date, cfg.maxAdvanceDays);
+  const closed = await thaiClosedSet(cfg);
+  const snap = await db.collection('thaiBookings').where('date', '>=', now.date).where('date', '<=', last).get();
+  const used = {};
+  snap.docs.forEach((d) => { const b = d.data(); if (THAI_ACTIVE.includes(b.status)) used[`${b.date}|${b.time}`] = (used[`${b.date}|${b.time}`] || 0) + 1; });
+  const times = thaiSlotTimes(cfg);
+  const days = [];
+  for (let i = 0; i <= cfg.maxAdvanceDays; i += 1) {
+    const date = addDaysStr(now.date, i);
+    if (!cfg.openDays.includes(dowOf(date)) || closed.has(date)) continue;
+    const slots = times.map((t) => {
+      const past = date === now.date && toMin(t.time) < now.minutes + cfg.minLeadMinutes;
+      const left = past ? 0 : Math.max(0, cfg.capacity - (used[`${date}|${t.time}`] || 0));
+      return { time: t.time, end: t.end, left };
+    });
+    if (slots.some((x) => x.left > 0)) days.push({ date, slots });
+  }
+  return days;
+}
+const thaiPublicConfig = (c) => ({ services: c.services, notice: c.notice, providerName: c.providerName, providerTitle: c.providerTitle, phone: c.phone, bookingPhone: c.bookingPhone });
+const cleanText = (v, max) => String(v || '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+const normPhone = (v) => String(v || '').replace(/\D/g, '');
+
+exports.thaiPublicInfo = onCall({ cors: true }, async () => {
+  const cfg = await getThaiConfig();
+  if (!cfg.enabled) return { enabled: false, config: thaiPublicConfig(cfg), days: [] };
+  return { enabled: true, config: thaiPublicConfig(cfg), days: await thaiAvailability(cfg) };
+});
+
+exports.thaiBook = onCall({ cors: true }, async (request) => {
+  const d = request.data || {};
+  if (d.hp) throw new HttpsError('invalid-argument', 'ข้อมูลไม่ถูกต้อง'); // ช่องล่อบอท (honeypot)
+  const cfg = await getThaiConfig();
+  if (!cfg.enabled) throw new HttpsError('failed-precondition', 'ขณะนี้ปิดรับจองออนไลน์ชั่วคราว');
+  const name = cleanText(d.name, 80);
+  const phone = normPhone(d.phone);
+  const service = cleanText(d.service, 80);
+  const note = cleanText(d.note, 300);
+  const date = String(d.date || '');
+  const time = String(d.time || '');
+  if (name.length < 2) throw new HttpsError('invalid-argument', 'กรุณากรอกชื่อ-สกุล');
+  if (!/^0\d{8,9}$/.test(phone)) throw new HttpsError('invalid-argument', 'เบอร์โทรศัพท์ไม่ถูกต้อง (ตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0)');
+  if (!service) throw new HttpsError('invalid-argument', 'กรุณาเลือกบริการ');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) throw new HttpsError('invalid-argument', 'กรุณาเลือกวันและเวลา');
+
+  const days = await thaiAvailability(cfg);
+  const day = days.find((x) => x.date === date);
+  const slot = day && day.slots.find((x) => x.time === time);
+  if (!slot || slot.left <= 0) throw new HttpsError('failed-precondition', 'ช่วงเวลานี้เต็มแล้วหรือไม่เปิดให้จอง กรุณาเลือกเวลาอื่น');
+
+  const code = `T${String(Math.floor(Math.random() * 900000) + 100000)}`;
+  const slotKey = `${date}|${time}`;
+  const mine = db.collection('thaiBookings').where('phone', '==', phone).where('status', 'in', THAI_ACTIVE);
+  let ref;
+  await db.runTransaction(async (tx) => {
+    // ตรวจซ้ำในธุรกรรม: ช่วงเวลาเต็ม / จองเกินจำนวนต่อเบอร์ (กันบอทและกดซ้ำ)
+    const sameSlot = await tx.get(db.collection('thaiBookings').where('date', '==', date).where('time', '==', time));
+    if (sameSlot.docs.filter((x) => THAI_ACTIVE.includes(x.data().status)).length >= cfg.capacity) throw new HttpsError('failed-precondition', 'ช่วงเวลานี้เต็มแล้ว กรุณาเลือกเวลาอื่น');
+    const myActive = await tx.get(mine);
+    const future = myActive.docs.filter((x) => x.data().date >= bkkParts().date);
+    if (future.length >= cfg.maxActivePerPhone) throw new HttpsError('resource-exhausted', `เบอร์นี้มีการจองที่ยังไม่ถึงวันนัดครบ ${cfg.maxActivePerPhone} รายการแล้ว`);
+    ref = db.collection('thaiBookings').doc();
+    tx.set(ref, { code, date, time, timeEnd: slot.end, slotKey, service, name, phone, note, status: 'รอยืนยัน', source: 'online', createdAt: FieldValue.serverTimestamp() });
+  });
+
+  try {
+    const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
+    if (channelAccessToken && thaiTargetId && enabled) {
+      await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 มีผู้จองคิวแพทย์แผนไทย (ออนไลน์)\nรหัส: ${code}\nวันที่: ${thaiDateShort(date)} เวลา ${time}-${slot.end} น.\nบริการ: ${service}\nชื่อ: ${name}\nโทร: ${phone}${note ? `\nอาการ/หมายเหตุ: ${note}` : ''}` }]);
+    }
+  } catch (e) { console.error('thaiBook: ส่งไลน์ไม่สำเร็จ', e.message); }
+  return { ok: true, code, date, time, timeEnd: slot.end, service, name };
+});
+
+// ผู้จองตรวจสอบ/ยกเลิกเอง ด้วยรหัสการจอง + เบอร์โทร
+async function findThaiBooking(code, phone) {
+  const c = String(code || '').trim().toUpperCase();
+  const p = normPhone(phone);
+  if (!c || !p) throw new HttpsError('invalid-argument', 'กรุณากรอกรหัสการจองและเบอร์โทร');
+  const snap = await db.collection('thaiBookings').where('code', '==', c).limit(5).get();
+  const hit = snap.docs.find((x) => x.data().phone === p);
+  if (!hit) throw new HttpsError('not-found', 'ไม่พบการจอง ตรวจสอบรหัสและเบอร์โทรอีกครั้ง');
+  return hit;
+}
+exports.thaiLookup = onCall({ cors: true }, async (request) => {
+  const hit = await findThaiBooking(request.data && request.data.code, request.data && request.data.phone);
+  const b = hit.data();
+  return { code: b.code, date: b.date, time: b.time, timeEnd: b.timeEnd || '', service: b.service, name: b.name, status: b.status };
+});
+exports.thaiCancel = onCall({ cors: true }, async (request) => {
+  const hit = await findThaiBooking(request.data && request.data.code, request.data && request.data.phone);
+  const b = hit.data();
+  if (!THAI_ACTIVE.includes(b.status)) throw new HttpsError('failed-precondition', `การจองนี้สถานะ "${b.status}" ยกเลิกไม่ได้`);
+  await hit.ref.update({ status: 'ยกเลิก', cancelledBy: 'ผู้จอง', cancelledAt: FieldValue.serverTimestamp() });
+  try {
+    const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
+    if (channelAccessToken && thaiTargetId && enabled) {
+      await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🚫 ผู้จองยกเลิกคิวแพทย์แผนไทย\nรหัส: ${b.code}\nวันที่: ${thaiDateShort(b.date)} เวลา ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} น.\nชื่อ: ${b.name} (${b.phone})` }]);
+    }
+  } catch (e) { console.error('thaiCancel: ส่งไลน์ไม่สำเร็จ', e.message); }
+  return { ok: true };
+});
+
+// สรุปคิววันนี้เข้าไลน์กลุ่มงานแพทย์แผนไทย เวลา 07:30 (ปิดไว้เป็นค่าเริ่มต้น เปิดที่หน้าตั้งค่าคลินิก — ใช้โควตาข้อความไลน์ 1 ข้อความ/วันที่มีคิว)
+exports.dailyThaiSummary = onSchedule({ schedule: '30 7 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const cfg = await getThaiConfig();
+  if (!cfg.dailySummary) return;
+  const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
+  if (!channelAccessToken || !thaiTargetId || !enabled) return;
+  const today = bkkParts().date;
+  const snap = await db.collection('thaiBookings').where('date', '==', today).get();
+  const list = snap.docs.map((x) => x.data()).filter((b) => THAI_ACTIVE.includes(b.status)).sort((a, b) => a.time.localeCompare(b.time));
+  if (!list.length) return;
+  await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 คิวแพทย์แผนไทยวันนี้ ${thaiDateShort(today)} (${list.length} คิว)\n` + list.map((b) => `${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} ${b.name} — ${b.service}`).join('\n') }]);
 });
 
 // ส่งแจ้งเตือนไลน์ซ้ำสำหรับใบลาที่มีอยู่แล้ว (Super Admin เท่านั้น) — ใช้กรณีตอนยื่นใบลาจริง (onLeaveCreated ด้านบน)

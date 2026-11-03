@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import Logo from '../components/Logo';
 import { ORG_SHORT, ORG_UNDER } from '../config/brand';
-import { getThaiConfig, thaiPublicUrl } from '../lib/thaiClinic';
+import { THAI_CLINIC, getThaiConfig, thaiPhones, thaiPublicUrl } from '../lib/thaiClinic';
 
 // ป้าย QR Code จองคิวแพทย์แผนไทย (A4 แนวตั้ง) — ติดที่คลินิก/บอร์ดประชาสัมพันธ์ (ไม่มีข้อมูลส่วนบุคคล เป็นแค่ลิงก์สาธารณะ)
 export default function PrintThaiQr() {
   const [qr, setQr] = useState('');
   const [cfg, setCfg] = useState(null);
   useEffect(() => {
-    getThaiConfig().then(setCfg).catch(() => setCfg({ providerName: 'พท.อาระยา ใจอุ่น', providerTitle: 'แพทย์แผนไทย', phone: '042-704651' }));
+    getThaiConfig().then(setCfg).catch(() => setCfg({ ...THAI_CLINIC }));
     QRCode.toDataURL(thaiPublicUrl(), { width: 900, margin: 1, errorCorrectionLevel: 'M' }).then(setQr);
   }, []);
   useEffect(() => { if (qr && cfg) setTimeout(() => window.print(), 700); }, [qr, cfg]);
@@ -24,7 +24,7 @@ export default function PrintThaiQr() {
       <p className="mt-4 text-3xl font-bold text-emerald-700">สแกนเพื่อจองคิว</p>
       <p className="mt-1 text-lg text-slate-600">เปิดกล้องมือถือ / แอปไลน์ แล้วสแกน QR Code เลือกวัน-เวลาที่ต้องการ</p>
       <div className="mt-8 rounded-2xl bg-emerald-50 px-8 py-4 text-2xl text-emerald-900">
-        บริการโดย <b>{cfg.providerName} {cfg.providerTitle}</b><br />โทรสอบถาม/จอง <b>{cfg.phone}</b>
+        บริการโดย <b>{cfg.providerName} {cfg.providerTitle}</b>{thaiPhones(cfg).map(([l, n]) => <span key={n}><br />{l} <b>{n}</b></span>)}
       </div>
     </div>
   );
