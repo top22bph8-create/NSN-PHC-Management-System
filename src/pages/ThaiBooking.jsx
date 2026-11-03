@@ -93,7 +93,8 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
   const byDay = useMemo(() => { const m = {}; upcoming.forEach((b) => { m[b.date] = (m[b.date] || 0) + 1; }); return m; }, [upcoming]);
   const calCells = useMemo(() => {
     const [y, mo] = date.split('-').map(Number);
-    const first = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // เริ่มวันจันทร์ const len = new Date(y, mo, 0).getDate();
+    const first = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // เริ่มวันจันทร์
+    const len = new Date(y, mo, 0).getDate();
     return [...Array(first).fill(null), ...Array.from({ length: len }, (_, i) => `${date.slice(0, 7)}-${String(i + 1).padStart(2, '0')}`)];
   }, [date]);
   const shiftMonth = (n) => { const [y, mo] = date.split('-').map(Number); const d = new Date(y, mo - 1 + n, 1); setDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`); };
