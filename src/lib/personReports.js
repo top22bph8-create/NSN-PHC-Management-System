@@ -44,9 +44,9 @@ export async function exportMentalReport(cfg, rows, villageOf = {}) {
   // 1) ทะเบียนรวม
   const ws = wb.addWorksheet('ทะเบียนรวม', { views: [{ state: 'frozen', ySplit: 3 }] });
   const cols = [
-    ['ลำดับ', 6], ['เลขบัตรประชาชน', 18], ['ชื่อ-สกุล', 26], ['อายุ', 7], ['บ้านเลขที่', 10], ['หมู่', 6], ['บ้าน', 18],
+    ['ลำดับ', 6], ['เลขบัตรประชาชน', 18], ['ชื่อ-สกุล', 26], ['วันเดือนปีเกิด', 14], ['อายุ', 7], ['บ้านเลขที่', 10], ['หมู่', 6], ['บ้าน', 18],
     ['กลุ่มผู้ป่วย', 22], ['กลุ่มสี', 10], ['การวินิจฉัย', 24], ['สารเสพติด', 18], ['SMI-V', 8], ['สถานพยาบาล', 20],
-    ['ยาที่ใช้', 20], ['การกินยา', 14], ['เยี่ยมล่าสุด', 14], ['นัดครั้งถัดไป', 14], ['เบอร์โทร', 14], ['หมายเหตุ', 24],
+    ['ยาที่ใช้', 20], ['การกินยา', 14], ['เยี่ยมล่าสุด', 14], ['นัดครั้งถัดไป', 14], ['เบอร์โทร', 14], ['รหัสสิทธิ์', 10], ['สิทธิ', 26], ['หมายเหตุ', 24],
   ];
   head(ws, `${title} (ข้อมูล ณ ${fmtDate(todayStr())})`, cols.length);
   ws.getRow(3).values = cols.map((c) => c[0]);
@@ -54,20 +54,20 @@ export async function exportMentalReport(cfg, rows, villageOf = {}) {
   cols.forEach((c, i) => { ws.getColumn(i + 1).width = c[1]; });
   sorted.forEach((r, i) => {
     const row = ws.addRow([
-      i + 1, r.idCard || '', `${r.namePrefix || ''}${r.name || ''}`, ageOf(r.birthday), r.houseNo || '', r.moo || '', r.village || villageOf[String(r.moo)] || '',
+      i + 1, r.idCard || '', `${r.namePrefix || ''}${r.name || ''}`, r.birthday ? fmtDate(r.birthday) : '', ageOf(r.birthday), r.houseNo || '', r.moo || '', r.village || villageOf[String(r.moo)] || '',
       r.psychGroup || '', r.colorGroup || '', r.diagnosis || '', r.substanceType || '', r.smiV || '', r.hospital || '',
-      r.medication || '', r.adherence || '', r.lastVisit ? fmtDate(r.lastVisit) : '', r.nextAppt ? fmtDate(r.nextAppt) : '', r.phone || '', r.note || r.remark || '',
+      r.medication || '', r.adherence || '', r.lastVisit ? fmtDate(r.lastVisit) : '', r.nextAppt ? fmtDate(r.nextAppt) : '', r.phone || '', r.rightsCode || '', r.rightsName || '', r.note || r.remark || '',
     ]);
     box(row);
     row.getCell(2).numFmt = '@';
     const c = r.colorGroup;
     if (FILL[c]) {
-      const cell = row.getCell(9);
+      const cell = row.getCell(10);
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL[c] } };
       cell.font = { bold: true, color: { argb: FONT[c] } };
       cell.alignment = { horizontal: 'center' };
     }
-    if (r.psychGroup === GROUPS[1]) row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } };
+    if (r.psychGroup === GROUPS[1]) row.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } };
   });
   ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: cols.length } };
 
@@ -95,15 +95,15 @@ export async function exportMentalReport(cfg, rows, villageOf = {}) {
   // 3) แยกรายกลุ่ม + รายชื่อกลุ่มสีแดง (เฝ้าระวัง)
   const addList = (name, list, note) => {
     const w = wb.addWorksheet(name);
-    const h = ['ลำดับ', 'ชื่อ-สกุล', 'อายุ', 'บ้านเลขที่', 'หมู่', 'บ้าน', 'กลุ่มสี', 'การวินิจฉัย', 'การกินยา', 'เบอร์โทร', 'ติดตาม/หมายเหตุ'];
+    const h = ['ลำดับ', 'เลขบัตรประชาชน', 'ชื่อ-สกุล', 'วันเดือนปีเกิด', 'อายุ', 'บ้านเลขที่', 'หมู่', 'บ้าน', 'กลุ่มสี', 'การวินิจฉัย', 'การกินยา', 'เบอร์โทร', 'รหัสสิทธิ์', 'สิทธิ', 'ติดตาม/หมายเหตุ'];
     head(w, `${note} (${list.length} ราย)`, h.length);
     w.getRow(3).values = h; headerRow(w.getRow(3));
-    [6, 26, 7, 10, 6, 18, 10, 24, 14, 14, 30].forEach((x, i) => { w.getColumn(i + 1).width = x; });
+    [6, 18, 26, 14, 7, 10, 6, 18, 10, 24, 14, 14, 10, 26, 30].forEach((x, i) => { w.getColumn(i + 1).width = x; });
     list.forEach((r, i) => {
-      const row = w.addRow([i + 1, `${r.namePrefix || ''}${r.name || ''}`, ageOf(r.birthday), r.houseNo || '', r.moo || '', r.village || villageOf[String(r.moo)] || '', r.colorGroup || '', r.diagnosis || '', r.adherence || '', r.phone || '', '']);
+      const row = w.addRow([i + 1, r.idCard || '', `${r.namePrefix || ''}${r.name || ''}`, r.birthday ? fmtDate(r.birthday) : '', ageOf(r.birthday), r.houseNo || '', r.moo || '', r.village || villageOf[String(r.moo)] || '', r.colorGroup || '', r.diagnosis || '', r.adherence || '', r.phone || '', r.rightsCode || '', r.rightsName || '', '']);
       box(row);
       const c = r.colorGroup;
-      if (FILL[c]) { row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL[c] } }; row.getCell(7).font = { bold: true, color: { argb: FONT[c] } }; }
+      if (FILL[c]) { row.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL[c] } }; row.getCell(9).font = { bold: true, color: { argb: FONT[c] } }; }
     });
   };
   addList('กลุ่มจิตเวช', sorted.filter((r) => r.psychGroup !== GROUPS[1]), 'กลุ่มผู้ป่วยจิตเวช');

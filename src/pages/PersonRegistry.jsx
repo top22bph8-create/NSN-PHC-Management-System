@@ -259,11 +259,17 @@ async function analyzeFile(cfg, file, rows) {
     // กุญแจตรวจซ้ำ: เลขบัตร ถ้าไม่มี (เฉพาะทะเบียนที่ยอมให้ว่าง) ใช้ ชื่อ+หมู่
     const dkey = out.idCard || `n:${out.name}|${out.moo}`;
     let kind = 'new';
+    let hitKey = dkey;
     if (!errors.length) {
       if (seen.has(dkey)) { errors.push(out.idCard ? 'เลขบัตรซ้ำกับแถวอื่นในไฟล์' : 'ชื่อ+หมู่ซ้ำกับแถวอื่นในไฟล์'); } else seen.add(dkey);
-      if (!errors.length && existing.has(dkey)) kind = 'dup';
+      // ถ้าไฟล์นี้มีเลขบัตรแต่ในระบบเดิมยังไม่มีเลขบัตร (บันทึกไว้ด้วย ชื่อ+หมู่) ให้ถือเป็นคนเดียวกัน — อัปเดตแทนการเพิ่มซ้ำ
+      if (!errors.length && !existing.has(dkey) && out.idCard && cfg.idOptional) {
+        const nk = `n:${out.name}|${out.moo}`;
+        if (existing.has(nk) && !existing.get(nk).idCard) hitKey = nk;
+      }
+      if (!errors.length && existing.has(hitKey)) kind = 'dup';
     }
-    items.push({ line, out, errors, warns, kind: errors.length ? 'error' : kind, existingId: existing.get(dkey)?.id });
+    items.push({ line, out, errors, warns, kind: errors.length ? 'error' : kind, existingId: existing.get(hitKey)?.id });
   });
   return items;
 }
@@ -288,7 +294,7 @@ function ImportModal({ cfg, rows, onClose, say }) {
       for (let s = 0; s < todo.length; s += 400) {
         const batch = writeBatch(db);
         todo.slice(s, s + 400).forEach((i) => {
-          if (i.kind === 'dup') batch.update(doc(db, cfg.key, i.existingId), { ...i.out, updatedAt: serverTimestamp() });
+          if (i.kind === 'dup') batch.update(doc(db, cfg.key, i.existingId), { ...Object.fromEntries(Object.entries(i.out).filter(([, v]) => v !== '' && v != null)), updatedAt: serverTimestamp() });
           else batch.set(doc(collection(db, cfg.key)), { ...i.out, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
         });
         await batch.commit();
@@ -321,7 +327,7 @@ function ImportModal({ cfg, rows, onClose, say }) {
             {cnt('dup') > 0 && (
               <div className="rounded-lg bg-amber-50 p-2 text-amber-900">
                 <label className="mr-4"><input type="radio" name="imode" checked={mode === 'skip'} onChange={() => setMode('skip')} /> ข้ามรายการที่ซ้ำ</label>
-                <label><input type="radio" name="imode" checked={mode === 'update'} onChange={() => setMode('update')} /> อัปเดตข้อมูลเดิมด้วยข้อมูลจากไฟล์</label>
+                <label><input type="radio" name="imode" checked={mode === 'update'} onChange={() => setMode('update')} /> อัปเดตข้อมูลเดิมด้วยข้อมูลจากไฟล์ (ช่องที่ว่างในไฟล์จะไม่ลบข้อมูลเดิม)</label>
               </div>
             )}
             {problems.length > 0 && (

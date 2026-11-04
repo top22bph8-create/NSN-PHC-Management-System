@@ -80,6 +80,8 @@ export const PERSON_REGISTRIES = {
       { key: 'allowance', label: 'เบี้ยความพิการ', type: 'select', options: ['ได้รับ', 'ไม่ได้รับ'] },
       { key: 'aid', label: 'กายอุปกรณ์ / อุปกรณ์ช่วย', type: 'text' },
       { key: 'rights', label: 'สิทธิการรักษา', type: 'select', options: RIGHTS },
+      { key: 'rightsCode', label: 'รหัสสิทธิ์', type: 'text', hint: 'รหัสสิทธิ์การรักษาจากทะเบียนสุขภาพ (JHCIS)' },
+      { key: 'rightsName', label: 'สิทธิ (ตามทะเบียนสุขภาพ JHCIS)', type: 'text', list: true },
       { key: 'adlGroup', label: 'กลุ่มศักยภาพ (ADL)', type: 'select', options: ['ติดสังคม (กลุ่ม 1)', 'ติดบ้าน (กลุ่ม 2)', 'ติดเตียง (กลุ่ม 3)'] },
       { key: 'lastVisit', label: 'เยี่ยมบ้านล่าสุด', type: 'date' },
       ...COMMON_TAIL,
@@ -111,6 +113,8 @@ export const PERSON_REGISTRIES = {
     colorHelp: { 'เขียว': 'ไม่ก้าวร้าว / เสี่ยงต่ำ', 'เหลือง': 'เสี่ยงปานกลาง ต้องเฝ้าระวัง', 'แดง': 'เสี่ยงสูง ก้าวร้าวรุนแรง' },
     fields: [
       ...COMMON_HEAD.map((f) => (f.key === 'idCard' ? { ...f, required: false, hint: '13 หลัก — ถ้ายังไม่มีเว้นว่างไว้ได้ แล้วมาเติมภายหลัง' } : f.key === 'moo' ? { ...f, required: false } : f)),
+      { key: 'rightsCode', label: 'รหัสสิทธิ์', type: 'text', hint: 'รหัสสิทธิ์การรักษาจากทะเบียนสุขภาพ (JHCIS)' },
+      { key: 'rightsName', label: 'สิทธิ (ตามทะเบียนสุขภาพ JHCIS)', type: 'text', list: true },
       { key: 'psychGroup', label: 'กลุ่มผู้ป่วย', type: 'select', options: ['จิตเวช', 'จิตเวชที่ใช้สารเสพติด'], default: 'จิตเวช', list: true },
       { key: 'colorGroup', label: 'กลุ่มสี (ความก้าวร้าวทางอารมณ์)', type: 'select', options: ['เขียว', 'เหลือง', 'แดง'], list: true, hint: 'เขียว = เสี่ยงต่ำ · เหลือง = ปานกลาง · แดง = เสี่ยงสูง (ตามสัญลักษณ์สีของ รพ.สต.)' },
       { key: 'diagnosis', label: 'การวินิจฉัย / โรค', type: 'text', list: true, datalist: ['จิตเภท (Schizophrenia)', 'โรคซึมเศร้า', 'โรคไบโพลาร์ (อารมณ์สองขั้ว)', 'โรควิตกกังวล', 'โรคจิตจากสารเสพติด', 'ภาวะสมองเสื่อม', 'ปัญญาอ่อน', 'ลมชัก/ชัก', 'อื่นๆ'] },
