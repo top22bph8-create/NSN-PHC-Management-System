@@ -87,7 +87,7 @@ export default function ThaiBookingPublic() {
           <section className="rounded-2xl bg-white p-5 text-center shadow-lg ring-1 ring-emerald-200">
             <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
             <h2 className="mt-2 text-xl font-bold text-emerald-800">จองคิวสำเร็จ</h2>
-            <p className="text-sm text-slate-500">เจ้าหน้าที่จะรับทราบและอาจโทรยืนยันตามเบอร์ที่ให้ไว้</p>
+            <p className="text-sm text-slate-500">คลินิกได้รับแจ้งการจองของท่านแล้ว กรุณามาตามวัน-เวลาที่เลือก</p>
             <div className="mx-auto mt-4 max-w-xs rounded-xl bg-emerald-50 p-4 text-left text-sm">
               <div className="text-xs text-slate-500">รหัสการจอง (จดหรือแคปหน้าจอไว้)</div>
               <div className="break-all text-xl font-extrabold text-emerald-800">{done.code}</div>
@@ -99,7 +99,7 @@ export default function ThaiBookingPublic() {
             {cfg.lineOaId ? (
               <div className="mx-auto mt-4 max-w-xs rounded-xl bg-green-50 p-3 text-sm ring-1 ring-green-200">
                 <p className="font-semibold text-green-800">รับข้อความยืนยันคิวทางไลน์</p>
-                <p className="text-xs text-slate-600">กดปุ่มด้านล่าง แล้วกดส่งรหัสจอง เมื่อแพทย์แผนไทยยืนยัน ระบบจะแจ้งทางไลน์ให้ทันที</p>
+                <p className="text-xs text-slate-600">กดปุ่มด้านล่าง แล้วกดส่งรหัสจอง เพื่อรับข้อความยืนยันคิวและการเปลี่ยนแปลงทางไลน์</p>
                 <a className="btn mt-2 w-full !bg-[#06C755] text-white" href={thaiLineLink(cfg.lineOaId, done.code)} target="_blank" rel="noreferrer">💬 รับข้อความยืนยันทางไลน์</a>
               </div>
             ) : null}
@@ -203,7 +203,7 @@ export default function ThaiBookingPublic() {
         <section className="rounded-2xl bg-white p-4 shadow">
           <h2 className="mb-2 flex items-center gap-1.5 font-bold text-slate-700"><Search className="h-4 w-4" /> ตรวจสอบ / ยกเลิกการจอง</h2>
           <form onSubmit={doLookup} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-            <input className="input" placeholder="รหัสการจอง เช่น NSM-THAI-0001-2569" value={look.code} onChange={(e) => setLook({ ...look, code: e.target.value.toUpperCase() })} aria-label="รหัสการจอง" />
+            <input className="input" placeholder="รหัสการจอง เช่น NSM-Thai-01" value={look.code} onChange={(e) => setLook({ ...look, code: e.target.value.toUpperCase() })} aria-label="รหัสการจอง" />
             <input className="input" inputMode="tel" placeholder="เบอร์โทรที่ใช้จอง" value={look.phone} onChange={(e) => setLook({ ...look, phone: e.target.value })} aria-label="เบอร์โทร" />
             <button className="btn btn-outline" disabled={lookBusy || !look.code || !look.phone}>{lookBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'ค้นหา'}</button>
           </form>

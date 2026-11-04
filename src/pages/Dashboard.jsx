@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle, Car, CheckCircle2, Clock, Inbox, CalendarDays, Send, ArrowRight, Hammer, User,
+  Car, Globe, Inbox, CalendarDays, Send, ArrowRight, Hammer, User,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
-import { GROUPS } from '../config/menu';
+import { GROUPS, QUBIT_PORTAL_URL } from '../config/menu';
 import { TodayCards } from '../components/DashboardToday';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import MenuLink from '../components/MenuLink';
@@ -31,6 +31,18 @@ const LEAVE_TYPE_TONE = {
   'อื่น ๆ': { bar: 'from-slate-400 to-slate-600', badge: 'bg-slate-100 text-slate-700' },
 };
 const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่น ๆ'];
+
+// ไอคอนเดี่ยว: ระบบงานโรงพยาบาลส่งเสริมสุขภาพตำบล Qubit Portal (ลิงก์ตั้งที่ config/menu.js → QUBIT_PORTAL_URL)
+function QubitCard() {
+  const inner = (
+    <>
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700"><Globe className="h-6 w-6" /></div>
+      <div><div className="font-bold leading-tight">Qubit Portal</div><div className="mt-1 text-sm text-slate-500">ระบบงานโรงพยาบาลส่งเสริมสุขภาพตำบล</div></div>
+    </>
+  );
+  if (!QUBIT_PORTAL_URL) return <div className="card flex items-center gap-3 p-4 opacity-60" title="ยังไม่ได้ตั้งลิงก์">{inner}</div>;
+  return <a href={QUBIT_PORTAL_URL} target="_blank" rel="noopener noreferrer" className="card flex items-center gap-3 p-4 transition hover:shadow-md focus-visible:outline focus-visible:outline-2">{inner}</a>;
+}
 
 function Stat({ icon: Icon, label, value, tone }) {
   return (
@@ -159,12 +171,10 @@ export default function Dashboard() {
             {m && (
               <>
                 <h2 className="mb-2 text-lg font-semibold">ภาพรวมงานธุรการ</h2>
-                <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+                <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
                   <Stat icon={Inbox} label="หนังสือรับทั้งหมด" value={m.inTotal} tone="bg-brand-100 text-brand-700" />
-                  <Stat icon={Clock} label="รอดำเนินการ" value={m.pending.length} tone="bg-amber-100 text-amber-700" />
-                  <Stat icon={AlertTriangle} label="เกินกำหนด" value={m.overdue.length} tone="bg-red-100 text-red-700" />
-                  <Stat icon={Clock} label="ใกล้ครบกำหนด (3 วัน)" value={m.near.length} tone="bg-orange-100 text-orange-700" />
                   <Stat icon={Send} label="หนังสือส่งทั้งหมด" value={m.outTotal} tone="bg-sky-100 text-sky-700" />
+                  <QubitCard />
                 </div>
               </>
             )}
@@ -223,22 +233,6 @@ export default function Dashboard() {
                     ))}
                   </div>
                   <div className="mt-2 flex gap-4 text-sm text-slate-600"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-brand-600" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-brand-300" />หนังสือส่ง</span></div>
-                </div>
-
-                <div className="card p-4">
-                  <h3 className="mb-3 flex items-center gap-2 font-semibold"><AlertTriangle className="h-5 w-5 text-red-600" /> แจ้งเตือนสำคัญ</h3>
-                  {m.overdue.length + m.near.length === 0 ? (
-                    <p className="flex items-center gap-2 py-6 text-emerald-700"><CheckCircle2 className="h-5 w-5" /> ไม่มีรายการเกินกำหนดหรือใกล้ครบกำหนด</p>
-                  ) : (
-                    <ul className="divide-y divide-slate-100">
-                      {[...m.overdue.map((x) => ({ x, red: true })), ...m.near.map((x) => ({ x, red: false }))].slice(0, 8).map(({ x, red }) => (
-                        <li key={x.id} className="flex cursor-pointer items-start gap-2 py-2 hover:bg-slate-50" onClick={() => nav(`/incoming?open=${x.id}`)}>
-                          <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${red ? 'bg-red-500' : 'bg-orange-400'}`} />
-                          <div className="min-w-0 flex-1"><div className="truncate font-medium">{x.receiveNo} · {x.subject}</div><div className="text-sm text-slate-500">{red ? 'เกินกำหนด' : 'ใกล้ครบกำหนด'} {fmtDate(x.dueDate)}</div></div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
 
                 {canSeeLeave && leaveMonth && (

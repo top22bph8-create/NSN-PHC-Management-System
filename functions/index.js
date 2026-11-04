@@ -669,16 +669,20 @@ async function thaiAvailability(cfg) {
 }
 const thaiPublicConfig = (c) => ({ services: c.services, notice: c.notice, providerName: c.providerName, providerTitle: c.providerTitle, phone: c.phone, bookingPhone: c.bookingPhone, lineOaId: c.lineOaId || '' });
 
-// เลขที่การจอง: NSM-THAI-(ลำดับ 4 หลัก)-(พ.ศ.) เช่น NSM-THAI-0001-2569 — รันเลขใหม่ทุกปี พ.ศ. (ปีปฏิทิน เวลาไทย) เก็บตัวนับที่ counters/thai-ปี
-const thaiYearBE = () => Number(bkkParts().date.slice(0, 4)) + 543;
-const thaiCodeText = (n, y) => `NSM-THAI-${String(n).padStart(4, '0')}-${y}`;
+// เลขที่การจอง: NSM-Thai-(ลำดับ) เช่น NSM-Thai-01, NSM-Thai-02, ... NSM-Thai-100 — รันต่อเนื่องไม่รีเซ็ตตามปี เก็บตัวนับที่ counters/thai-seq
+const thaiCodeText = (n) => `NSM-Thai-${String(n).padStart(2, '0')}`;
+// รับรหัสที่พิมพ์ตัวพิมพ์เล็ก/ใหญ่ปนกัน แล้วแปลงเป็นรูปแบบมาตรฐาน (รหัสแบบเก่า NSM-THAI-0001-2569 คืนค่าเดิมเป็นตัวพิมพ์ใหญ่)
+const thaiCanonCode = (v) => {
+  const t = String(v || '').trim().toUpperCase();
+  const m = t.match(/^NSM-THAI-(\d{1,6})$/);
+  return m ? thaiCodeText(Number(m[1])) : t;
+};
 // ต้องเรียก tx.get ตัวนับก่อนการเขียนใดๆ ในธุรกรรม — คืนฟังก์ชันที่ใช้ออกเลขและเขียนตัวนับ
 async function thaiReserveCode(tx) {
-  const y = thaiYearBE();
-  const cref = db.doc(`counters/thai-${y}`);
+  const cref = db.doc('counters/thai-seq');
   const cs = await tx.get(cref);
   const n = (cs.exists ? Number(cs.data().last) || 0 : 0) + 1;
-  return () => { tx.set(cref, { last: n, year: y }, { merge: true }); return thaiCodeText(n, y); };
+  return () => { tx.set(cref, { last: n }, { merge: true }); return thaiCodeText(n); };
 }
 const cleanText = (v, max) => String(v || '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const normPhone = (v) => String(v || '').replace(/\D/g, '');
@@ -724,7 +728,7 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
     const issue = await thaiReserveCode(tx);
     ref = db.collection('thaiBookings').doc();
     code = issue();
-    tx.set(ref, { code, date, time, timeEnd: slot.end, slotKey, service, name, phone, note, status: 'รอยืนยัน', source: 'online', createdAt: FieldValue.serverTimestamp() });
+    tx.set(ref, { code, date, time, timeEnd: slot.end, slotKey, service, name, phone, note, status: 'ยืนยันแล้ว', confirmedBy: 'ระบบ (จองอัตโนมัติ)', source: 'online', createdAt: FieldValue.serverTimestamp() });
   });
 
   // ส่งการ์ดเข้าไลน์กลุ่มแพทย์แผนไทยทันที และเก็บผลการส่งไว้ที่ใบจอง (notifyResult) เพื่อให้เจ้าหน้าที่เห็นสาเหตุถ้าไม่ถึงกลุ่ม
@@ -734,7 +738,7 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
     if (!enabled) notifyResult = 'ไม่ได้ส่ง: ปิดการแจ้งเตือนไลน์หลักอยู่';
     else if (!channelAccessToken) notifyResult = 'ไม่ได้ส่ง: ยังไม่ได้ตั้ง Channel Access Token';
     else if (!thaiTargetId) notifyResult = 'ไม่ได้ส่ง: ยังไม่ได้ตั้ง Target ID กลุ่มแพทย์แผนไทย';
-    else await pushLineOrThrow(channelAccessToken, thaiTargetId, [buildThaiBookingFlex(ref.id, { code, date, time, timeEnd: slot.end, service, name, phone, note })]);
+    else await pushLineOrThrow(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 มีผู้จองคิวแพทย์แผนไทย (แจ้งเพื่อทราบ)\nรหัส: ${code}\nวันที่: ${thaiDateShort(date)} เวลา ${time}-${slot.end} น.\nชื่อ: ${name}\nโทร: ${phone}\nบริการ: ${service}\nอาการ: ${note || '-'}` }]);
   } catch (e) { console.error('thaiBook: ส่งไลน์ไม่สำเร็จ', e.message); notifyResult = `ส่งไม่สำเร็จ: ${String(e.message).slice(0, 160)}`; }
   try { await ref.update({ notifyResult }); } catch (e) { /* ไม่กระทบการจอง */ }
   return { ok: true, code, date, time, timeEnd: slot.end, service, name };
@@ -750,7 +754,7 @@ exports.thaiNextCode = onCall({ cors: true }, async (request) => {
 
 // ผู้จองตรวจสอบ/ยกเลิกเอง ด้วยรหัสการจอง + เบอร์โทร
 async function findThaiBooking(code, phone) {
-  const c = String(code || '').trim().toUpperCase();
+  const c = thaiCanonCode(code);
   const p = normPhone(phone);
   if (!c || !p) throw new HttpsError('invalid-argument', 'กรุณากรอกรหัสการจองและเบอร์โทร');
   const snap = await db.collection('thaiBookings').where('code', '==', c).limit(5).get();
@@ -858,18 +862,19 @@ async function handleThaiPatientMessage(ev) {
   const src = ev.source || {};
   if (src.groupId || src.roomId || !src.userId) return; // เฉพาะแชทส่วนตัว 1:1
   if (!ev.message || ev.message.type !== 'text') return;
-  const m = String(ev.message.text || '').toUpperCase().match(/NSM-THAI-\d{4}-\d{4}|T\d{6}/);
+  const m = String(ev.message.text || '').toUpperCase().match(/NSM-THAI-\d{1,6}(?:-\d{4})?|T\d{6}/);
   if (!m) return;
+  const codeKey = thaiCanonCode(m[0]);
   const { channelAccessToken } = await getLineSettings();
   if (!channelAccessToken || !ev.replyToken) return;
-  const snap = await db.collection('thaiBookings').where('code', '==', m[0]).limit(1).get();
-  if (snap.empty) { await replyLine(channelAccessToken, ev.replyToken, `ไม่พบรหัสจอง ${m[0]} กรุณาตรวจสอบรหัสอีกครั้ง`); return; }
+  const snap = await db.collection('thaiBookings').where('code', '==', codeKey).limit(1).get();
+  if (snap.empty) { await replyLine(channelAccessToken, ev.replyToken, `ไม่พบรหัสจอง ${codeKey} กรุณาตรวจสอบรหัสอีกครั้ง`); return; }
   const doc = snap.docs[0]; const b = doc.data();
   if (b.lineUserId && b.lineUserId !== src.userId) { await replyLine(channelAccessToken, ev.replyToken, 'รหัสจองนี้ผูกกับไลน์อื่นแล้ว หากต้องการเปลี่ยนกรุณาโทรติดต่อคลินิก'); return; }
   await doc.ref.update({ lineUserId: src.userId });
   const msg = {
-    'รอยืนยัน': 'เจ้าหน้าที่กำลังตรวจสอบคิวของท่าน เมื่อยืนยันแล้วระบบจะแจ้งทางไลน์นี้ทันที',
-    'ยืนยันแล้ว': 'คิวของท่านได้รับการยืนยันแล้ว ✅',
+    'รอยืนยัน': 'ระบบบันทึกคิวของท่านแล้ว',
+    'ยืนยันแล้ว': 'คิวของท่านได้รับการบันทึกเรียบร้อยแล้ว ✅',
     'ยกเลิก': 'คิวนี้ถูกยกเลิกแล้ว',
   }[b.status] || `สถานะปัจจุบัน: ${b.status}`;
   await replyLine(channelAccessToken, ev.replyToken, `🌿 เชื่อมไลน์สำเร็จ\nรหัส ${b.code}\n${thaiDateShort(b.date)} เวลา ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} น.\nบริการ: ${b.service}\n\n${msg}`);
@@ -894,17 +899,15 @@ exports.onThaiBookingUpdated = onDocumentUpdated('thaiBookings/{id}', async (eve
   await pushLine(channelAccessToken, after.lineUserId, [{ type: 'text', text }]);
 });
 
-// สรุปคิววันนี้เข้าไลน์กลุ่มงานแพทย์แผนไทย เวลา 07:30 (ปิดไว้เป็นค่าเริ่มต้น เปิดที่หน้าตั้งค่าคลินิก — ใช้โควตาข้อความไลน์ 1 ข้อความ/วันที่มีคิว)
-exports.dailyThaiSummary = onSchedule({ schedule: '30 7 * * *', timeZone: 'Asia/Bangkok' }, async () => {
-  const cfg = await getThaiConfig();
-  if (!cfg.dailySummary) return;
+// สรุปคิววันนี้เข้าไลน์กลุ่มงานแพทย์แผนไทย เวลา 07:00 น. ทุกวัน (ส่งเฉพาะวันที่มีคิว — ใช้โควตาข้อความไลน์ 1 ข้อความ/วัน)
+exports.dailyThaiSummary = onSchedule({ schedule: '0 7 * * *', timeZone: 'Asia/Bangkok' }, async () => {
   const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
   if (!channelAccessToken || !thaiTargetId || !enabled) return;
   const today = bkkParts().date;
   const snap = await db.collection('thaiBookings').where('date', '==', today).get();
   const list = snap.docs.map((x) => x.data()).filter((b) => THAI_ACTIVE.includes(b.status)).sort((a, b) => a.time.localeCompare(b.time));
   if (!list.length) return;
-  await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 คิวแพทย์แผนไทยวันนี้ ${thaiDateShort(today)} (${list.length} คิว)\n` + list.map((b) => `${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} ${b.name} — ${b.service}`).join('\n') }]);
+  await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 สรุปคิวแพทย์แผนไทยวันนี้ ${thaiDateShort(today)} (${list.length} คิว)\n` + list.map((b, i) => `${i + 1}. ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} ${b.name} โทร ${b.phone} — ${b.service}`).join('\n') }]);
 });
 
 // ส่งแจ้งเตือนไลน์ซ้ำสำหรับใบลาที่มีอยู่แล้ว (Super Admin เท่านั้น) — ใช้กรณีตอนยื่นใบลาจริง (onLeaveCreated ด้านบน)

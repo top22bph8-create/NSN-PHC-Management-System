@@ -280,7 +280,7 @@ function SettingsTab({ cfg, writable, say, onSaved }) {
         </div>
         <div><label className={lbl}>รายการบริการ (1 บรรทัด = 1 บริการ)</label><textarea rows={6} className="input" value={servicesText} onChange={(e) => setServicesText(e.target.value)} /></div>
         <div><label className={lbl}>ประกาศบนหน้าจอง (ถ้ามี เช่น ปิดปรับปรุง/ข้อควรปฏิบัติ)</label><textarea rows={2} className="input" value={c.notice} onChange={set('notice')} /></div>
-        <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={!!c.dailySummary} onChange={set('dailySummary')} /><span>ส่งสรุปคิวของวันนี้เข้าไลน์กลุ่มแพทย์แผนไทยทุกเช้า 07:30 (ใช้โควตาไลน์ 1 ข้อความต่อวันที่มีคิว) — การแจ้งเตือนเมื่อมีผู้จอง/ยกเลิกส่งทันทีอยู่แล้ว</span></label>
+        <p className="text-sm text-slate-600">🔔 เมื่อมีผู้จอง ระบบแจ้งเข้าไลน์กลุ่มทันทีเพื่อทราบ (ไม่ต้องกดยืนยัน) และส่งสรุปคิวของวันนี้เข้ากลุ่มทุกเช้า 07:00 น. (เฉพาะวันที่มีคิว)</p>
       </section>
       {writable && <button type="button" className="btn btn-primary" onClick={save} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} บันทึกการตั้งค่า</button>}
     </fieldset>

@@ -72,6 +72,8 @@ export default function SettingsPage() {
       const targetChanged = !!lineTargetId.trim();
       const vehicleTargetChanged = !!lineVehicleTargetId.trim();
       const thaiTargetChanged = !!lineThaiTargetId.trim();
+      const typed = [lineTargetId, lineVehicleTargetId, lineThaiTargetId].map((x) => x.trim()).filter(Boolean);
+      if (new Set(typed).size !== typed.length) throw new Error('Target ID ของกลุ่มไลน์ซ้ำกัน — แต่ละกลุ่ม (กลุ่มหลัก / ใช้รถ / แพทย์แผนไทย) ต้องใช้รหัสคนละตัว');
       if (tokenChanged || targetChanged || vehicleTargetChanged || thaiTargetChanged) {
         await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim(), thaiTargetId: lineThaiTargetId.trim() });
         setLineToken(''); setLineTargetId(''); setLineVehicleTargetId(''); setLineThaiTargetId('');
@@ -191,7 +193,7 @@ export default function SettingsPage() {
                 <input id="lineToken" type="password" autoComplete="off" className="input" placeholder="วาง Channel access token ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไขค่าเดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง)</label>
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง) — กลุ่มหลัก: ใบลา/งานมอบหมาย/เงินยืม ฯลฯ</label>
                 <input id="lineTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
               </div>
               <p className="text-sm text-slate-600">

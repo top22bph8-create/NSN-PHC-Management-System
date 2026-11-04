@@ -19,6 +19,9 @@ export const REGISTRY_LINKS = [
 // ===== กลุ่มงานหลัก 11 กลุ่ม (ใช้ทั้งแดชบอร์ดกลางหน้า, หน้ากลุ่ม /group/:key และแถบเมนูซ้าย) =====
 // ready=false → ยังไม่เปิดใช้ แสดงเป็น "เร็วๆ นี้" ; module = สิทธิ์ใน src/lib/roles.js (ไม่ใส่ = ทุกบทบาทเห็น)
 const R = (key, desc) => { const r = REGISTRY_LINKS.find((x) => x.key === key); return { ...r, desc, ready: true, module: key }; };
+// ลิงก์ระบบงาน รพ.สต. Qubit Portal (แสดงเป็นไอคอนเดี่ยวคู่กับ "ภาพรวมงานธุรการ" ในแดชบอร์ด) — ใส่ URL จริงที่นี่
+export const QUBIT_PORTAL_URL = 'https://qubitco.online/portal';
+
 export const GROUPS = [
   {
     key: 'admin', title: 'งานธุรการ', emoji: '📋', icon: ClipboardList, tone: 'from-sky-500 to-blue-600', soft: 'bg-sky-50 text-sky-700',
