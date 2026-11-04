@@ -69,6 +69,8 @@ export default function SettingsPage() {
       await writeAudit({ action: 'settings', module: 'settings', docId: 'numbering', label: 'รูปแบบเลขทะเบียน', after: value });
       await saveLineMeta(lineMeta);
       const tokenChanged = !!lineToken.trim();
+      // Channel access token จริงของ LINE ยาวกว่า 100 ตัวอักษร — ถ้าสั้นกว่านี้มักเป็นค่าที่เบราว์เซอร์เติมให้เอง (เช่น จุด 11 ตัว) ห้ามบันทึกทับ
+      if (tokenChanged && lineToken.trim().length < 100) throw new Error('ช่อง Channel access token สั้นผิดปกติ (อาจเป็นค่าที่เบราว์เซอร์เติมให้เอง) — ลบช่องนี้ให้ว่างแล้วบันทึกใหม่ หรือวาง token ที่คัดลอกจาก LINE Developers ใหม่ทั้งหมด');
       const targetChanged = !!lineTargetId.trim();
       const vehicleTargetChanged = !!lineVehicleTargetId.trim();
       const thaiTargetChanged = !!lineThaiTargetId.trim();
@@ -190,11 +192,11 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">Channel access token</label>
-                <input id="lineToken" type="password" autoComplete="off" className="input" placeholder="วาง Channel access token ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไขค่าเดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
+                <input id="lineToken" name="lineToken-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="วาง Channel access token ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไขค่าเดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง) — กลุ่มหลัก: ใบลา/งานมอบหมาย/เงินยืม ฯลฯ</label>
-                <input id="lineTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
+                <input id="lineTargetId" name="lineTargetId-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
               </div>
               <p className="text-sm text-slate-600">
                 LINE ผู้อำนวยการ (สำหรับปุ่มอนุมัติ):{' '}
@@ -206,12 +208,12 @@ export default function SettingsPage() {
               </p>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineVehicleTargetId">Target ID ไลน์กลุ่ม "ขออนุญาตใช้รถ" (แยกจากกลุ่มหลักด้านบน)</label>
-                <input id="lineVehicleTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineVehicleTargetId} onChange={(e) => setLineVehicleTargetId(e.target.value)} />
+                <input id="lineVehicleTargetId" name="lineVehicleTargetId-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineVehicleTargetId} onChange={(e) => setLineVehicleTargetId(e.target.value)} />
                 <p className="mt-1 text-xs text-slate-500">คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการที่ตั้งไว้ด้านบน) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง</p>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineThaiTargetId">Target ID ไลน์กลุ่ม "งานแพทย์แผนไทย" (แจ้งเตือนการจองคิวออนไลน์)</label>
-                <input id="lineThaiTargetId" type="password" autoComplete="off" className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานแพทย์แผนไทย) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineThaiTargetId} onChange={(e) => setLineThaiTargetId(e.target.value)} />
+                <input id="lineThaiTargetId" name="lineThaiTargetId-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานแพทย์แผนไทย) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineThaiTargetId} onChange={(e) => setLineThaiTargetId(e.target.value)} />
                 <p className="mt-1 text-xs text-slate-500">เมื่อมีผู้จองหรือยกเลิกคิวแพทย์แผนไทย ระบบส่งข้อความเข้ากลุ่มนี้ (เชิญบอทเข้ากลุ่มแล้วพิมพ์ข้อความ 1 ครั้ง จะเห็น ID ในรายการด้านล่าง กด "ใช้เป็นกลุ่มแพทย์แผนไทย")</p>
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
@@ -274,6 +276,7 @@ export default function SettingsPage() {
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanBorrow} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanBorrow: e.target.checked } })} /> ยืมเงิน (ทะเบียนสัญญายืมเงิน)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanRepay} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanRepay: e.target.checked } })} /> ส่งใช้เงินยืม</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanOverdue} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanOverdue: e.target.checked } })} /> เงินยืมเกินกำหนดส่งใช้ (ทุกวัน 06:00 น.)</label>
+                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.unitDuty !== false} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, unitDuty: e.target.checked } })} /> เวรออกหน่วยปฐมพยาบาล/รับบริจาคโลหิต (แจ้งตอนบันทึก + 06:00 น. วันออกหน่วย)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.birthday} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, birthday: e.target.checked } })} /> 🎉 วันเกิดบุคลากร (ทุกวัน 06:00 น.)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.taxOverdueReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, taxOverdueReminder: e.target.checked } })} /> ภาษีหัก ณ ที่จ่ายค้างส่งสรรพากร (แจ้งเวลา 08:30 น. ของวันก่อนสิ้นเดือน 3 วันทำการ)</label>
                 <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.vehicleSubmit} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, vehicleSubmit: e.target.checked } })} /> 🚗 เมื่อมีคำขอใช้รถใหม่ (กลุ่มงานรถ)</label>

@@ -166,6 +166,15 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isActive();
     }
+    // เวรออกหน่วยปฐมพยาบาล/รับบริจาคโลหิต: รายชื่อ+คิว (unitRoster) และงานออกหน่วย (unitDuty) — เจ้าหน้าที่ที่ใช้งานอยู่ดู/สร้าง/แก้ไขได้
+    match /unitRoster/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    match /unitDuty/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /reg-loan/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

@@ -11,6 +11,7 @@ import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { GROUPS, QUBIT_PORTAL_URL } from '../config/menu';
 import { TodayCards } from '../components/DashboardToday';
+import DashboardUnitDuty from '../components/DashboardUnitDuty';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import MenuLink from '../components/MenuLink';
 import { getQuota, usage } from '../lib/leave';
@@ -163,6 +164,7 @@ export default function Dashboard() {
       {normalizeRole(profile.role) === 'super_admin' && <LineQuotaStatus />}
 
       <TodayCards />
+      <DashboardUnitDuty />
 
       {error ? <ErrorState message={error} />
         : !data && readable.length ? <Spinner />
@@ -219,25 +221,36 @@ export default function Dashboard() {
             <h2 className="mb-3 text-lg font-semibold">ภาพรวมและแจ้งเตือน</h2>
             {m && (
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="card p-4">
-                  <h3 className="mb-3 font-semibold">จำนวนเอกสารรายเดือน (ปีงบประมาณ {fy})</h3>
-                  <div className="flex h-40 items-end gap-1" role="img" aria-label="กราฟจำนวนหนังสือรับและส่งรายเดือน">
-                    {m.monthly.map((x) => (
-                      <div key={x.label} className="flex flex-1 flex-col items-center gap-1">
-                        <div className="flex h-32 w-full items-end justify-center gap-0.5">
-                          <div className="w-1/2 rounded-t bg-brand-600" style={{ height: `${(x.inc / maxBar) * 100}%` }} title={`รับ ${x.inc}`} />
-                          <div className="w-1/2 rounded-t bg-brand-300" style={{ height: `${(x.out / maxBar) * 100}%` }} title={`ส่ง ${x.out}`} />
-                        </div>
-                        <span className="text-[11px] text-slate-500">{x.label}</span>
-                      </div>
-                    ))}
+                <div className="card overflow-hidden">
+                  <div className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-cyan-500 px-4 py-2.5 text-white">
+                    <Inbox className="h-5 w-5" /><h3 className="flex-1 font-bold !text-white">จำนวนเอกสารรายเดือน (ปีงบประมาณ {fy})</h3>
+                    <span className="rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold">รับ {m.inTotal} · ส่ง {m.outTotal}</span>
                   </div>
-                  <div className="mt-2 flex gap-4 text-sm text-slate-600"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-brand-600" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-brand-300" />หนังสือส่ง</span></div>
+                  <div className="p-4">
+                    <div className="relative flex h-40 items-end gap-1 rounded-lg bg-gradient-to-b from-sky-50 to-white px-1 pt-2" role="img" aria-label="กราฟจำนวนหนังสือรับและส่งรายเดือน">
+                      {[25, 50, 75].map((g) => <div key={g} className="pointer-events-none absolute inset-x-0 border-t border-dashed border-sky-100" style={{ bottom: `${g * 0.8 + 20}%` }} />)}
+                      {m.monthly.every((x) => !x.inc && !x.out) && <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">ยังไม่มีหนังสือรับ/ส่งในปีงบประมาณนี้</div>}
+                      {m.monthly.map((x) => (
+                        <div key={x.label} className="flex flex-1 flex-col items-center gap-1">
+                          <div className="flex h-32 w-full items-end justify-center gap-0.5">
+                            <div className="w-1/2 rounded-t bg-gradient-to-t from-sky-700 to-sky-400" style={{ height: `${(x.inc / maxBar) * 100}%` }} title={`รับ ${x.inc}`} />
+                            <div className="w-1/2 rounded-t bg-gradient-to-t from-fuchsia-600 to-pink-400" style={{ height: `${(x.out / maxBar) * 100}%` }} title={`ส่ง ${x.out}`} />
+                          </div>
+                          <span className="text-[11px] text-slate-500">{x.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-4 text-sm text-slate-600"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-sky-500" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-pink-500" />หนังสือส่ง</span></div>
+                  </div>
                 </div>
 
                 {canSeeLeave && leaveMonth && (
-                  <div className="card p-4">
-                    <h3 className="mb-3 flex items-center gap-2 font-semibold"><CalendarDays className="h-5 w-5 text-brand-700" /> คนลาเดือน{leaveMonth.monthLabel}</h3>
+                  <div className="card overflow-hidden">
+                    <div className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-white">
+                      <CalendarDays className="h-5 w-5" /><h3 className="flex-1 font-bold !text-white">คนลาเดือน{leaveMonth.monthLabel}</h3>
+                      <span className="rounded-full bg-white/25 px-2.5 py-0.5 text-sm font-bold">{leaveMonth.onLeave.length}</span>
+                    </div>
+                    <div className="p-4">
                     {leaveMonth.onLeave.length === 0 ? (
                       <p className="py-6 text-center text-slate-400">ไม่มีใครลาในเดือนนี้</p>
                     ) : (
@@ -251,30 +264,31 @@ export default function Dashboard() {
                         ))}
                       </ul>
                     )}
+                    </div>
                   </div>
                 )}
 
                 {canSeeLeave && leaveMonth && leaveQuota && (
-                  <div className="card p-4">
-                    <h3 className="mb-3 flex items-center justify-between font-semibold">
-                      <span className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-brand-700" /> วันลาคงเหลือของฉัน (ปีงบ {fy})</span>
-                      <Link to="/leave" className="text-sm font-normal text-brand-700 hover:underline">ดูทั้งหมด</Link>
-                    </h3>
-                    <div className="space-y-2.5">
+                  <div className="card overflow-hidden">
+                    <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 px-4 py-2.5 text-white">
+                      <CalendarDays className="h-5 w-5" /><h3 className="flex-1 font-bold !text-white">วันลาคงเหลือของฉัน (ปีงบ {fy})</h3>
+                      <Link to="/leave" className="text-xs underline opacity-90 hover:opacity-100">ดูทั้งหมด</Link>
+                    </div>
+                    <div className="space-y-3 p-4">
                       {Object.entries(leaveQuota).map(([type, q]) => {
                         const u = leaveMonth.used[type] || 0;
                         const p = leaveMonth.pending[type] || 0;
                         const isVacation = type === 'ลาพักผ่อน';
                         const accrued = isVacation ? (Number(profile.vacationCarryOver) || 0) : 0;
                         const remain = Math.max(0, q - u) + accrued;
-                        const pct = q ? Math.min(100, ((u + p) / q) * 100) : 0;
+                        const pct = q ? Math.max(0, Math.min(100, ((q - u - p) / q) * 100)) : 0; // แถบ = สัดส่วนวันที่ยังเหลือ (เต็ม = ยังไม่ได้ใช้เลย)
                         return (
                           <div key={type}>
                             <div className="mb-0.5 flex items-center justify-between text-sm">
                               <span className="font-medium text-slate-700">{type}</span>
                               <span className="font-bold text-slate-800">{remain} <span className="font-normal text-slate-400">/ {q} วัน{isVacation && accrued ? `+${accrued}สะสม` : ''}</span></span>
                             </div>
-                            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-2.5 rounded-full bg-gradient-to-r ${leaveTone(type).bar}`} style={{ width: `${pct}%` }} /></div>
+                            <div className="h-3 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200"><div className={`h-3 rounded-full bg-gradient-to-r ${leaveTone(type).bar}`} style={{ width: `${pct}%` }} /></div>
                           </div>
                         );
                       })}

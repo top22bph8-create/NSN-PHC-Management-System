@@ -5,6 +5,7 @@ import { can, canRead } from './lib/roles';
 import { REGISTRIES } from './config/registries';
 import { PERSON_REGISTRIES } from './config/personRegistries';
 import PersonRegistry from './pages/PersonRegistry';
+import UnitDuty from './pages/UnitDuty';
 import ThaiBooking from './pages/ThaiBooking';
 import ThaiBookingPublic from './pages/ThaiBookingPublic';
 import PrintThaiQr from './pages/PrintThaiQr';
@@ -193,6 +194,8 @@ function Shell() {
           {Object.values(PERSON_REGISTRIES).map((cfg) => (
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><PersonRegistry cfg={cfg} /></Guard>} />
           ))}
+          <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
+          <Route path="unit-blood" element={<Guard module="unit-duty"><UnitDuty kind="blood" /></Guard>} />
           <Route path="thai-booking" element={<Guard module="thai-booking"><ThaiBooking /></Guard>} />
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />
           <Route path="leave" element={<Guard module="leave"><Leave /></Guard>} />

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, CheckCircle2, Loader2, Phone, Search, XCircle } from 'lucide-react';
 import Logo from '../components/Logo';
 import { ORG_SHORT, ORG_UNDER } from '../config/brand';
-import { THAI_CLINIC, thaiBook, thaiLineLink, thaiCancel, thaiLookup, thaiPhones, thaiPublicInfo, thaiTimeRange } from '../lib/thaiClinic';
+import { THAI_CLINIC, thaiBook, thaiCancel, thaiLookup, thaiPhones, thaiPublicInfo, thaiTimeRange } from '../lib/thaiClinic';
 
 const WD = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
 const MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -96,13 +96,6 @@ export default function ThaiBookingPublic() {
               <div>บริการ: {done.service}</div>
               <div>ชื่อ: {done.name}</div>
             </div>
-            {cfg.lineOaId ? (
-              <div className="mx-auto mt-4 max-w-xs rounded-xl bg-green-50 p-3 text-sm ring-1 ring-green-200">
-                <p className="font-semibold text-green-800">รับข้อความยืนยันคิวทางไลน์</p>
-                <p className="text-xs text-slate-600">กดปุ่มด้านล่าง แล้วกดส่งรหัสจอง เพื่อรับข้อความยืนยันคิวและการเปลี่ยนแปลงทางไลน์</p>
-                <a className="btn mt-2 w-full !bg-[#06C755] text-white" href={thaiLineLink(cfg.lineOaId, done.code)} target="_blank" rel="noreferrer">💬 รับข้อความยืนยันทางไลน์</a>
-              </div>
-            ) : null}
             <p className="mt-3 text-xs text-slate-500">ถ้าติดธุระมาไม่ได้ กรุณายกเลิกด้วยรหัสการจอง + เบอร์โทร (ด้านล่างของหน้านี้) หรือโทร {thaiPhones(cfg).map((x) => x[1]).join(' / ')}</p>
             <button className="btn btn-outline mt-4" onClick={() => { setDone(null); setService(''); setDate(''); setTime(''); setF({ name: '', phone: '', note: '', hp: '' }); setAgree(false); load(); }}>จองคิวเพิ่ม</button>
           </section>

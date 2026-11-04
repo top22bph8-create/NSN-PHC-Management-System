@@ -52,6 +52,7 @@ export const ACCESS = {
   'reg-elderly': { read: ALL, write: ALL },
   'reg-disabled': { read: ALL, write: ALL },
   'reg-mental': { read: ALL, write: ALL },
+  'unit-duty': { read: ALL, write: ALL },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },
   audit: { read: ['super_admin'], write: [] },

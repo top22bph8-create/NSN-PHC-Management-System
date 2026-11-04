@@ -33,7 +33,7 @@ const printVehicleUrl = (id) => `${HOSTING_URL}/#/print-vehicle/${id}`;
 // ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
 // เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
 // ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
-const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true, vehicleSubmit: true, vehicleDecide: true };
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true, vehicleSubmit: true, vehicleDecide: true, unitDuty: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -908,6 +908,33 @@ exports.dailyThaiSummary = onSchedule({ schedule: '0 7 * * *', timeZone: 'Asia/B
   const list = snap.docs.map((x) => x.data()).filter((b) => THAI_ACTIVE.includes(b.status)).sort((a, b) => a.time.localeCompare(b.time));
   if (!list.length) return;
   await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 สรุปคิวแพทย์แผนไทยวันนี้ ${thaiDateShort(today)} (${list.length} คิว)\n` + list.map((b, i) => `${i + 1}. ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} ${b.name} โทร ${b.phone} — ${b.service}`).join('\n') }]);
+});
+
+// ===== เวรออกหน่วยปฐมพยาบาล / รับบริจาคโลหิต (unitDuty) — แจ้งไลน์กลุ่มหลัก =====
+const UNIT_TITLE = { firstaid: '🚑 เวรออกหน่วยปฐมพยาบาล', blood: '🩸 เวรออกรับบริจาคโลหิต' };
+function unitDutyText(head, e) {
+  const mem = (e.members || []).map((m, i) => `${i + 1}. ${m.name}${m.position ? ` (${m.position})` : ''}`).join('\n');
+  return `${head}\n${UNIT_TITLE[e.kind] || 'เวรออกหน่วย'}\nวันที่: ${thaiDateShort(e.date)}${e.time ? ` เวลา ${e.time} น.` : ''}\nสถานที่/กิจกรรม: ${e.place}${e.orderNo ? `\nคำสั่ง/หนังสือที่: ${e.orderNo}` : ''}\n${e.kind === 'firstaid' ? `${e.unitLabel}` : 'ผู้ปฏิบัติงาน'}:\n${mem}${e.note ? `\nหมายเหตุ: ${e.note}` : ''}`;
+}
+exports.onUnitDutyCreated = onDocumentCreated('unitDuty/{id}', async (event) => {
+  const e = event.data.data();
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || events.unitDuty === false) return;
+  await sendLine(channelAccessToken, targetId, unitDutyText('📌 มีการบันทึกงานออกหน่วยใหม่', e));
+});
+exports.onUnitDutyUpdated = onDocumentUpdated('unitDuty/{id}', async (event) => {
+  const b = event.data.before.data(); const a = event.data.after.data();
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || events.unitDuty === false) return;
+  if (b.status !== a.status && a.status === 'ยกเลิก') await sendLine(channelAccessToken, targetId, unitDutyText('🚫 ยกเลิกงานออกหน่วย', a));
+});
+// เช้าวันออกหน่วย 06:00 น. แจ้งซ้ำเฉพาะวันที่มีงาน
+exports.dailyUnitDutyReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled || events.unitDuty === false) return;
+  const snap = await db.collection('unitDuty').where('date', '==', bkkParts().date).get();
+  const list = snap.docs.map((d) => d.data()).filter((e) => e.status === 'นัดหมาย').sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+  for (const e of list) await sendLine(channelAccessToken, targetId, unitDutyText('⏰ วันนี้ออกหน่วย (แจ้งตอนเช้า)', e));
 });
 
 // ส่งแจ้งเตือนไลน์ซ้ำสำหรับใบลาที่มีอยู่แล้ว (Super Admin เท่านั้น) — ใช้กรณีตอนยื่นใบลาจริง (onLeaveCreated ด้านบน)
