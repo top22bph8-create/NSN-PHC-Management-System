@@ -62,6 +62,65 @@ async function collect(conn, from, to) {
 }
 
 const conn = await mysql.createConnection({ ...dbConfig(), charset: 'utf8mb4' });
+if (args.includes('--explore')) {
+  // โหมดสำรวจโครงสร้าง (ไม่ส่งข้อมูลผู้ป่วย): ชื่อคอลัมน์ตาราง person และรหัสสิทธิ เพื่อออกแบบรายงานทะเบียนสิทธิ
+  const [cols] = await conn.query('show columns from person');
+  console.log('คอลัมน์ person:', cols.map((c) => c.Field).join(', '));
+  const [rights] = await conn.query('select c.rightcode, c.rightname, c.rightgroup from cright c order by c.rightgroup, c.rightcode');
+  console.log('\nรหัสสิทธิ (cright):'); rights.forEach((r) => console.log(` ${r.rightcode} | ${r.rightgroup} | ${r.rightname}`));
+  const [grp] = await conn.query('select * from crightgroup'); console.log('\nกลุ่มสิทธิ:', JSON.stringify(grp));
+  const [tl] = await conn.query('select typelive, count(*) n from person group by typelive'); console.log('\nประเภทการอยู่อาศัย person.typelive:', JSON.stringify(tl));
+  for (const col of ['hosmain', 'hossub']) { try { const [r] = await conn.query(`select ${col} h, count(*) n from person where rightcode is not null group by ${col} order by n desc limit 6`); console.log(`\nสถานพยาบาลหลัก (${col}) ที่พบมากสุด:`, JSON.stringify(r)); } catch (e) { console.log(`\nไม่มีคอลัมน์ ${col}:`, e.code); } }
+  await conn.end(); process.exit(0);
+}
+if (args.includes('--rights')) {
+  // โหมดทะเบียนสิทธิ UC/Wel: ตรง = อยู่ในเขต (ประเภทอาศัย 1-4) และขึ้นทะเบียนที่ รพ.สต.เรา / ไม่ตรง = อยู่ในเขตแต่ขึ้นทะเบียนที่อื่น / B = นอกเขตแต่มาขึ้นทะเบียนกับเรา
+  const PCU = String(cfg.pcucode || '05449');
+  const [pc] = await conn.query('show columns from person'); const has = (c) => pc.some((x) => x.Field === c);
+  const alive = has('dischar') ? "and (p.dischar is null or p.dischar in ('9','','0'))" : '';
+  const rows = await conn.query(`select p.pid, t.titlename, p.fname, p.lname, p.birth, p.typelive, p.hossub, h.hosname, c.rightgroup, c.rightname, p.dateexpire,
+      hs.hno, hs.villcode, concat(ifnull(hs.hno,''), ' ม.', cast(substr(hs.villcode,7,2) as unsigned)) addr
+    from person p
+    left join ctitle t on t.titlecode = p.prename
+    left join cright c on c.rightcode = p.rightcode
+    left join chospital h on h.hoscode = p.hossub
+    left join house hs on hs.pcucode = p.pcucodeperson and hs.hcode = p.hcode
+    where not exists (select 1 from persondeath d where d.pid = p.pid and d.pcucodeperson = p.pcucodeperson) ${alive}`).then((r) => r[0]);
+  await conn.end();
+  const today = new Date(); const age = (b) => { if (!b) return ''; const d = new Date(b); return isNaN(d) ? '' : Math.floor((today - d) / 31557600000); };
+  const nm = (r) => `${r.titlename || ''}${r.fname || ''} ${r.lname || ''}`.trim();
+  const cats = { A: [], B: [], C: [], RUC: [], ROFC: [], RSSS: [], RLGO: [], RNRD: [], ROTH: [], RNON: [] }; const RK = { 1: 'ROFC', 2: 'RSSS', 7: 'RLGO', 5: 'RNRD' }; const sum = { reg: {}, regUcWel: [0, 0], pcu: PCU, inAreaNoUcWel: 0, expired: 0, hosC: {}, byType: {} };
+  for (const r of rows) {
+    const g = String(r.rightgroup || ''); const uc = g === '3' || g === '4';
+    const inArea = r.villcode && !String(r.villcode).endsWith('00'); const tl = String(r.typelive || '');
+    const here = String(r.hossub || '').trim() === PCU; const t14 = ['1', '2', '3', '4'].includes(tl);
+    if (tl === '1' || tl === '3') { // ประชากรตามทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามประเภทสิทธิ; สิทธิหมดอายุนับเป็นไร้สิทธิ
+      const key = !g || (r.dateexpire && new Date(r.dateexpire) < today) ? 'RNON' : uc ? 'RUC' : (RK[g] || 'ROTH');
+      cats[key].push([r.pid, nm(r), age(r.birth), (r.addr || '').trim(), tl, r.rightname || 'ไม่มีสิทธิ', r.hosname || (r.hossub ? `รหัส ${r.hossub}` : 'ไม่ระบุ'), g]);
+      sum.reg[key] = (sum.reg[key] || 0) + 1; if (key === 'RUC') sum.regUcWel[g === '3' ? 0 : 1]++;
+    }
+    if (inArea && t14 && !uc) { sum.inAreaNoUcWel++; continue; }
+    if (!uc) continue;
+    if (r.dateexpire && new Date(r.dateexpire) < today) { sum.expired++; continue; }
+    const row = [r.pid, nm(r), age(r.birth), (r.addr || '').trim(), tl, r.rightname || '', r.hosname || (r.hossub ? `รหัส ${r.hossub}` : 'ไม่ระบุ'), g];
+    const bt = (sum.byType[tl] ||= { A: [0, 0], C: [0, 0] }); const gi = g === '3' ? 0 : 1;
+    if (inArea && t14 && here) { cats.A.push(row); bt.A[gi]++; }
+    else if (inArea && t14) { cats.C.push(row); bt.C[gi]++; sum.hosC[row[6]] = (sum.hosC[row[6]] || 0) + 1; }
+    else if (!inArea && here) cats.B.push(row);
+  }
+  sum.counts = { A: cats.A.length, B: cats.B.length, C: cats.C.length };
+  sum.hosC = Object.fromEntries(Object.entries(sum.hosC).sort((a, b) => b[1] - a[1]).slice(0, 20));
+  sum.asOf = iso(today);
+  console.log(`ตรง(A)=${sum.counts.A}  นอกเขตมาขึ้นกับเรา(B)=${sum.counts.B}  ไม่ตรง(C)=${sum.counts.C}  ในเขตไม่มี UC/Wel=${sum.inAreaNoUcWel}  หมดอายุ=${sum.expired}`);
+  console.log('ประชากรตามทะเบียนราษฎร์ แยกสิทธิ:', JSON.stringify(sum.reg), ' UC/Wel =', sum.regUcWel.join('/'));
+  if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); process.exit(0); }
+  const chunks = []; for (const [cat, list] of Object.entries(cats)) for (let i = 0; i < list.length || (i === 0 && !list.length); i += 1500) { chunks.push({ cat, idx: i / 1500, rows: list.slice(i, i + 1500) }); if (!list.length) break; }
+  const url = cfg.rightsEndpoint || String(cfg.endpoint).replace(/ingestservicestats/i, 'ingestrightsregistry');
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ summary: sum, chunks }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
+  console.log(`ส่งสำเร็จ ${body.chunks} ชุด`); process.exit(0);
+}
 let from; let to = iso(new Date());
 if (argv('--check')) { from = to = argv('--check'); }
 else if (argv('--from')) from = argv('--from');

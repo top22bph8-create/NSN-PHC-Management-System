@@ -1236,3 +1236,28 @@ exports.ingestServiceStats = onRequest({ cors: false, memory: '256MiB' }, async 
     res.json({ ok: true, saved: n });
   } catch (e) { console.error('ingestServiceStats', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
 });
+
+// ===== ทะเบียนสิทธิ UC/Wel ตรง-ไม่ตรง: สคริปต์ที่เครื่อง JHCIS ส่งสรุป + รายชื่อ (เฉพาะชื่อ/อายุ/ที่อยู่/สถานพยาบาล ไม่มีเลขบัตร) -> rightsRegistry/* (อ่านได้เฉพาะผู้ที่ล็อกอิน) =====
+exports.ingestRightsRegistry = onRequest({ cors: false, memory: '512MiB', timeoutSeconds: 300 }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
+  try {
+    const key = String(req.get('x-api-key') || '');
+    const meta = await db.doc('settings/statsIngest').get();
+    const want = meta.exists ? meta.data().keyHash : '';
+    if (!want || key.length < 20 || require('crypto').createHash('sha256').update(key).digest('hex') !== want) { res.status(401).json({ ok: false, error: 'คีย์ไม่ถูกต้อง' }); return; }
+    const body = req.body || {};
+    const chunks = Array.isArray(body.chunks) ? body.chunks : [];
+    if (!body.summary || typeof body.summary !== 'object' || chunks.length > 200) { res.status(400).json({ ok: false, error: 'ข้อมูลไม่ถูกต้อง' }); return; }
+    const keep = new Set(['summary']);
+    for (const c of chunks) {
+      const cat = String(c.cat || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 8); const idx = Number(c.idx) || 0;
+      if (!cat || !Array.isArray(c.rows) || c.rows.length > 2000) continue;
+      const id = `${cat}_${idx}`; keep.add(id);
+      await db.doc(`rightsRegistry/${id}`).set({ cat, idx, rows: c.rows.map((r) => (Array.isArray(r) ? r.slice(0, 10).map((x) => String(x == null ? '' : x).slice(0, 120)) : [])), updatedAt: FieldValue.serverTimestamp() });
+    }
+    await db.doc('rightsRegistry/summary').set({ ...body.summary, updatedAt: FieldValue.serverTimestamp() });
+    const old = await db.collection('rightsRegistry').listDocuments();
+    await Promise.all(old.filter((d) => !keep.has(d.id)).map((d) => d.delete()));
+    res.json({ ok: true, chunks: chunks.length });
+  } catch (e) { console.error('ingestRightsRegistry', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});
