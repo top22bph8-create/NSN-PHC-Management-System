@@ -66,8 +66,26 @@ function AddBookingModal({ date, cfg, existing, onClose, say, user }) {
   );
 }
 
-function QueueTab({ cfg, writable, say, profileEmail }) {
+const OUT_REASONS = ['ติดให้บริการนอกสถานที่', 'ติดประชุม/อบรม', 'ติดภารกิจอื่น'];
+function QueueTab({ cfg, writable, say, profileEmail, onCfg }) {
   const [date, setDate] = useState(todayStr());
+  const [outOpen, setOutOpen] = useState(false);
+  const [outReason, setOutReason] = useState(OUT_REASONS[0]);
+  const [outBusy, setOutBusy] = useState(false);
+  const outDates = cfg.outDates || [];
+  const outToday = outDates.find((x) => x.date === date);
+  const saveOut = async (list, label) => {
+    setOutBusy(true);
+    try {
+      const sorted = list.sort((a, b) => a.date.localeCompare(b.date));
+      await saveThaiConfig({ outDates: sorted });
+      onCfg({ ...cfg, outDates: sorted });
+      await writeAudit({ action: 'settings', module: 'thai-booking', label });
+      say({ type: 'ok', text: label }); setOutOpen(false);
+    } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setOutBusy(false); }
+  };
+  const closeDay = () => saveOut([...outDates.filter((x) => x.date !== date), { date, reason: outReason.trim() || OUT_REASONS[0] }], `งดรับนัดวันที่ ${fmtDate(date)} (${outReason.trim() || OUT_REASONS[0]})`);
+  const openDay = (d) => saveOut(outDates.filter((x) => x.date !== d), `เปิดรับนัดวันที่ ${fmtDate(d)} อีกครั้ง`);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [statusF, setStatusF] = useState('all');
@@ -122,8 +140,30 @@ function QueueTab({ cfg, writable, say, profileEmail }) {
         <select className="input !w-auto" value={statusF} onChange={(e) => setStatusF(e.target.value)} aria-label="สถานะ">
           <option value="all">สถานะ: ทั้งหมด</option>{THAI_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        {writable && <button className="btn btn-primary ml-auto" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> เพิ่มคิว</button>}
+        {writable && !outToday && date >= todayStr() && <button className="btn btn-outline ml-auto border-rose-300 text-rose-700" onClick={() => setOutOpen((v) => !v)}>🚫 งดรับนัดวันนี้ที่เลือก</button>}
+        {writable && <button className={`btn btn-primary ${outToday || date < todayStr() ? 'ml-auto' : ''}`} onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> เพิ่มคิว</button>}
       </div>
+      {outToday && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 p-3 text-rose-800">
+          <b>🚫 งดรับนัดวันที่ {fmtDate(date)}</b><span>เนื่องจาก{String(outToday.reason || OUT_REASONS[0]).replace(/^เนื่องจาก/, '')}</span>
+          {writable && <button className="btn btn-outline ml-auto !py-1" disabled={outBusy} onClick={() => openDay(date)}>เปิดรับนัดวันนี้อีกครั้ง</button>}
+        </div>
+      )}
+      {outOpen && !outToday && (
+        <div className="mb-3 space-y-2 rounded-xl border border-rose-200 bg-white p-3">
+          <p className="font-semibold text-rose-800">งดรับนัดวันที่ {fmtDate(date)}</p>
+          <p className="text-sm text-slate-500">หน้าจองของประชาชนจะไม่แสดงวันนี้ให้เลือก และขึ้นประกาศ "งดรับนัด เนื่องจาก…"</p>
+          {active > 0 && <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">⚠️ วันนี้มีคิวที่จองไว้แล้ว {active} คิว ระบบไม่ยกเลิกให้อัตโนมัติ กรุณาโทรแจ้งผู้จองและเปลี่ยนสถานะเป็น "ยกเลิก"</p>}
+          <div className="flex flex-wrap gap-2">{OUT_REASONS.map((r) => <button type="button" key={r} onClick={() => setOutReason(r)} className={`rounded-full px-3 py-1 text-sm ${outReason === r ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-800 ring-1 ring-rose-200'}`}>{r}</button>)}</div>
+          <input className="input" value={outReason} onChange={(e) => setOutReason(e.target.value)} maxLength={80} aria-label="เหตุผลที่งดรับนัด" />
+          <div className="flex gap-2"><button className="btn btn-primary !bg-rose-600" disabled={outBusy} onClick={closeDay}>{outBusy && <Loader2 className="h-4 w-4 animate-spin" />} ยืนยันงดรับนัด</button><button className="btn btn-outline" onClick={() => setOutOpen(false)}>ยกเลิก</button></div>
+        </div>
+      )}
+      {outDates.filter((x) => x.date >= todayStr()).length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-sm"><span className="text-slate-500">วันที่งดรับนัด:</span>
+          {outDates.filter((x) => x.date >= todayStr()).map((x) => <button key={x.date} onClick={() => setDate(x.date)} title={x.reason} className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-800 ring-1 ring-rose-200">🚫 {fmtDate(x.date)}</button>)}
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap gap-1.5 text-sm">
         {Array.from({ length: 8 }, (_, i) => addDays(todayStr(), i)).map((d) => (
           <button key={d} onClick={() => setDate(d)} className={`rounded-full px-3 py-1 font-medium ring-1 ${byDay[d] ? thaiLoadClass(byDay[d]) : 'bg-white text-slate-600 ring-slate-200 hover:bg-emerald-50'} ${d === date ? 'outline outline-2 outline-offset-2 outline-slate-800' : ''}`}>
@@ -205,10 +245,11 @@ function SettingsTab({ cfg, writable, say, onSaved }) {
     if (!slots.length) return say({ type: 'error', text: 'ช่วงเวลาที่ตั้งไม่มีคิวให้จองเลย ตรวจเวลาเปิด-ปิด/ช่วงพัก' });
     setBusy(true);
     try {
-      const out = { ...c, services, closedDates: [...new Set(c.closedDates)].sort() };
+      const { outDates: _o, ...rest } = c; // วันงดรับนัดจัดการที่แท็บรายการคิว ไม่เขียนทับจากฟอร์มนี้
+      const out = { ...rest, services, closedDates: [...new Set(c.closedDates)].sort() };
       await saveThaiConfig(out);
       await writeAudit({ action: 'settings', module: 'thai-booking', label: 'ตั้งค่าคลินิกแพทย์แผนไทย' });
-      onSaved(out); say({ type: 'ok', text: 'บันทึกการตั้งค่าแล้ว (หน้าจองของประชาชนอัปเดตทันที)' });
+      onSaved({ ...out, outDates: cfg.outDates || [] }); say({ type: 'ok', text: 'บันทึกการตั้งค่าแล้ว (หน้าจองของประชาชนอัปเดตทันที)' });
     } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
   };
   const importHolidays = async () => {
@@ -336,7 +377,7 @@ export default function ThaiBooking() {
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === k ? 'bg-emerald-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-emerald-50'}`}>{l}</button>
         ))}
       </div>
-      {!cfg ? <Spinner /> : tab === 'queue' ? <QueueTab cfg={cfg} writable={writable} say={say} profileEmail={profile.email} />
+      {!cfg ? <Spinner /> : tab === 'queue' ? <QueueTab cfg={cfg} writable={writable} say={say} profileEmail={profile.email} onCfg={setCfg} />
         : tab === 'report' ? <ReportTab cfg={cfg} />
         : tab === 'settings' ? <SettingsTab cfg={cfg} writable={writable} say={say} onSaved={setCfg} /> : <QrTab cfg={cfg} />}
       <Toast toast={toast} onClose={() => setToast(null)} />

@@ -27,7 +27,7 @@ export const THAI_DEFAULT_CONFIG = {
   start: '08:30', end: '15:30', slotMinutes: 30, capacity: 1,
   lunchStart: '12:00', lunchEnd: '13:00',
   maxAdvanceDays: 30, minLeadMinutes: 60, maxActivePerPhone: 2,
-  closedDates: [], closeOnHolidays: true,
+  closedDates: [], outDates: [], closeOnHolidays: true,
   services: ['นวดไทยเพื่อการรักษา', 'ประคบสมุนไพร', 'อบไอน้ำสมุนไพร', 'ทับหม้อเกลือ', 'ตรวจรักษา/ให้คำปรึกษาแพทย์แผนไทย', 'อื่นๆ'],
   notice: '', dailySummary: false, lineOaId: '',
   ...THAI_CLINIC,

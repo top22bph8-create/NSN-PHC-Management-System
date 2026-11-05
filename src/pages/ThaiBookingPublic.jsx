@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, CheckCircle2, Loader2, Phone, Search, XCircle } from 'lucide-react';
 import Logo from '../components/Logo';
+import { fmtDate } from '../lib/thai';
 import { ORG_SHORT, ORG_UNDER } from '../config/brand';
 import { THAI_CLINIC, thaiBook, thaiCancel, thaiLookup, thaiPhones, thaiPublicInfo, thaiTimeRange } from '../lib/thaiClinic';
 
@@ -113,6 +114,13 @@ export default function ThaiBookingPublic() {
           </section>
         ) : (
           <form onSubmit={submit} className="space-y-4">
+            {(info.closures || []).length > 0 && (
+              <div className="space-y-1 rounded-xl bg-rose-50 p-3 text-sm text-rose-900 ring-1 ring-rose-200" role="alert">
+                {info.closures.map((x) => (
+                  <p key={x.date}>🚫 <b>{x.date === info.today ? 'งดรับนัดวันนี้' : `งดรับนัดวันที่ ${fmtDate(x.date)}`}</b> เนื่องจาก{String(x.reason).replace(/^เนื่องจาก/, '')}</p>
+                ))}
+              </div>
+            )}
             {cfg.notice && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">📢 {cfg.notice}</p>}
 
             <section className="rounded-2xl bg-white p-4 shadow-lg">

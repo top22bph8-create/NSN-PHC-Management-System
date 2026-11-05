@@ -600,6 +600,7 @@ const THAI_DEFAULT = {
   lunchStart: '12:00', lunchEnd: '13:00',
   maxAdvanceDays: 30, minLeadMinutes: 60, maxActivePerPhone: 2,
   closedDates: [],
+  outDates: [], // งดรับนัดรายวัน [{date, reason}] เช่น ติดให้บริการนอกสถานที่ (ตั้งจากหน้าเจ้าหน้าที่ แท็บรายการคิว)
   services: ['นวดไทยเพื่อการรักษา', 'ประคบสมุนไพร', 'อบไอน้ำสมุนไพร', 'ทับหม้อเกลือ', 'ตรวจรักษา/ให้คำปรึกษาแพทย์แผนไทย', 'อื่นๆ'],
   notice: '', dailySummary: false,
   providerName: 'พท.อาระยา ใจอุ่น', providerTitle: 'แพทย์แผนไทย', phone: '042-704651', bookingPhone: '080-481-0290',
@@ -639,6 +640,7 @@ function thaiSlotTimes(cfg) {
 }
 async function thaiClosedSet(cfg) {
   const set = new Set(cfg.closedDates || []);
+  (cfg.outDates || []).forEach((x) => x && x.date && set.add(x.date));
   try {
     const h = await db.doc('settings/holidays').get();
     if (h.exists && cfg.closeOnHolidays !== false && Array.isArray(h.data().list)) h.data().list.forEach((x) => x && x.date && set.add(x.date));
@@ -689,8 +691,11 @@ const normPhone = (v) => String(v || '').replace(/\D/g, '');
 
 exports.thaiPublicInfo = onCall({ cors: true }, async () => {
   const cfg = await getThaiConfig();
-  if (!cfg.enabled) return { enabled: false, config: thaiPublicConfig(cfg), days: [] };
-  return { enabled: true, config: thaiPublicConfig(cfg), days: await thaiAvailability(cfg) };
+  const today = bkkParts().date;
+  const closures = (cfg.outDates || []).filter((x) => x && x.date >= today && x.date <= addDaysStr(today, cfg.maxAdvanceDays))
+    .map((x) => ({ date: x.date, reason: cleanText(x.reason, 80) || 'ติดให้บริการนอกสถานที่' })).sort((a, b) => a.date.localeCompare(b.date));
+  if (!cfg.enabled) return { enabled: false, config: thaiPublicConfig(cfg), days: [], closures, today };
+  return { enabled: true, config: thaiPublicConfig(cfg), days: await thaiAvailability(cfg), closures, today };
 });
 
 exports.thaiBook = onCall({ cors: true }, async (request) => {
@@ -712,6 +717,8 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
   const days = await thaiAvailability(cfg);
   const day = days.find((x) => x.date === date);
   const slot = day && day.slots.find((x) => x.time === time);
+  const out = (cfg.outDates || []).find((x) => x && x.date === date);
+  if (out) throw new HttpsError('failed-precondition', `งดรับนัดวันที่ ${thaiDateShort(date)} เนื่องจาก${cleanText(out.reason, 80).replace(/^เนื่องจาก/, '') || 'ติดให้บริการนอกสถานที่'}`);
   if (!slot || slot.left <= 0) throw new HttpsError('failed-precondition', 'ช่วงเวลานี้เต็มแล้วหรือไม่เปิดให้จอง กรุณาเลือกเวลาอื่น');
 
   let code = '';
