@@ -1201,3 +1201,38 @@ exports.dailyLineQuotaCheck = onSchedule({ schedule: '0 8 * * *', timeZone: 'Asi
   await ref.set({ warnedMonth: month }, { merge: true });
   await sendLine(channelAccessToken, targetId, `⚠️ โควตาข้อความไลน์ใกล้เต็ม\nใช้ไปแล้ว ${info.used} / ${info.limit} ข้อความ (${info.percent}%) เหลือ ${info.remaining} ข้อความ\nเมื่อเต็ม ระบบจะส่งแจ้งเตือนเข้าไลน์ไม่ได้จนถึงต้นเดือนหน้า`);
 });
+
+// ===== สถานะการให้บริการ รพ.สต. (แดชบอร์ด): สคริปต์บนเครื่องที่มี JHCIS ส่ง "ตัวเลขสรุปรายวัน" (ไม่มีชื่อ/เลขบัตรผู้ป่วย) เข้ามาเก็บที่ serviceStats/{YYYY-MM-DD} =====
+// ยืนยันตัวตนด้วยคีย์ลับในส่วนหัว x-api-key เทียบกับ sha256 ที่เก็บใน settings/statsIngest.keyHash (สร้างคีย์ได้ที่หน้า "รายงานสถานะการให้บริการ" โดย Super Admin)
+exports.ingestServiceStats = onRequest({ cors: false, memory: '256MiB' }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
+  try {
+    const key = String(req.get('x-api-key') || '');
+    const meta = await db.doc('settings/statsIngest').get();
+    const want = meta.exists ? meta.data().keyHash : '';
+    const got = require('crypto').createHash('sha256').update(key).digest('hex');
+    if (!want || key.length < 20 || got !== want) { res.status(401).json({ ok: false, error: 'คีย์ไม่ถูกต้อง' }); return; }
+    const days = Array.isArray(req.body && req.body.days) ? req.body.days : [];
+    if (!days.length || days.length > 400) { res.status(400).json({ ok: false, error: 'จำนวนวันต้องอยู่ระหว่าง 1-400' }); return; }
+    const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : 0);
+    const numMap = (o, max = 60) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).slice(0, max).map(([k, v]) => [String(k).slice(0, 80), num(v)]));
+    let n = 0;
+    for (let i = 0; i < days.length; i += 400) {
+      const batch = db.batch();
+      days.slice(i, i + 400).forEach((d) => {
+        if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.date))) return;
+        const topDx = (Array.isArray(d.topDx) ? d.topDx : []).slice(0, 15).map((x) => ({ code: String(x.code || '').slice(0, 12), name: String(x.name || '').slice(0, 120), n: num(x.n) }));
+        batch.set(db.doc(`serviceStats/${d.date}`), {
+          date: d.date, visits: num(d.visits), persons: num(d.persons),
+          byFlag: numMap(d.byFlag), byRight: numMap(d.byRight), bySex: numMap(d.bySex), byAge: numMap(d.byAge), byVillage: numMap(d.byVillage),
+          vaccines: numMap(d.vaccines), anc: num(d.anc), deaths: num(d.deaths), topDx,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        n += 1;
+      });
+      await batch.commit();
+    }
+    await db.doc('settings/statsMeta').set({ lastSyncAt: FieldValue.serverTimestamp(), lastSyncDays: n, lastSyncNote: String((req.body && req.body.note) || '').slice(0, 300) }, { merge: true });
+    res.json({ ok: true, saved: n });
+  } catch (e) { console.error('ingestServiceStats', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});

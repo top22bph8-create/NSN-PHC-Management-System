@@ -6,6 +6,7 @@ import { REGISTRIES } from './config/registries';
 import { PERSON_REGISTRIES } from './config/personRegistries';
 import PersonRegistry from './pages/PersonRegistry';
 import UnitDuty from './pages/UnitDuty';
+import ServiceStats from './pages/ServiceStats';
 import ThaiBooking from './pages/ThaiBooking';
 import ThaiBookingPublic from './pages/ThaiBookingPublic';
 import PrintThaiQr from './pages/PrintThaiQr';
@@ -195,6 +196,7 @@ function Shell() {
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><PersonRegistry cfg={cfg} /></Guard>} />
           ))}
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
+          <Route path="service-stats" element={<Guard module="service-stats"><ServiceStats /></Guard>} />
           <Route path="unit-blood" element={<Guard module="unit-duty"><UnitDuty kind="blood" /></Guard>} />
           <Route path="thai-booking" element={<Guard module="thai-booking"><ThaiBooking /></Guard>} />
           <Route path="personnel" element={<Guard module="personnel"><Personnel /></Guard>} />

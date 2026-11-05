@@ -53,6 +53,7 @@ export const ACCESS = {
   'reg-disabled': { read: ALL, write: ALL },
   'reg-mental': { read: ALL, write: ALL },
   'unit-duty': { read: ALL, write: ALL },
+  'service-stats': { read: ALL, write: [] },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },
   audit: { read: ['super_admin'], write: [] },

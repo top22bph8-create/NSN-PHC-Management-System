@@ -1,0 +1,6 @@
+{
+  "jhcisDir": "C:\\Program Files\\jhcis",
+  "endpoint": "ใส่ Function URL ของ ingestServiceStats ที่ได้ตอน deploy",
+  "apiKey": "ใส่คีย์ที่สร้างในหน้า รายงานสถานะการให้บริการ",
+  "days": 7
+}

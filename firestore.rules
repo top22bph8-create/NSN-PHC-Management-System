@@ -69,8 +69,13 @@ service cloud.firestore {
     // ตั้งค่าระบบ
     match /settings/{id} {
       // settings/lineNotify เก็บ TOKEN สำหรับแจ้งเตือนไลน์ — ห้ามอ่านจากฝั่งไคลเอนต์เด็ดขาด (Cloud Function ใช้ Admin SDK อ่านได้อยู่แล้ว ไม่ผ่านกติกานี้)
-      allow read: if isActive() && id != 'lineNotify';
+      allow read: if isActive() && id != 'lineNotify' && id != 'statsIngest';
       allow write: if hasRole(['super_admin']);
+    }
+    // สถิติบริการรายวันจาก JHCIS (ตัวเลขสรุปล้วนๆ ไม่มีข้อมูลผู้ป่วยรายบุคคล) — เขียนได้เฉพาะ Cloud Function (Admin SDK)
+    match /serviceStats/{id} {
+      allow read: if isActive();
+      allow write: if false;
     }
     // คลินิกแพทย์แผนไทย: เจ้าหน้าที่ที่ล็อกอินแก้ตั้งค่าคลินิกได้ (ไม่ต้องเป็น Super Admin)
     match /settings/thaiClinic {
