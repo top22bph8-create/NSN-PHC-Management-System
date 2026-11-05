@@ -20,15 +20,22 @@ function dbConfig() {
   try {
     const txt = fs.readFileSync(path.join(cfg.jhcisDir || 'C:\\Program Files\\jhcis', 'database.properties'), 'utf8');
     const p = Object.fromEntries(txt.split(/\r?\n/).filter((l) => l.includes('=') && !l.trim().startsWith('#')).map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim().toLowerCase(), l.slice(i + 1).trim()]; }));
-    const url = Object.entries(p).find(([k, v]) => /^jdbc:mysql:/i.test(v) || k.includes('url'))?.[1] || '';
+    if (p.server) o.host = p.server === 'localhost' ? '127.0.0.1' : p.server;
+    if (p.port) o.port = Number(p.port);
+    if (p.database) o.database = p.database;
+    if (p.username) o.user = p.username;
+    if (p.password != null) o.password = p.password;
+    const url = Object.values(p).find((v) => /^jdbc:mysql:/i.test(v)) || '';
     const m = url.match(/mysql:\/\/([^:/]+)(?::(\d+))?\/([^?;]+)/i);
     if (m) { o.host = m[1]; if (m[2]) o.port = Number(m[2]); o.database = m[3]; }
-    const u = Object.entries(p).find(([k]) => /user/.test(k)); if (u) o.user = u[1];
-    const pw = Object.entries(p).find(([k]) => /pass|pwd/.test(k)); if (pw) o.password = pw[1];
   } catch (e) { console.log('อ่าน database.properties ไม่ได้ ใช้ค่าเริ่มต้น:', e.message); }
-  return { ...o, ...(cfg.db || {}) };
+  let extra = {};
+  try { extra = JSON.parse(fs.readFileSync(path.join(here, 'db.json'), 'utf8')); } catch { /* ไม่มี db.json: ใช้ค่าจาก database.properties/config.json */ }
+  return { ...o, ...(cfg.db || {}), ...extra };
 }
 
+// นับเฉพาะ "ให้บริการแล้ว" ตามเงื่อนไขเดียวกับรายงานของ JHCIS (flagservice < 04 หรือว่าง) — ตัดรหัส 99 (คิวค้าง/ยกเลิก) ออก
+const SVC = "(v.flagservice < '04' or v.flagservice is null or length(trim(v.flagservice)) = 0)";
 const failed = new Set();
 async function q(conn, name, sql, params) { try { const [r] = await conn.query(sql, params); return r; } catch (e) { failed.add(name); console.log(`  ! ตัวชี้วัด "${name}" ดึงไม่ได้: ${e.code || e.message}`); return []; } }
 const toMap = (rows, kf, vf = 'n') => Object.fromEntries(rows.filter((r) => r[kf] != null && String(r[kf]).trim() !== '').map((r) => [String(r[kf]).trim(), Number(r[vf])]));
@@ -37,18 +44,18 @@ async function collect(conn, from, to) {
   const days = {};
   const day = (d) => { const k = typeof d === 'string' ? d : iso(d); return (days[k] ||= { date: k, visits: 0, persons: 0, byFlag: {}, byRight: {}, bySex: {}, byAge: {}, byVillage: {}, vaccines: {}, anc: 0, deaths: 0, topDx: [] }); };
   const D = "date_format(v.visitdate,'%Y-%m-%d')";
-  for (const r of await q(conn, 'ยอดรวม', `select ${D} d, count(*) visits, count(distinct v.pcucodeperson, v.pid) persons from visit v where v.visitdate between ? and ? group by d`, [from, to])) { const x = day(r.d); x.visits = Number(r.visits); x.persons = Number(r.persons); }
+  for (const r of await q(conn, 'ยอดรวม', `select ${D} d, count(*) visits, count(distinct v.pcucodeperson, v.pid) persons from visit v where v.visitdate between ? and ? and ${SVC} group by d`, [from, to])) { const x = day(r.d); x.visits = Number(r.visits); x.persons = Number(r.persons); }
   for (const r of await q(conn, 'ประเภทบริการ', `select ${D} d, ifnull(nullif(trim(v.flagservice),''),'ไม่ระบุ') k, count(*) n from visit v where v.visitdate between ? and ? group by d,k`, [from, to])) day(r.d).byFlag[r.k] = Number(r.n);
-  for (const r of await q(conn, 'สิทธิ', `select ${D} d, ifnull(g.rightgroupname,'ไม่ระบุ') k, count(*) n from visit v left join cright c on v.rightcode=c.rightcode left join crightgroup g on c.rightgroup=g.rightgroupcode where v.visitdate between ? and ? group by d,k`, [from, to])) day(r.d).byRight[r.k] = Number(r.n);
-  for (const r of await q(conn, 'เพศ/อายุ', `select ${D} d, p.sex sx, timestampdiff(year,p.birth,v.visitdate) a from visit v left join person p on v.pcucodeperson=p.pcucodeperson and v.pid=p.pid where v.visitdate between ? and ?`, [from, to])) {
+  for (const r of await q(conn, 'สิทธิ', `select ${D} d, ifnull(g.rightgroupname,'ไม่ระบุ') k, count(*) n from visit v left join cright c on v.rightcode=c.rightcode left join crightgroup g on c.rightgroup=g.rightgroupcode where v.visitdate between ? and ? and ${SVC} group by d,k`, [from, to])) day(r.d).byRight[r.k] = Number(r.n);
+  for (const r of await q(conn, 'เพศ/อายุ', `select ${D} d, p.sex sx, timestampdiff(year,p.birth,v.visitdate) a from visit v left join person p on v.pcucodeperson=p.pcucodeperson and v.pid=p.pid where v.visitdate between ? and ? and ${SVC}`, [from, to])) {
     const x = day(r.d); const s = String(r.sx || '?'); x.bySex[s] = (x.bySex[s] || 0) + 1;
     const a = r.a; const k = a == null ? null : a < 5 ? '0-4' : a < 15 ? '5-14' : a < 25 ? '15-24' : a < 60 ? '25-59' : '60+'; if (k) x.byAge[k] = (x.byAge[k] || 0) + 1;
   }
-  for (const r of await q(conn, 'หมู่บ้าน', `select ${D} d, ifnull(vl.villname,'ไม่ระบุ') k, count(*) n from visit v left join person p on v.pcucodeperson=p.pcucodeperson and v.pid=p.pid left join house h on p.pcucodeperson=h.pcucode and p.hcode=h.hcode left join village vl on h.pcucode=vl.pcucode and h.villcode=vl.villcode where v.visitdate between ? and ? group by d,k`, [from, to])) day(r.d).byVillage[r.k] = Number(r.n);
-  const dx = await q(conn, 'โรค/วินิจฉัย', `select ${D} d, vd.diagcode code, max(c.diseasename) name, count(distinct vd.visitno) n from visit v join visitdiag vd on v.pcucode=vd.pcucode and v.visitno=vd.visitno left join cdisease c on vd.diagcode=c.diseasecode where v.visitdate between ? and ? and vd.dxtype='01' group by d,code`, [from, to]);
+  for (const r of await q(conn, 'หมู่บ้าน', `select ${D} d, ifnull(vl.villname,'ไม่ระบุ') k, count(*) n from visit v left join person p on v.pcucodeperson=p.pcucodeperson and v.pid=p.pid left join house h on p.pcucodeperson=h.pcucode and p.hcode=h.hcode left join village vl on h.pcucode=vl.pcucode and h.villcode=vl.villcode where v.visitdate between ? and ? and ${SVC} group by d,k`, [from, to])) day(r.d).byVillage[r.k] = Number(r.n);
+  const dx = await q(conn, 'โรค/วินิจฉัย', `select ${D} d, vd.diagcode code, max(c.diseasename) name, count(distinct vd.visitno) n from visit v join visitdiag vd on v.pcucode=vd.pcucode and v.visitno=vd.visitno left join cdisease c on vd.diagcode=c.diseasecode where v.visitdate between ? and ? and ${SVC} and vd.dxtype='01' group by d,code`, [from, to]);
   for (const r of dx) day(r.d).topDx.push({ code: r.code, name: r.name || '', n: Number(r.n) });
   Object.values(days).forEach((x) => { x.topDx.sort((a, b) => b.n - a.n); x.topDx = x.topDx.slice(0, 15); });
-  for (const r of await q(conn, 'วัคซีน', `select ${D} d, e.vaccinecode k, count(*) n from visit v join visitepi e on v.pcucode=e.pcucode and v.visitno=e.visitno where v.visitdate between ? and ? group by d,k`, [from, to])) day(r.d).vaccines[r.k] = Number(r.n);
+  for (const r of await q(conn, 'วัคซีน', `select ${D} d, e.vaccinecode k, count(*) n from visit v join visitepi e on v.pcucode=e.pcucode and v.visitno=e.visitno where v.visitdate between ? and ? and ${SVC} group by d,k`, [from, to])) day(r.d).vaccines[r.k] = Number(r.n);
   for (const r of await q(conn, 'ฝากครรภ์', `select date_format(datecheck,'%Y-%m-%d') d, count(*) n from visitanc where datecheck between ? and ? group by d`, [from, to])) day(r.d).anc = Number(r.n);
   for (const r of await q(conn, 'เสียชีวิต', `select date_format(deaddate,'%Y-%m-%d') d, count(*) n from persondeath where deaddate between ? and ? group by d`, [from, to])) day(r.d).deaths = Number(r.n);
   return Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
@@ -59,19 +66,34 @@ let from; let to = iso(new Date());
 if (argv('--check')) { from = to = argv('--check'); }
 else if (argv('--from')) from = argv('--from');
 else { const d = new Date(); d.setDate(d.getDate() - ((cfg.days || 7) - 1)); from = iso(d); }
+{ const d = dbConfig(); console.log(`เชื่อมต่อ ${d.user}@${d.host}:${d.port}/${d.database}`); }
 console.log(`ดึงข้อมูล ${from} ถึง ${to} ...`);
 const out = await collect(conn, from, to);
 await conn.end();
 if (argv('--check')) {
   const x = out[0];
-  console.log(x ? JSON.stringify(x, null, 2) : 'ไม่พบการให้บริการในวันนั้น');
+  if (x) {
+    console.log('===== สรุปแบบย่อ (เทียบกับ JHCIS) =====');
+    console.log(`วันที่ ${x.date}  ครั้ง(visits)=${x.visits}  คน(persons)=${x.persons}`);
+    console.log('ตามประเภทบริการ flagservice:', JSON.stringify(x.byFlag));
+    console.log('ตามสิทธิ:', JSON.stringify(x.byRight));
+    console.log('==========================================');
+  }
+  if (argv('--full')) console.log(x ? JSON.stringify(x, null, 2) : 'ไม่พบการให้บริการในวันนั้น');
   console.log(failed.size ? `\nตัวชี้วัดที่ดึงไม่ได้: ${[...failed].join(', ')}` : '\nดึงได้ครบทุกตัวชี้วัด');
   console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูลขึ้นระบบ — เทียบ "visits" กับรายงานใน JHCIS ของวันเดียวกัน');
   process.exit(0);
 }
 if (!out.length) { console.log('ไม่มีข้อมูลในช่วงนี้'); process.exit(0); }
 const note = failed.size ? `ดึงไม่ได้: ${[...failed].join(', ')}` : '';
-const res = await fetch(cfg.endpoint, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ days: out, note }) });
-const body = await res.json().catch(() => ({}));
-console.log(res.ok ? `ส่งสำเร็จ ${body.saved} วัน${note ? ` (${note})` : ''}` : `ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`);
-process.exit(res.ok ? 0 : 1);
+// ส่งทีละ 100 วัน (เซิร์ฟเวอร์รับได้ไม่เกิน 400 วัน/ครั้ง)
+let saved = 0; let ok = true;
+for (let i = 0; i < out.length; i += 100) {
+  const part = out.slice(i, i + 100);
+  const res = await fetch(cfg.endpoint, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ days: part, note }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); ok = false; break; }
+  saved += body.saved || 0; console.log(`  ส่งแล้ว ${saved}/${out.length} วัน`);
+}
+if (ok) console.log(`ส่งสำเร็จ ${saved} วัน${note ? ` (${note})` : ''}`);
+process.exit(ok ? 0 : 1);

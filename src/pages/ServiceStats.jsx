@@ -16,6 +16,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const lastDay = (y, m) => new Date(y, m, 0).getDate();
 const sumMap = (list, k) => { const o = {}; list.forEach((d) => Object.entries(d[k] || {}).forEach(([a, b]) => { o[a] = (o[a] || 0) + b; })); return o; };
 const AGE_ORDER = ['0-4', '5-14', '15-24', '25-59', '60+'];
+const FLAG = { '03': 'ให้บริการแล้ว', '99': 'คิวค้าง/ยกเลิก (ไม่นับ)' };
 const SEX = { 1: 'ชาย', 2: 'หญิง' };
 const nf = (n) => Number(n || 0).toLocaleString('th-TH');
 
@@ -156,11 +157,11 @@ export default function ServiceStats() {
           {trend.length > 0 && (
             <section className="card mb-4 p-4">
               <h3 className="mb-2 font-bold text-slate-700">{mode === 'month' ? 'จำนวนครั้งที่รับบริการรายวัน' : 'จำนวนครั้งที่รับบริการรายเดือน'}</h3>
-              <div className="flex h-40 items-end gap-1 overflow-x-auto">
+              <div className="flex items-end gap-1 overflow-x-auto pb-1">
                 {trend.map((x) => (
                   <div key={x.k} className="flex min-w-[18px] flex-1 flex-col items-center justify-end" title={`${x.k}: ${nf(x.v)} ครั้ง`}>
                     <span className="text-[10px] tabular-nums text-slate-500">{x.v}</span>
-                    <div className="w-full rounded-t bg-gradient-to-t from-sky-700 to-sky-400" style={{ height: `${(x.v / tmax) * 100}%`, minHeight: x.v ? 2 : 0 }} />
+                    <div className="w-full rounded-t bg-gradient-to-t from-sky-700 to-sky-400" style={{ height: `${x.v ? Math.max(3, Math.round((x.v / tmax) * 130)) : 0}px` }} />
                     <span className="text-[10px] text-slate-400">{x.k}</span>
                   </div>
                 ))}
@@ -174,7 +175,7 @@ export default function ServiceStats() {
             <Bars title="ตามกลุ่มอายุ" data={agg.byAge} order={AGE_ORDER} color="from-amber-500 to-amber-300" />
             <Bars title="ตามหมู่บ้าน" data={agg.byVillage} color="from-teal-600 to-teal-400" />
             <Bars title="วัคซีนที่ให้ (รหัส)" data={agg.vaccines} color="from-fuchsia-600 to-pink-400" />
-            <Bars title="ตามประเภทบริการ (รหัส JHCIS)" data={agg.byFlag} color="from-slate-600 to-slate-400" />
+            <Bars title="ตามประเภทบริการ (ในแดชบอร์ดนับเฉพาะที่ให้บริการแล้ว)" data={agg.byFlag} labelOf={(k) => FLAG[k] || `รหัส ${k}`} color="from-slate-600 to-slate-400" />
           </div>
         </>
       )}
