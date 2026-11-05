@@ -45,14 +45,14 @@ export default function PrintPersonnel() {
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr>
-              {['ลำดับ', 'ชื่อ - สกุล', 'ตำแหน่ง', 'ประเภทบุคลากร', 'เลขบัตรประชาชน', 'เบอร์โทรศัพท์', 'วุฒิการศึกษา', 'ปริญญาโท', 'ใบประกอบวิชาชีพ (เลขที่/หมดอายุ)', 'วันเดือนปีเกิด', 'อายุ', 'วันมาปฏิบัติงาน', 'วันบรรจุเป็นข้าราชการ', 'อายุราชการ', 'ยกยอดลาพักผ่อนสะสม(วัน)'].map((h) => (
+              {['ลำดับ', 'ชื่อ - สกุล', 'ตำแหน่ง', 'ประเภทบุคลากร', 'เลขบัตรประชาชน', 'เบอร์โทรศัพท์', 'วุฒิการศึกษา', 'ปริญญาโท', 'ใบประกอบวิชาชีพ (เลขที่/หมดอายุ)', 'วันเดือนปีเกิด', 'อายุ', 'วันถ่ายโอน อบจ.', 'วันมาปฏิบัติงาน', 'อยู่ รพ.สต.นี้', 'ผ่านการอบรม', 'วันบรรจุเป็นข้าราชการ', 'อายุราชการ', 'ยกยอดลาพักผ่อนสะสม(วัน)'].map((h) => (
                 <th key={h} className="border border-slate-400 px-1.5 py-1 font-semibold" style={{ background: '#e8f4fc' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={15} className="border border-slate-400 p-4 text-center text-slate-400">ไม่มีข้อมูลบุคลากร</td></tr>
+              <tr><td colSpan={18} className="border border-slate-400 p-4 text-center text-slate-400">ไม่มีข้อมูลบุคลากร</td></tr>
             ) : rows.map((u, i) => (
               <tr key={u.email}>
                 <td className="border border-slate-300 px-1.5 py-1 text-center">{i + 1}</td>
@@ -66,7 +66,10 @@ export default function PrintPersonnel() {
                 <td className="border border-slate-300 px-1.5 py-1">{[u.licenseName, u.licenseNo && `เลขที่ ${u.licenseNo}`, u.licenseExpire && `หมดอายุ ${fmtDate(u.licenseExpire)}`].filter(Boolean).join(' · ')}</td>
                 <td className="border border-slate-300 px-1.5 py-1">{u.birthday ? fmtDate(u.birthday) : ''}</td>
                 <td className="border border-slate-300 px-1.5 py-1">{u.birthday ? fmtDuration(calcDuration(u.birthday)) : ''}</td>
+                <td className="border border-slate-300 px-1.5 py-1">{u.transferDate ? fmtDate(u.transferDate) : ''}</td>
                 <td className="border border-slate-300 px-1.5 py-1">{u.startWorkDate ? fmtDate(u.startWorkDate) : ''}</td>
+                <td className="border border-slate-300 px-1.5 py-1">{u.startWorkDate ? fmtDuration(calcDuration(u.startWorkDate)) : ''}</td>
+                <td className="border border-slate-300 px-1.5 py-1">{u.training || ''}</td>
                 <td className="border border-slate-300 px-1.5 py-1">{u.civilServiceDate ? fmtDate(u.civilServiceDate) : ''}</td>
                 <td className="border border-slate-300 px-1.5 py-1">{u.civilServiceDate ? fmtDuration(calcDuration(u.civilServiceDate)) : ''}</td>
                 <td className="border border-slate-300 px-1.5 py-1 text-center">{u.vacationCarryOver || 0}</td>

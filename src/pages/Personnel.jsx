@@ -4,7 +4,8 @@
 // เพิ่มข้อมูลที่ควรมีสำหรับฐานข้อมูลบุคคลากรราชการ: ประเภทบุคลากร, เลขบัตรประชาชน, เบอร์โทรศัพท์, วุฒิการศึกษา
 import { useEffect, useMemo, useState } from 'react';
 import { doc, collection, onSnapshot, updateDoc } from 'firebase/firestore';
-import { FileSpreadsheet, Loader2, Pencil, Printer, Search, Users } from 'lucide-react';
+import { FileSpreadsheet, Loader2, Pencil, Printer, Search, Upload, Users } from 'lucide-react';
+import { parsePersonnelSheet, planPersonnel, FIELD_LABEL } from '../lib/personnelImport';
 import { db } from '../firebase';
 import { fmtDate, calcDuration, fmtDuration } from '../lib/thai';
 import { exportXlsx } from '../lib/exportFile';
@@ -39,7 +40,7 @@ function EditPersonModal({ user, onClose, say }) {
     name: splitPrefix(user.name).rest || user.name || '', namePrefix: user.namePrefix || splitPrefix(user.name).prefix, position: user.position || '', personnelType: user.personnelType || '',
     idCard: user.idCard || '', phone: user.phone || '', education: user.education || '', masterDegree: user.masterDegree || '',
     licenseName: user.licenseName || '', licenseNo: user.licenseNo || '', licenseIssue: user.licenseIssue || '', licenseExpire: user.licenseExpire || '',
-    birthday: user.birthday || '', startWorkDate: user.startWorkDate || '', civilServiceDate: user.civilServiceDate || '',
+    birthday: user.birthday || '', transferDate: user.transferDate || '', training: user.training || '', startWorkDate: user.startWorkDate || '', civilServiceDate: user.civilServiceDate || '',
     vacationCarryOver: user.vacationCarryOver || 0,
   });
   const [busy, setBusy] = useState(false);
@@ -47,6 +48,7 @@ function EditPersonModal({ user, onClose, say }) {
   const setDate = (k) => (v) => setF({ ...f, [k]: v });
   const age = calcDuration(f.birthday);
   const svcAge = calcDuration(f.civilServiceDate);
+  const hereAge = calcDuration(f.startWorkDate);
 
   const submit = async () => {
     if (f.idCard && !/^\d{13}$/.test(f.idCard.trim())) return say({ type: 'error', text: 'เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก (หรือเว้นว่างไว้)' });
@@ -56,7 +58,7 @@ function EditPersonModal({ user, onClose, say }) {
         name: splitPrefix(clean(f.name)).rest || clean(f.name), namePrefix: f.namePrefix || splitPrefix(clean(f.name)).prefix || '', position: clean(f.position), personnelType: f.personnelType,
         idCard: clean(f.idCard), phone: clean(f.phone), education: clean(f.education), masterDegree: clean(f.masterDegree),
         licenseName: clean(f.licenseName), licenseNo: clean(f.licenseNo), licenseIssue: f.licenseIssue || '', licenseExpire: f.licenseExpire || '',
-        birthday: f.birthday || '', startWorkDate: f.startWorkDate || '', civilServiceDate: f.civilServiceDate || '',
+        birthday: f.birthday || '', transferDate: f.transferDate || '', training: clean(f.training), startWorkDate: f.startWorkDate || '', civilServiceDate: f.civilServiceDate || '',
         vacationCarryOver: Number(f.vacationCarryOver) || 0,
       };
       await updateDoc(doc(db, 'users', user.email), patch);
@@ -113,7 +115,13 @@ function EditPersonModal({ user, onClose, say }) {
         <div>
           <label className="mb-1 block text-sm text-slate-600" htmlFor="pwd">วันมาปฏิบัติงาน ณ สถานบริการนี้</label>
           <ThaiDateInput id="pwd" value={f.startWorkDate} onChange={setDate('startWorkDate')} yearsBack={50} yearsForward={0} />
+          {hereAge && <p className="mt-1 text-xs text-brand-700">ปฏิบัติงานที่ รพ.สต.นี้มาแล้ว {fmtDuration(hereAge)}</p>}
         </div>
+        <div>
+          <label className="mb-1 block text-sm text-slate-600" htmlFor="ptd">วันถ่ายโอนมา อบจ.สกลนคร</label>
+          <ThaiDateInput id="ptd" value={f.transferDate} onChange={setDate('transferDate')} yearsBack={10} yearsForward={0} />
+        </div>
+        <div><label className="mb-1 block text-sm text-slate-600" htmlFor="ptr">ผ่านการอบรม</label><input id="ptr" className="input" placeholder="เช่น หลักสูตรเวชปฏิบัติทั่วไป" value={f.training} onChange={set('training')} /></div>
         <div>
           <label className="mb-1 block text-sm text-slate-600" htmlFor="pcsd">วันบรรจุเป็นข้าราชการ</label>
           <ThaiDateInput id="pcsd" value={f.civilServiceDate} onChange={setDate('civilServiceDate')} yearsBack={50} yearsForward={0} />
@@ -121,6 +129,37 @@ function EditPersonModal({ user, onClose, say }) {
         </div>
         <div><label className="mb-1 block text-sm text-slate-600" htmlFor="pvc">ยกยอดลาพักผ่อนสะสม (วัน)</label><input id="pvc" type="number" min="0" className="input" value={f.vacationCarryOver} onChange={set('vacationCarryOver')} /></div>
         <p className="text-xs text-slate-500">การเปลี่ยน Username/รหัสผ่าน/บทบาท ให้ไปที่เมนู "กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก"</p>
+      </div>
+    </Modal>
+  );
+}
+
+function ImportModal({ imp, setImp, users, say, onClose }) {
+  const plan = useMemo(() => planPersonnel(imp.people, users, imp.overwrite), [imp.people, users, imp.overwrite]);
+  const todo = plan.filter((x) => x.user && Object.keys(x.patch).length);
+  const run = async () => {
+    setImp({ ...imp, busy: true });
+    try {
+      for (const x of todo) {
+        await updateDoc(doc(db, 'users', x.user.email), x.patch);
+        await writeAudit({ action: 'update', module: 'personnel', docId: x.user.email, label: `นำเข้าข้อมูลบุคลากรจาก Excel: ${x.user.name} (${Object.keys(x.patch).map((k) => FIELD_LABEL[k]).join(', ')})` });
+      }
+      say({ type: 'ok', text: `อัปเดตข้อมูลบุคลากร ${todo.length} คนแล้ว` }); onClose();
+    } catch (err) { say({ type: 'error', text: 'ไม่สำเร็จ: ' + (err.code || err.message) }); setImp({ ...imp, busy: false }); }
+  };
+  return (
+    <Modal wide title="นำเข้าข้อมูลบุคลากรจาก Excel" onClose={onClose}
+      footer={<button className="btn btn-primary w-full" onClick={run} disabled={imp.busy || !todo.length}>{imp.busy && <Loader2 className="h-4 w-4 animate-spin" />} ยืนยันอัปเดต {todo.length} คน</button>}>
+      <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={imp.overwrite} onChange={(e) => setImp({ ...imp, overwrite: e.target.checked })} /> เขียนทับข้อมูลเดิมที่ต่างจากไฟล์ (ปกติจะเติมเฉพาะช่องที่ว่าง)</label>
+      <div className="space-y-2">
+        {plan.map((x) => (
+          <div key={x.p._row} className={`rounded-lg border p-3 text-sm ${x.user ? 'border-slate-200' : 'border-red-300 bg-red-50'}`}>
+            <div className="font-semibold">{x.p._name} {x.user ? <span className="font-normal text-emerald-700">→ จับคู่กับ {fullName(x.user)} (ด้วย{x.matchBy})</span> : <span className="font-normal text-red-600">{x.ambiguous ? 'พบชื่อซ้ำหลายคน — ข้าม' : 'ไม่พบในทำเนียบ — ข้าม (ต้องมีบัญชีผู้ใช้ก่อน)'}</span>}</div>
+            {x.user && <div className="mt-1 text-slate-600">{Object.keys(x.patch).length ? `จะเติม/แก้: ${Object.keys(x.patch).map((k) => FIELD_LABEL[k]).join(', ')}` : 'ไม่มีช่องที่ต้องเติม'}</div>}
+            {x.conflicts.map((c) => <div key={c.k} className="text-amber-700">⚠ {FIELD_LABEL[c.k]}: ในระบบ “{c.ov}” ≠ ในไฟล์ “{c.nv}”{imp.overwrite ? ' (จะเขียนทับ)' : ' (คงเดิม)'}</div>)}
+            {x.p._warns.map((w, i) => <div key={i} className="text-amber-700">⚠ {w}</div>)}
+          </div>
+        ))}
       </div>
     </Modal>
   );
@@ -160,13 +199,29 @@ export default function Personnel() {
       'วันหมดอายุใบอนุญาต': u.licenseExpire ? fmtDate(u.licenseExpire) : '',
       'วันเดือนปีเกิด': u.birthday ? fmtDate(u.birthday) : '',
       'อายุ': u.birthday ? fmtDuration(calcDuration(u.birthday)) : '',
+      'วันถ่ายโอนมา อบจ.สกลนคร': u.transferDate ? fmtDate(u.transferDate) : '',
       'วันมาปฏิบัติงาน': u.startWorkDate ? fmtDate(u.startWorkDate) : '',
+      'ระยะเวลาที่ รพ.สต.นี้': u.startWorkDate ? fmtDuration(calcDuration(u.startWorkDate)) : '',
+      'ผ่านการอบรม': u.training || '',
       'วันบรรจุเป็นข้าราชการ': u.civilServiceDate ? fmtDate(u.civilServiceDate) : '',
       'อายุราชการ': u.civilServiceDate ? fmtDuration(calcDuration(u.civilServiceDate)) : '',
       'ยกยอดลาพักผ่อนสะสม(วัน)': u.vacationCarryOver || 0,
     }));
     exportXlsx(data, 'ทำเนียบบุคลากร', `ทำเนียบบุคลากร_${new Date().toISOString().slice(0, 10)}`);
     writeAudit({ action: 'export', module: 'personnel', label: `รายงานประวัติบุคลากร (Excel) ${rows.length} รายการ` }).catch(() => {});
+  };
+  const [imp, setImp] = useState(null);
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(await file.arrayBuffer());
+      const ws = wb.worksheets[0];
+      const grid = []; ws.eachRow({ includeEmpty: true }, (row, n) => { const a = []; row.eachCell({ includeEmpty: true }, (c, i) => { let v = c.value; if (v && typeof v === 'object' && !(v instanceof Date)) v = v.result ?? v.text ?? (v.richText ? v.richText.map((t) => t.text).join('') : ''); a[i - 1] = v; }); grid[n - 1] = a; });
+      for (let i = 0; i < grid.length; i++) grid[i] = grid[i] || [];
+      setImp({ people: parsePersonnelSheet(grid), overwrite: false, busy: false });
+    } catch (err) { say({ type: 'error', text: 'อ่านไฟล์ไม่สำเร็จ: ' + err.message }); }
   };
   const openPrintPersonnel = () => window.open(`${window.location.origin}${window.location.pathname}#/print-personnel`, '_blank');
 
@@ -175,6 +230,7 @@ export default function Personnel() {
       <PageHeader icon={Users} emoji="👥" title="ทำเนียบบุคลากร" subtitle="ฐานข้อมูลบุคคลากรข้าราชการและลูกจ้างหน่วยงาน (จัดการ Username/บทบาท/บัญชีผู้ใช้ ที่เมนู “กำหนดผู้ใช้งาน”)"
         actions={
           <div className="flex flex-wrap gap-2">
+            {writable && <label className="btn cursor-pointer bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" title="นำเข้า/อัปเดตข้อมูลบุคลากรจาก Excel"><Upload className="h-4 w-4" /> นำเข้า Excel<input type="file" accept=".xlsx" className="hidden" onChange={onPickFile} /></label>}
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doExportExcel} title="ออกรายงานประวัติบุคลากรเป็น Excel"><FileSpreadsheet className="h-4 w-4" /> Excel</button>
             <button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={openPrintPersonnel} title="เปิดหน้าพิมพ์รายงาน แล้วเลือก บันทึกเป็น PDF"><Printer className="h-4 w-4" /> PDF</button>
           </div>
@@ -189,7 +245,7 @@ export default function Personnel() {
             <thead className="bg-brand-50 text-sm text-slate-600">
               <tr>
                 <th className="w-44 px-3 py-2">ชื่อ - สกุล</th><th className="w-44 px-3 py-2">ตำแหน่ง</th><th className="w-36 px-3 py-2">ประเภทบุคลากร</th>
-                <th className="w-28 px-3 py-2">เบอร์โทร</th><th className="w-36 px-3 py-2">วันเกิด / อายุ</th><th className="w-28 px-3 py-2">วันมาปฏิบัติงาน</th>
+                <th className="w-28 px-3 py-2">เบอร์โทร</th><th className="w-36 px-3 py-2">วันเกิด / อายุ</th><th className="w-40 px-3 py-2">วันมาปฏิบัติงาน / ถ่ายโอน</th>
                 <th className="w-40 px-3 py-2">วันบรรจุ / อายุราชการ</th><th className="w-56 px-3 py-2">ใบประกอบวิชาชีพ</th><th className="w-28 px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="w-16 px-3 py-2" />}
               </tr>
             </thead>
@@ -203,7 +259,7 @@ export default function Personnel() {
                   <td className="px-3 py-2 text-sm text-slate-600">
                     {u.birthday ? (<>🎂 {fmtDate(u.birthday)}<div className="text-xs text-slate-400">อายุ {fmtDuration(calcDuration(u.birthday))}</div></>) : '-'}
                   </td>
-                  <td className="px-3 py-2 text-sm text-slate-600">{u.startWorkDate ? fmtDate(u.startWorkDate) : '-'}</td>
+                  <td className="px-3 py-2 text-sm text-slate-600">{u.startWorkDate ? (<>{fmtDate(u.startWorkDate)}<div className="text-xs text-slate-400">อยู่มา {fmtDuration(calcDuration(u.startWorkDate))}</div></>) : '-'}{u.transferDate && <div className="text-xs text-slate-400">ถ่ายโอน {fmtDate(u.transferDate)}</div>}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">
                     {u.civilServiceDate ? (<>{fmtDate(u.civilServiceDate)}<div className="text-xs text-slate-400">อายุราชการ {fmtDuration(calcDuration(u.civilServiceDate))}</div></>) : '-'}
                   </td>
@@ -214,7 +270,7 @@ export default function Personnel() {
                       {u.licenseExpire && <div className={`text-xs ${st.cls}`}>หมดอายุ {fmtDate(u.licenseExpire)}{st.note ? ` · ${st.note}` : ''}</div>}
                     </>); })() : '-'}
                   </td>
-                  <td className="px-3 py-2 text-sm text-slate-600">{u.vacationCarryOver || 0}</td>
+                  <td className="px-3 py-2 text-sm text-slate-600">{u.vacationCarryOver || 0}{u.training && <div className="truncate text-xs text-slate-400" title={u.training}>{u.training}</div>}</td>
                   {writable && (
                     <td className="px-3 py-2"><button className="btn btn-outline !px-2 !py-1 text-sm" onClick={() => setModal(u)} title="แก้ไขข้อมูลบุคลากร"><Pencil className="h-4 w-4" /></button></td>
                   )}
@@ -224,6 +280,7 @@ export default function Personnel() {
           </table>
         )}
       </div>
+      {imp && <ImportModal imp={imp} setImp={setImp} users={rows || []} say={say} onClose={() => setImp(null)} />}
       {modal && <EditPersonModal user={modal} onClose={() => setModal(null)} say={say} />}
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
