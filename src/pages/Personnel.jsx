@@ -241,11 +241,11 @@ export default function Personnel() {
       </div>
       <div className="card overflow-x-auto">
         {error ? <ErrorState message={error} /> : rows === null ? <Spinner /> : shown.length === 0 ? <EmptyState title="ยังไม่มีข้อมูลบุคลากร" hint="เพิ่มบัญชีผู้ใช้งานที่เมนู “กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก” ก่อน แล้วค่อยกลับมากรอกข้อมูลส่วนตัวที่นี่" /> : (
-          <table className="w-full min-w-[1650px] table-fixed text-left">
+          <table className="w-full min-w-[1800px] table-fixed text-left">
             <thead className="bg-brand-50 text-sm text-slate-600">
               <tr>
                 <th className="w-44 px-3 py-2">ชื่อ - สกุล</th><th className="w-44 px-3 py-2">ตำแหน่ง</th><th className="w-36 px-3 py-2">ประเภทบุคลากร</th>
-                <th className="w-28 px-3 py-2">เบอร์โทร</th><th className="w-36 px-3 py-2">วันเกิด / อายุ</th><th className="w-40 px-3 py-2">วันมาปฏิบัติงาน / ถ่ายโอน</th>
+                <th className="w-40 px-3 py-2">เลขบัตรประชาชน</th><th className="w-28 px-3 py-2">เบอร์โทร</th><th className="w-36 px-3 py-2">วันเกิด / อายุ</th><th className="w-40 px-3 py-2">วันมาปฏิบัติงาน / ถ่ายโอน</th>
                 <th className="w-40 px-3 py-2">วันบรรจุ / อายุราชการ</th><th className="w-56 px-3 py-2">ใบประกอบวิชาชีพ</th><th className="w-28 px-3 py-2">ยกยอดลาพักผ่อนสะสม</th>{writable && <th className="w-16 px-3 py-2" />}
               </tr>
             </thead>
@@ -255,6 +255,7 @@ export default function Personnel() {
                   <td className="truncate px-3 py-2" title={fullName(u)}>{fullName(u) || usernameOf(u.email)}</td>
                   <td className="truncate px-3 py-2 text-sm text-slate-600" title={u.position || ''}>{u.position || '-'}</td>
                   <td className="px-3 py-2 text-sm">{u.personnelType ? <Badge className="bg-brand-100 text-brand-800">{u.personnelType}</Badge> : <span className="text-slate-400">-</span>}</td>
+                  <td className="px-3 py-2 text-sm tabular-nums text-slate-600">{u.idCard || <span className="text-slate-400">-</span>}</td>
                   <td className="truncate px-3 py-2 text-sm text-slate-600">{u.phone || '-'}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">
                     {u.birthday ? (<>🎂 {fmtDate(u.birthday)}<div className="text-xs text-slate-400">อายุ {fmtDuration(calcDuration(u.birthday))}</div></>) : '-'}
