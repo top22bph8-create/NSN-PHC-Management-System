@@ -33,7 +33,7 @@ const printVehicleUrl = (id) => `${HOSTING_URL}/#/print-vehicle/${id}`;
 // ต้องตรงกับ src/lib/lineNotify.js (DEFAULT_LINE_EVENTS) — ใช้ค่าเริ่มต้นนี้ merge กับค่าที่บันทึกไว้จริงเสมอ
 // เพราะเอกสาร settings/lineNotifyMeta ที่บันทึกไว้ก่อนเพิ่มเหตุการณ์ใหม่ (เช่น assignmentReminder) จะไม่มีคีย์นั้นอยู่เลย
 // ถ้าไม่ merge ค่าเริ่มต้น ฟีเจอร์ที่เพิ่มทีหลังจะถูกมองว่า "ปิด" ไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
-const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true, vehicleSubmit: true, vehicleDecide: true, unitDuty: true, workPlanReminder: true };
+const DEFAULT_LINE_EVENTS = { submit: true, decide: true, cancel: false, assignmentReminder: true, loanBorrow: true, loanRepay: true, loanOverdue: true, birthday: true, taxOverdueReminder: true, vehicleSubmit: true, vehicleDecide: true, unitDuty: true };
 
 async function getLineSettings() {
   const [credSnap, metaSnap] = await Promise.all([
@@ -1260,29 +1260,4 @@ exports.ingestRightsRegistry = onRequest({ cors: false, memory: '512MiB', timeou
     await Promise.all(old.filter((d) => !keep.has(d.id)).map((d) => d.delete()));
     res.json({ ok: true, chunks: chunks.length });
   } catch (e) { console.error('ingestRightsRegistry', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
-});
-
-// ===== เตือนงานติดตามผลงานปีงบ 2570 (หน้า "ติดตามผลงานปีงบประมาณ"): ทุกวัน 06:30 น. สรุปรายการที่เลยกำหนด (ย้อนหลัง 30 วัน) และใกล้ครบกำหนดใน 7 วัน แยกตามผู้รับผิดชอบ =====
-exports.dailyWorkPlanReminder = onSchedule({ schedule: '30 6 * * *', timeZone: 'Asia/Bangkok' }, async () => {
-  const { channelAccessToken, targetId, enabled, events } = await getLineSettings();
-  if (!channelAccessToken || !targetId || !enabled || !events.workPlanReminder) return;
-  const today = bangkokDateStr();
-  const addD = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-  const from = addD(today, -30); const to = addD(today, 7);
-  const snap = await db.collection('workTrack').get();
-  const over = []; const soon = [];
-  for (const d of snap.docs) {
-    const x = d.data(); const who = (x.owners || []).map((o) => o.name).join(', ') || 'ยังไม่มอบหมาย';
-    for (const dl of x.deadlines || []) {
-      const rec = (x.periods || {})[dl.key] || {};
-      if (rec.done || Number(rec.n || 0) > 0) continue;
-      const line = `• ${x.itemId}. ${x.title} (${dl.label}) ครบ ${dl.end}\n   ผู้รับผิดชอบ: ${who}`;
-      if (dl.end < today && dl.end >= from) over.push(line); else if (dl.end >= today && dl.end <= to) soon.push(line);
-    }
-  }
-  if (!over.length && !soon.length) return;
-  const parts = [`📊 ติดตามผลงานปีงบ 2570 (${today})`];
-  if (over.length) parts.push(`🔴 เลยกำหนด ${over.length} รายการ\n${over.slice(0, 15).join('\n')}`);
-  if (soon.length) parts.push(`🟡 ครบกำหนดใน 7 วัน ${soon.length} รายการ\n${soon.slice(0, 15).join('\n')}`);
-  await sendLine(channelAccessToken, targetId, parts.join('\n\n'));
 });
