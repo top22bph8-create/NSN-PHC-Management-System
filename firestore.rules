@@ -73,6 +73,11 @@ service cloud.firestore {
       allow write: if hasRole(['super_admin']);
     }
     // สถิติบริการรายวันจาก JHCIS (ตัวเลขสรุปล้วนๆ ไม่มีข้อมูลผู้ป่วยรายบุคคล) — เขียนได้เฉพาะ Cloud Function (Admin SDK)
+    match /workTrack/{id} {
+      allow read: if isActive();
+      allow create, update: if isActive();
+      allow delete: if false;
+    }
     match /rightsRegistry/{id} {
       allow read: if isActive();
       allow write: if false;

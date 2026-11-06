@@ -115,7 +115,7 @@ if (args.includes('--rights')) {
   console.log('ประชากรตามทะเบียนราษฎร์ แยกสิทธิ:', JSON.stringify(sum.reg), ' UC/Wel =', sum.regUcWel.join('/'));
   if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); process.exit(0); }
   const chunks = []; for (const [cat, list] of Object.entries(cats)) for (let i = 0; i < list.length || (i === 0 && !list.length); i += 1500) { chunks.push({ cat, idx: i / 1500, rows: list.slice(i, i + 1500) }); if (!list.length) break; }
-  const url = cfg.rightsEndpoint || String(cfg.endpoint).replace(/ingestservicestats/i, 'ingestrightsregistry');
+  const url = cfg.rightsEndpoint || 'https://us-central1-nsn-phc-web.cloudfunctions.net/ingestRightsRegistry';
   const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ summary: sum, chunks }) });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }

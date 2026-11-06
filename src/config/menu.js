@@ -53,6 +53,7 @@ export const GROUPS = [
   {
     key: 'info', title: 'งานข้อมูลข่าวสารและสารสนเทศ', emoji: '🌐', icon: Globe, tone: 'from-violet-500 to-purple-600', soft: 'bg-violet-50 text-violet-700',
     items: [
+      { key: 'work-tracker', label: 'ติดตามผลงานปีงบประมาณ 2570', path: '/work-tracker', icon: Activity, ready: true, module: 'work-tracker', tone: 'from-violet-600 to-fuchsia-500', desc: 'ปฏิทินงาน 46 รายการ สถานะ ผลงานเทียบเป้า ประมาณรายได้ ผู้รับผิดชอบ' },
       { key: 'service-stats', label: 'รายงานสถานะการให้บริการของ รพ.สต.', path: '/service-stats', icon: Activity, ready: true, module: 'service-stats', tone: 'from-sky-600 to-cyan-500', desc: 'แดชบอร์ดผู้รับบริการ รายวัน/รายเดือน/รายปี จาก JHCIS' },
       { key: 'rights-registry', label: 'ทะเบียนสิทธิ UC/Wel ตรง–ไม่ตรง', path: '/rights-registry', icon: Activity, ready: true, module: 'rights-registry', tone: 'from-emerald-600 to-teal-500', desc: 'จำนวนผู้ขึ้นทะเบียนสิทธิ UC/Wel ตรง/ไม่ตรง กดดูรายชื่อได้' },
       { key: 'ndpmanual', label: 'คู่มือการบันทึก NDP – JHCIS (รพ.สต.บ้านหนองสนม 05449)', path: '/group/info', href: `${import.meta.env.BASE_URL}ndp-manual/index.html`, icon: BookOpenCheck, manual: true, emoji: '📘', tone: 'from-blue-600 to-cyan-500', ready: true, desc: 'คู่มือบันทึก NDP รหัสค่าใช้จ่าย Mapping Error Msg (ปรับปรุงจากต้นฉบับ)' },
