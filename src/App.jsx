@@ -8,7 +8,7 @@ import PersonRegistry from './pages/PersonRegistry';
 import UnitDuty from './pages/UnitDuty';
 import ServiceStats from './pages/ServiceStats';
 import RightsRegistry from './pages/RightsRegistry';
-import WorkTracker from './pages/WorkTracker';
+import PPFee from './pages/PPFee';
 import ThaiBooking from './pages/ThaiBooking';
 import ThaiBookingPublic from './pages/ThaiBookingPublic';
 import PrintThaiQr from './pages/PrintThaiQr';
@@ -199,7 +199,7 @@ function Shell() {
           ))}
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
           <Route path="rights-registry" element={<Guard module="rights-registry"><RightsRegistry /></Guard>} />
-          <Route path="work-tracker" element={<Guard module="work-tracker"><WorkTracker /></Guard>} />
+          <Route path="pp-fee" element={<Guard module="pp-fee"><PPFee /></Guard>} />
           <Route path="service-stats" element={<Guard module="service-stats"><ServiceStats /></Guard>} />
           <Route path="unit-blood" element={<Guard module="unit-duty"><UnitDuty kind="blood" /></Guard>} />
           <Route path="thai-booking" element={<Guard module="thai-booking"><ThaiBooking /></Guard>} />

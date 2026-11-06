@@ -73,6 +73,111 @@ if (args.includes('--explore')) {
   for (const col of ['hosmain', 'hossub']) { try { const [r] = await conn.query(`select ${col} h, count(*) n from person where rightcode is not null group by ${col} order by n desc limit 6`); console.log(`\nสถานพยาบาลหลัก (${col}) ที่พบมากสุด:`, JSON.stringify(r)); } catch (e) { console.log(`\nไม่มีคอลัมน์ ${col}:`, e.code); } }
   await conn.end(); process.exit(0);
 }
+if (args.includes('--explore-pp')) {
+  // สำรวจโครงสร้างเพื่อออกแบบรายงาน P&P Fee Schedule (ไม่ส่งข้อมูลผู้ป่วย แสดงเฉพาะชื่อตาราง/คอลัมน์/จำนวนรวมของรหัส)
+  const T = async (sql, p) => { try { return (await conn.query(sql, p))[0]; } catch (e) { console.log('  ! ', e.code || e.message); return []; } };
+  const tabs = (await T('show tables')).map((r) => Object.values(r)[0]);
+  console.log('ตารางที่เกี่ยวข้อง:', tabs.filter((t) => /^(visit|cdrug|cproc|ndp|nhso|cicd|cdisease|cvacc)/i.test(t)).join(', '));
+  for (const t of ['visitdiag', 'visitdrug', 'cdrug', 'visitepi', 'visitanc', 'visitancpregnancy']) {
+    if (!tabs.includes(t)) { console.log(`\n(${t}: ไม่มีตารางนี้)`); continue; }
+    console.log(`\n${t}:`, (await T(`show columns from ${t}`)).map((c) => c.Field).join(', '));
+  }
+  const proc = tabs.filter((t) => /proc|oper|lab|ndp/i.test(t)); console.log('\nตารางหัตถการ/แล็บ:', proc.join(', '));
+  const pat = ['Z34', 'Z35', 'Z32', 'Z39', 'Z121', 'Z12.1', 'Z130', 'Z13.0', 'K060', 'K06.0', 'G431', 'G43.1', 'Z304', 'Z30.4', 'Z300', 'Z30.0', 'Z251', 'Z25.1', 'Z115', 'Z11.5', 'Z235', 'Z236', 'Z23.5', 'Z23.6', 'I10', 'E1'];
+  const where = pat.map(() => 'v.diagcode like ?').join(' or ');
+  const r = await T(`select upper(replace(v.diagcode,'.','')) c, count(*) n from visitdiag v where v.dateupdate >= date_sub(curdate(), interval 400 day) and (${where}) group by c order by n desc limit 40`, pat.map((x) => x + '%'));
+  console.log('\nรหัส ICD-10 (400 วันล่าสุด) จำนวนครั้ง:', r.map((x) => `${x.c}=${x.n}`).join(' '));
+  if (tabs.includes('cdrug')) { const c = await T(`select count(*) n, sum(tmtcode is not null and tmtcode<>'') tmt from cdrug`); console.log('\ncdrug: จำนวน', JSON.stringify(c)); }
+  await conn.end(); process.exit(0);
+}
+if (args.includes('--pp')) {
+  // รายงาน P&P Fee Schedule: นับจำนวนครั้งของแต่ละกิจกรรมจาก JHCIS ตามรหัส ICD-10 (เลขรหัสไม่มีจุด) ทั้งปีงบประมาณ แล้วจำกัดจำนวนครั้งต่อคนต่อปีตามตาราง
+  // ส่งเฉพาะตัวเลขรายเดือนต่อกิจกรรม (ไม่มีชื่อ/เลขบัตรผู้ป่วย) — เงินคำนวณที่หน้าเว็บจากอัตราจ่ายในตาราง
+  const PCU = String(cfg.pcucode || '05449');
+  const now = new Date(); const fyStartYear = now.getMonth() + 1 >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+  const fy = Number(argv('--fy')) || fyStartYear + 544; const sy = fy - 544;
+  const from2 = `${sy}-10-01`; const to2 = `${sy + 1}-09-30`;
+  const ageY = (b, d) => { if (!b) return null; const x = new Date(b); const y = new Date(d); if (isNaN(x)) return null; let a = y.getFullYear() - x.getFullYear(); if (y.getMonth() < x.getMonth() || (y.getMonth() === x.getMonth() && y.getDate() < x.getDate())) a--; return a; };
+  const ageM = (b, d) => { if (!b) return null; const x = new Date(b); const y = new Date(d); if (isNaN(x)) return null; return (y.getFullYear() - x.getFullYear()) * 12 + (y.getMonth() - x.getMonth()) - (y.getDate() < x.getDate() ? 1 : 0); };
+  // กติกาแต่ละกิจกรรม: codes = รหัส ICD-10 (ไม่มีจุด), cap = จำนวนครั้งสูงสุดต่อคนต่อปีงบ, ok = เงื่อนไขอายุ/เพศ
+  const RULES = [
+    { id: '3', codes: ['Z320', 'Z321'], cap: 4 },
+    { id: '4', codes: ['Z390', 'Z391', 'Z392'], cap: 3 },
+    { id: '5', codes: ['Z392'], cap: 2 },
+    { id: '6', codes: ['Z121'], cap: 1 },
+    { id: '7', codes: ['Z130'], cap: 1, ok: (r, d) => String(r.sex) === '2' && ageY(r.birth, d) >= 13 && ageY(r.birth, d) <= 45 },
+    { id: '9', codes: ['Z130'], cap: 1, ok: (r, d) => { const m = ageM(r.birth, d); return m >= 6 && m <= 12; } },
+    { id: '10', codes: ['K060'], cap: 2, ok: (r, d) => ageY(r.birth, d) >= 25 && ageY(r.birth, d) <= 59 },
+    { id: '14', codes: ['Z251'], cap: 1 },
+    { id: 'g1517', codes: ['Z115'], cap: 3 },
+    { id: '19', codes: ['Z235', 'Z236'], cap: 1, ok: (r, d) => ageY(r.birth, d) >= 25 },
+  ];
+  const T = async (sql, p) => { try { return (await conn.query(sql, p))[0]; } catch (e) { console.log('  ! ดึงไม่ได้:', e.code || e.message); return []; } };
+  const events = {}; RULES.forEach((r) => { events[r.id] = []; }); events['1'] = []; events['18'] = [];
+  const allCodes = [...new Set(RULES.flatMap((r) => r.codes))];
+  const diag = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, upper(replace(g.diagcode,'.','')) code, p.sex, p.birth, c.rightgroup rg
+    from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno
+    join person p on p.pcucodeperson = v.pcucodeperson and p.pid = v.pid left join cright c on c.rightcode = v.rightcode
+    where v.pcucode = ? and v.visitdate between ? and ? and ${SVC} and upper(replace(g.diagcode,'.','')) in (${allCodes.map(() => '?').join(',')})`, [PCU, from2, to2, ...allCodes]);
+  for (const r of diag) {
+    if (String(r.rg) === '5') continue; // คนต่างด้าว ไม่อยู่ในกลุ่ม "คนไทยทุกสิทธิ"
+    for (const rule of RULES) if (rule.codes.includes(r.code) && (!rule.ok || rule.ok(r, r.d))) events[rule.id].push({ k: String(r.pid), d: r.d });
+  }
+  // ฝากครรภ์: นับแถว visitanc ต่อครรภ์ (pid+pregno) สูงสุด 8 ครั้ง
+  const anc = await T(`select v.pid, a.pregno, date_format(a.datecheck,'%Y-%m-%d') d, c.rightgroup rg from visitanc a left join visit v on v.pcucode = a.pcucode and v.visitno = a.visitno
+    left join cright c on c.rightcode = v.rightcode where a.pcucode = ? and a.datecheck between ? and ?`, [PCU, from2, to2]);
+  for (const r of anc) if (String(r.rg) !== '5') events['1'].push({ k: `${r.pid}_${r.pregno}`, d: r.d });
+  // วัคซีน EPI อายุ 0–14 ปี: นับทุกเข็ม (ไม่จำกัดจำนวน)
+  const epi = await T(`select e.pid, date_format(e.dateepi,'%Y-%m-%d') d, p.birth from visitepi e join person p on p.pcucodeperson = e.pcucodeperson and p.pid = e.pid
+    where e.pcucode = ? and e.dateepi between ? and ?`, [PCU, from2, to2]);
+  for (const r of epi) { const a = ageY(r.birth, r.d); if (a != null && a >= 0 && a <= 14) events['18'].push({ k: `${r.pid}`, d: r.d }); }
+  // ยาคุมกำเนิด: JHCIS บันทึกเป็นรายการค่าบริการใน visitdrug/cdrug (ชื่อรายการ) — นับ 1 ครั้งต่อคนต่อวัน
+  const DRUG_RULES = [
+    { id: '11', like: '%ยาเม็ดคุมกำเนิดชนิดฮอร์โมนเดี่ยว%', cap: 5 },
+    { id: '12', like: '%ยาเม็ดคุมกำเนิดชนิดฮอร์โมนรวม%', cap: 5 },
+    { id: '13', like: '%ยาฉีดคุมกำเนิด%', cap: 5 },
+  ];
+  const drugCap = {};
+  for (const dr of DRUG_RULES) {
+    events[dr.id] = []; drugCap[dr.id] = dr.cap;
+    const rows2 = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, max(c.rightgroup) rg from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno
+      join cdrug dg on dg.drugcode = vd.drugcode left join cright c on c.rightcode = v.rightcode
+      where v.pcucode = ? and v.visitdate between ? and ? and ${SVC} and dg.drugname like ? group by v.pid, v.visitdate`, [PCU, from2, to2, dr.like]);
+    for (const r of rows2) if (String(r.rg) !== '5') events[dr.id].push({ k: String(r.pid), d: r.d });
+  }
+  const capFor = (id) => (id === '1' ? 8 : id === '18' ? Infinity : drugCap[id] || RULES.find((r) => r.id === id).cap);
+  const months = {}; const tot = {};
+  for (const [id, list] of Object.entries(events)) {
+    const cap = capFor(id); const seen = {}; const byK = {};
+    list.sort((a, b) => a.d.localeCompare(b.d));
+    for (const ev of list) {
+      const m = ev.d.slice(0, 7); const o = ((months[m] ||= {})[id] ||= { n: 0, e: 0 });
+      o.n++; byK[ev.k] = (byK[ev.k] || new Set()); byK[ev.k].add(ev.d);
+      if ((seen[ev.k] = (seen[ev.k] || 0) + 1) <= cap) o.e++;
+    }
+    tot[id] = { n: list.length, e: Object.values(months).reduce((a, mm) => a + (mm[id]?.e || 0), 0), persons: Object.keys(byK).length };
+  }
+  const mapped = Object.keys(events);
+  console.log(`ปีงบ ${fy} (${from2} ถึง ${to2}) หน่วยบริการ ${PCU}`);
+  console.log('กิจกรรม: บันทึกทั้งหมด / เบิกได้หลังจำกัดครั้ง / จำนวนคน'); Object.entries(tot).sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true })).forEach(([id, t]) => console.log(`  ข้อ ${id}: ${t.n} / ${t.e} / ${t.persons}`));
+  if (args.includes('--check')) {
+    const kw = ['ขัดฟัน', 'ทำความสะอาดฟัน', 'Hct', 'ฮีมาโตคริต', 'HbA1c', 'ฮีโมโกลบิน', 'Creatinine', 'ครีอะตินิน', 'Potassium', 'โพแทสเซียม', 'HPV', 'HBsAg', 'ตับอักเสบบี', 'HCV', 'ตับอักเสบซี', 'Triferdine', 'ไตรเฟอร์ดีน', 'Ferrofolic', 'เฟอโรโฟลิก', 'Folic', 'ฟลูออไรด์', 'ตั้งครรภ์', 'FIT', 'เลือดแฝง'];
+    const found = await T(`select dg.drugname nm, count(*) n from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno join cdrug dg on dg.drugcode = vd.drugcode
+      where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 400 day) and (${kw.map(() => 'dg.drugname like ?').join(' or ')}) group by dg.drugname order by n desc limit 40`, [PCU, ...kw.map((k) => `%${k}%`)]);
+    console.log('\nรายการค่าบริการ/ยาที่เกี่ยวข้อง (400 วัน):'); found.forEach((x) => console.log(`  ${x.nm} = ${x.n}`));
+    const dr = await T(`select d.drugname nm, count(*) n from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno
+      join visitdrug vd on vd.pcucode = v.pcucode and vd.visitno = v.visitno join cdrug d on d.drugcode = vd.drugcode
+      where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 400 day) and upper(replace(g.diagcode,'.','')) in ('Z304','Z300') group by d.drugname order by n desc limit 14`, [PCU]);
+    console.log('\nยาที่พบในการมารับบริการรหัส Z30.0/Z30.4 (400 วัน):'); dr.forEach((x) => console.log(`  ${x.nm} = ${x.n}`));
+    console.log('\nนี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); await conn.end(); process.exit(0);
+  }
+  await conn.end();
+  const url = cfg.ppEndpoint || 'https://us-central1-nsn-phc-web.cloudfunctions.net/ingestPpFee';
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ fy, asOf: iso(new Date()), months, mapped }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
+  console.log('ส่งสำเร็จ'); process.exit(0);
+}
 if (args.includes('--rights')) {
   // โหมดทะเบียนสิทธิ UC/Wel: ตรง = อยู่ในเขต (ประเภทอาศัย 1-4) และขึ้นทะเบียนที่ รพ.สต.เรา / ไม่ตรง = อยู่ในเขตแต่ขึ้นทะเบียนที่อื่น / B = นอกเขตแต่มาขึ้นทะเบียนกับเรา
   const PCU = String(cfg.pcucode || '05449');

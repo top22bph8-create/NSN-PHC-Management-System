@@ -55,7 +55,7 @@ export const ACCESS = {
   'unit-duty': { read: ALL, write: ALL },
   'service-stats': { read: ALL, write: [] },
   'rights-registry': { read: ALL, write: [] },
-  'work-tracker': { read: ALL, write: ALL },
+  'pp-fee': { read: ALL, write: [] },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },
   audit: { read: ['super_admin'], write: [] },

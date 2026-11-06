@@ -1261,3 +1261,26 @@ exports.ingestRightsRegistry = onRequest({ cors: false, memory: '512MiB', timeou
     res.json({ ok: true, chunks: chunks.length });
   } catch (e) { console.error('ingestRightsRegistry', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
 });
+
+// ===== P&P Fee Schedule: สคริปต์ที่เครื่อง JHCIS ส่งตัวเลขรายเดือนต่อกิจกรรม (ไม่มีข้อมูลผู้ป่วย) -> ppFee/fy{ปี พ.ศ.} =====
+exports.ingestPpFee = onRequest({ cors: false }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
+  try {
+    const key = String(req.get('x-api-key') || '');
+    const meta = await db.doc('settings/statsIngest').get();
+    const want = meta.exists ? meta.data().keyHash : '';
+    if (!want || key.length < 20 || require('crypto').createHash('sha256').update(key).digest('hex') !== want) { res.status(401).json({ ok: false, error: 'คีย์ไม่ถูกต้อง' }); return; }
+    const b = req.body || {};
+    const fy = Number(b.fy);
+    if (!Number.isInteger(fy) || fy < 2560 || fy > 2600 || !b.months || typeof b.months !== 'object' || Object.keys(b.months).length > 14) { res.status(400).json({ ok: false, error: 'ข้อมูลไม่ถูกต้อง' }); return; }
+    const months = {};
+    for (const [m, acts] of Object.entries(b.months)) {
+      if (!/^\d{4}-\d{2}$/.test(m) || typeof acts !== 'object') continue;
+      months[m] = {};
+      for (const [id, v] of Object.entries(acts).slice(0, 40)) months[m][String(id).slice(0, 8)] = { n: Number(v && v.n) || 0, e: Number(v && v.e) || 0 };
+    }
+    const mapped = (Array.isArray(b.mapped) ? b.mapped : []).slice(0, 40).map((x) => String(x).slice(0, 8));
+    await db.doc(`ppFee/fy${fy}`).set({ fy, asOf: String(b.asOf || '').slice(0, 10), months, mapped, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ ok: true });
+  } catch (e) { console.error('ingestPpFee', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});
