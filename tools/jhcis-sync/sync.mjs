@@ -178,6 +178,62 @@ if (args.includes('--pp')) {
   if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
   console.log('ส่งสำเร็จ'); process.exit(0);
 }
+if (args.includes('--targets')) {
+  // กลุ่มเป้าหมายรายกิจกรรม: ใครทำแล้ว/ยังไม่ได้ทำ แยกรายหมู่บ้าน (ส่งชื่อ อายุ บ้านเลขที่ หมู่ สถานะ — ไม่มีเลขบัตร) -> ppTargets
+  const PCU = String(cfg.pcucode || '05449');
+  const today = new Date(); const todayS = iso(today);
+  const T = async (sql, p) => { try { return (await conn.query(sql, p))[0]; } catch (e) { console.log('  ! ดึงไม่ได้:', e.code || e.message); return []; } };
+  const [pc] = await conn.query('show columns from person'); const alive = pc.some((x) => x.Field === 'dischar') ? "and (p.dischar is null or p.dischar in ('9','','0'))" : '';
+  const ageY = (b) => { const x = new Date(b); if (!b || isNaN(x)) return null; let a = today.getFullYear() - x.getFullYear(); if (today.getMonth() < x.getMonth() || (today.getMonth() === x.getMonth() && today.getDate() < x.getDate())) a--; return a; };
+  const ageM = (b) => { const x = new Date(b); if (!b || isNaN(x)) return null; return (today.getFullYear() - x.getFullYear()) * 12 + (today.getMonth() - x.getMonth()) - (today.getDate() < x.getDate() ? 1 : 0); };
+  const people = await T(`select p.pid, t.titlename, p.fname, p.lname, p.sex, p.birth, hs.hno, hs.villcode
+    from person p left join ctitle t on t.titlecode = p.prename join house hs on hs.pcucode = p.pcucodeperson and hs.hcode = p.hcode
+    where p.typelive in ('1','3') and hs.villcode is not null and hs.villcode not like '%00' and not exists (select 1 from persondeath d where d.pid = p.pid and d.pcucodeperson = p.pcucodeperson) ${alive}`);
+  const P = new Map(people.map((r) => [String(r.pid), r]));
+  const vname = {}; for (const r of await T('select villcode, villname from village')) vname[parseInt(String(r.villcode).slice(6, 8), 10)] = r.villname;
+  const moo = (r) => parseInt(String(r.villcode).slice(6, 8), 10);
+  const nm = (r) => `${r.titlename || ''}${r.fname || ''} ${r.lname || ''}`.trim();
+  const lastDiag = async (codes, since) => { const m = new Map(); for (const r of await T(`select v.pid, date_format(max(v.visitdate),'%Y-%m-%d') d from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno
+      where v.pcucode = ? and v.visitdate >= ? and ${SVC} and upper(replace(g.diagcode,'.','')) in (${codes.map(() => '?').join(',')}) group by v.pid`, [PCU, since, ...codes])) m.set(String(r.pid), r.d); return m; };
+  const dAgo = (n) => { const d = new Date(today); d.setDate(d.getDate() - n); return iso(d); };
+  const fyStartYear = today.getMonth() + 1 >= 10 ? today.getFullYear() : today.getFullYear() - 1; const fyStart = `${fyStartYear}-10-01`;
+  const acts = {}; const cats = {};
+  const add = (id, cat, name, rule, rows) => {
+    const by = {}; let d = 0; let pa = 0; let t = 0;
+    for (const r of rows) { const m = r.moo; const o = (by[m] ||= { t: 0, d: 0, p: 0 }); o.t++; t++; if (r.st === 'done') { o.d++; d++; } else if (r.st === 'partial') { o.p++; pa++; } }
+    acts[id] = { cat, name, rule, total: t, done: d, partial: pa, todo: t - d - pa, byMoo: by };
+    cats[cat] = rows.sort((a, b) => a.moo - b.moo || String(a.hno).localeCompare(String(b.hno), 'th', { numeric: true })).map((r) => [r.pid, r.name, r.age, r.hno || '', r.moo, r.st, r.detail]);
+  };
+  const mk = (r, st, detail, age) => ({ pid: r.pid, name: nm(r), age, hno: r.hno, moo: moo(r), st, detail });
+  // 6) FIT: อายุ 50–70 ปี ทุก 2 ปี
+  { const served = await lastDiag(['Z121'], dAgo(730)); const rows = [];
+    for (const r of P.values()) { const a = ageY(r.birth); if (a >= 50 && a <= 70) rows.push(served.has(String(r.pid)) ? mk(r, 'done', `ตรวจล่าสุด ${served.get(String(r.pid))}`, a) : mk(r, 'todo', 'ยังไม่ได้ตรวจใน 2 ปี', a)); }
+    add('6', 'TFIT', 'คัดกรองมะเร็งลำไส้ใหญ่ FIT TEST', 'อายุ 50–70 ปี (ทุก 2 ปี) — ทำแล้ว = มีรหัส Z12.1 ใน 2 ปีล่าสุด', rows); }
+  // 9) ยาเม็ดเสริมธาตุเหล็กเด็ก 6–12 เดือน
+  { const served = await lastDiag(['Z130'], dAgo(400)); const rows = [];
+    for (const r of P.values()) { const m = ageM(r.birth); if (m >= 6 && m <= 12) { const ds = served.get(String(r.pid)); rows.push(ds ? mk(r, 'done', `ได้รับ ${ds}`, `${m} เดือน`) : mk(r, 'todo', 'ยังไม่ได้รับ', `${m} เดือน`)); } }
+    add('9', 'TCH', 'ยาเม็ดเสริมธาตุเหล็กเด็ก 6–12 เดือน', 'เด็กอายุ 6–12 เดือน — ทำแล้ว = มีรหัส Z13.0', rows); }
+  // 14) วัคซีนไข้หวัดใหญ่ (ประมาณการกลุ่มเสี่ยง: อายุ 65 ปีขึ้นไป)
+  { const served = await lastDiag(['Z251'], fyStart); const rows = [];
+    for (const r of P.values()) { const a = ageY(r.birth); if (a >= 65) rows.push(served.has(String(r.pid)) ? mk(r, 'done', `ฉีด ${served.get(String(r.pid))}`, a) : mk(r, 'todo', 'ยังไม่ได้ฉีดในปีงบนี้', a)); }
+    add('14', 'TFLU', 'วัคซีนไข้หวัดใหญ่', 'อายุ 65 ปีขึ้นไป (กลุ่มเสี่ยงอื่น เช่น โรคเรื้อรัง ยังไม่รวม) — ทำแล้ว = มีรหัส Z25.1 ในปีงบนี้', rows); }
+  // 1) หญิงตั้งครรภ์: ครรภ์ที่ LMP ไม่เกิน 300 วัน และกำหนดคลอดยังไม่เกิน 45 วัน
+  { const preg = await T(`select pid, pregno, date_format(edc,'%Y-%m-%d') edc from visitancpregnancy where lmp >= date_sub(curdate(), interval 300 day) and edc >= date_sub(curdate(), interval 45 day)`);
+    const cnt = {}; for (const r of await T('select pid, pregno, count(*) n, date_format(max(datecheck),\'%Y-%m-%d\') d from visitanc group by pid, pregno')) cnt[`${r.pid}_${r.pregno}`] = r;
+    const rows = [];
+    for (const g of preg) { const r = P.get(String(g.pid)); if (!r) continue; const c = cnt[`${g.pid}_${g.pregno}`]; const n = c ? Number(c.n) : 0;
+      rows.push(mk(r, n >= 8 ? 'done' : n > 0 ? 'partial' : 'todo', n ? `ฝากครรภ์ ${n}/8 ครั้ง (ล่าสุด ${c.d}) · กำหนดคลอด ${g.edc}` : `ยังไม่เคยฝากครรภ์ · กำหนดคลอด ${g.edc}`, ageY(r.birth))); }
+    add('1', 'TANC', 'ฝากครรภ์ ANC 1–8 ครั้ง', 'หญิงตั้งครรภ์ปัจจุบัน (กำหนดคลอดยังไม่เกิน 45 วัน) — ทำแล้ว = ฝากครรภ์ครบ 8 ครั้ง', rows); }
+  for (const [id, a] of Object.entries(acts)) console.log(`ข้อ ${id} ${a.name}: เป้าหมาย ${a.total} · ทำแล้ว ${a.done} · ทำบางส่วน ${a.partial} · ยังไม่ทำ ${a.todo}`);
+  if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); await conn.end(); process.exit(0); }
+  await conn.end();
+  const chunks = []; for (const [cat, list] of Object.entries(cats)) for (let i = 0; i < list.length || i === 0; i += 1500) { chunks.push({ cat, idx: i / 1500, rows: list.slice(i, i + 1500) }); if (!list.length) break; }
+  const url = cfg.targetsEndpoint || 'https://us-central1-nsn-phc-web.cloudfunctions.net/ingestPpTargets';
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ summary: { acts, villages: vname, asOf: todayS }, chunks }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
+  console.log(`ส่งสำเร็จ ${body.chunks} ชุด`); process.exit(0);
+}
 if (args.includes('--rights')) {
   // โหมดทะเบียนสิทธิ UC/Wel: ตรง = อยู่ในเขต (ประเภทอาศัย 1-4) และขึ้นทะเบียนที่ รพ.สต.เรา / ไม่ตรง = อยู่ในเขตแต่ขึ้นทะเบียนที่อื่น / B = นอกเขตแต่มาขึ้นทะเบียนกับเรา
   const PCU = String(cfg.pcucode || '05449');
