@@ -13,7 +13,7 @@ import { Badge, ConfirmDialog, Modal, Spinner } from '../../components/ui';
 import CaseFormModal from './CaseFormModal';
 import { Curve, HBars } from './OutbreakBars';
 import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, fullName, maskId, nf, validThaiId } from './outbreakLib';
-import { useOfficers, useVillages } from './outbreakRefs';
+import { locate, useAreas, useOfficers, useVillages } from './outbreakRefs';
 import CaseFiles from './CaseFiles';
 import GuideTab from './GuideTab';
 import OutbreakMap from './OutbreakMap';
@@ -22,13 +22,13 @@ import { CLASSIFICATION, TEMPLATES } from './diseaseTemplates';
 const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['guide', 'แนวทางสอบสวน/นิยามโรค'], ['patients', 'ผู้ป่วย'], ['map', 'แผนที่'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
 const lab = 'mb-1 block text-sm text-slate-600';
 
-function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
+export function PersonModal({ kind, caseId, caseDefaults, initial, preset, onClose }) {
   const isP = kind === 'patient';
   const villages = useVillages(); const officers = useOfficers();
   const split = (n) => { const t = String(n || '').trim(); const k = t.indexOf(' '); return k < 0 ? [t, ''] : [t.slice(0, k), t.slice(k + 1)]; };
   const [f, setF] = useState(() => (initial ? { ...initial, firstName: initial.firstName ?? split(initial.name)[0], lastName: initial.lastName ?? split(initial.name)[1] } : {
-    firstName: '', lastName: '', idCard: '', age: '', sex: '', houseNo: '', villageNo: caseDefaults?.villageNo || '', reportDate: caseDefaults?.reportDate || '', onsetDate: '', admitDate: '', hospital: '', dischargeDate: '', symptoms: '', investigator: caseDefaults?.responsible || '',
-    classification: '', ext: {}, status: isP ? PERSON_STATUS[0] : PERSON_STATUS[3], relation: '', lastContact: '', lat: '', lng: '', note: '' }));
+    firstName: '', lastName: '', idCard: '', age: '', sex: '', houseNo: '', villageNo: preset?.villageNo || caseDefaults?.villageNo || '', reportDate: caseDefaults?.reportDate || '', onsetDate: '', admitDate: '', hospital: '', dischargeDate: '', symptoms: '', investigator: caseDefaults?.responsible || '',
+    classification: '', ext: {}, status: isP ? PERSON_STATUS[0] : PERSON_STATUS[3], relation: '', lastContact: '', lat: preset?.lat ?? '', lng: preset?.lng ?? '', note: '' }));
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const dt = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
@@ -127,6 +127,9 @@ export default function OutbreakCase() {
   const patients = useMemo(() => (people || []).filter((p) => p.kind === 'patient').sort((a, b) => String(a.onsetDate || '9').localeCompare(String(b.onsetDate || '9'))), [people]);
   const contacts = useMemo(() => (people || []).filter((p) => p.kind === 'contact'), [people]);
   const an = useMemo(() => (cs ? analyze(cs, patients, contacts) : null), [cs, patients, contacts]);
+  const areas = useAreas();
+  const moveP = async (p, lat, lng) => { try { await updateDoc(doc(db, 'outbreakPeople', p.id), { lat, lng, updatedAt: serverTimestamp() }); const l = locate(areas, lat, lng); say(`ย้ายหมุดแล้ว${l.inside === false ? ' — ตำแหน่งนี้อยู่นอกเขตรับผิดชอบ' : ''}`); } catch (e) { say('ย้ายหมุดไม่สำเร็จ: ' + (e.code || e.message)); } };
+  const placeP = async (p, lat, lng) => { const l = locate(areas, lat, lng); try { await updateDoc(doc(db, 'outbreakPeople', p.id), { lat, lng, ...(l.villageNo && !p.villageNo ? { villageNo: l.villageNo } : {}), updatedAt: serverTimestamp() }); say(`วางพิกัดให้ ${p.name} แล้ว${l.inside === false ? ' — อยู่นอกเขตรับผิดชอบ' : ''}`); } catch (e) { say('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } };
   if (cs === undefined || !people) return <Spinner />;
   if (cs === null) return <div className="card p-6 text-center text-slate-600">ไม่พบเหตุการณ์นี้ <Link className="text-brand-700 underline" to="/outbreak">กลับไปหน้าหลัก</Link></div>;
   const say = (t) => { setMsg(t); setTimeout(() => setMsg(''), 4000); };
@@ -192,7 +195,7 @@ export default function OutbreakCase() {
           <p className="mt-2 text-xs text-slate-400">ตัวเลขทั้งหมดคำนวณจากข้อมูลที่บันทึกในเคสนี้เท่านั้น</p></section>
       </>)}
       {tab === 'guide' && <GuideTab cs={cs} say={say} />}
-      {tab === 'map' && <OutbreakMap patients={patients} label={{ [id]: cs.title }} />}
+      {tab === 'map' && <OutbreakMap patients={patients} areas={areas} label={{ [id]: cs.title }} onMove={moveP} onPlace={placeP} onAddAt={(lat, lng) => setPm({ kind: 'patient', initial: null, preset: { lat, lng, villageNo: locate(areas, lat, lng).villageNo } })} />}
       {tab === 'patients' && <PeopleTable list={patients} isP />}
       {tab === 'contacts' && <PeopleTable list={contacts} isP={false} />}
       {tab === 'timeline' && <ListTab cs={cs} field="timeline" say={say} columns={[{ k: 'text', t: 'เหตุการณ์/สิ่งที่ดำเนินการ' }]} blank={{ date: todayStr(), text: '' }} empty="ยังไม่มี Timeline — บันทึกวันรับแจ้ง วันออกสอบสวน วันพบผู้ป่วยรายสำคัญ ฯลฯ" />}
@@ -202,7 +205,7 @@ export default function OutbreakCase() {
       {tab === 'files' && <CaseFiles cs={cs} say={say} />}
 
       {edit && <CaseFormModal initial={cs} onClose={() => setEdit(false)} />}
-      {pm && <PersonModal kind={pm.kind} caseId={id} caseDefaults={cs} initial={pm.initial} onClose={() => setPm(null)} />}
+      {pm && <PersonModal kind={pm.kind} caseId={id} caseDefaults={cs} initial={pm.initial} preset={pm.preset} onClose={() => setPm(null)} />}
       {del && <ConfirmDialog busy={busy} onCancel={() => setDel(null)} onConfirm={doDel} message={del === 'case' ? `ลบเคส “${cs.title}” พร้อมผู้ป่วยและผู้สัมผัสทั้งหมด ${nf(people.length)} ราย?` : `ลบ “${del.name}” ออกจากเคสนี้?`} />}
       <p className="hidden text-xs text-slate-400 print:block">พิมพ์โดย {profile?.name || profile?.email} · {fmtDate(todayStr())} · เอกสารนี้มีข้อมูลระบุตัวบุคคล ห้ามเผยแพร่</p>
     </div>
