@@ -82,6 +82,7 @@ export default function ServiceStats() {
   const t = todayStr(); const [ty, tm] = t.split('-').map(Number);
   const [mode, setMode] = useState('month');
   const [day, setDay] = useState(t);
+  const [rFrom, setRFrom] = useState(t.slice(0, 8) + '01'); const [rTo, setRTo] = useState(t);
   const [mon, setMon] = useState(tm); const [yr, setYr] = useState(ty + 543);
   const [fiscal, setFiscal] = useState(false);
   const [docs, setDocs] = useState(null);
@@ -91,9 +92,10 @@ export default function ServiceStats() {
   const range = useMemo(() => {
     const y = yr - 543;
     if (mode === 'day') return [day, day];
+    if (mode === 'range') { const a = rFrom <= rTo ? rFrom : rTo; const b = rFrom <= rTo ? rTo : rFrom; return [a, b]; }
     if (mode === 'month') return [`${y}-${pad(mon)}-01`, `${y}-${pad(mon)}-${lastDay(y, mon)}`];
     return fiscal ? [`${y - 1}-10-01`, `${y}-09-30`] : [`${y}-01-01`, `${y}-12-31`];
-  }, [mode, day, mon, yr, fiscal]);
+  }, [mode, day, mon, yr, fiscal, rFrom, rTo]);
   useEffect(() => {
     setDocs(null);
     return onSnapshot(query(collection(db, 'serviceStats'), where('date', '>=', range[0]), where('date', '<=', range[1])),
@@ -116,7 +118,7 @@ export default function ServiceStats() {
   // แท่งแนวโน้ม: เดือน = รายวัน, ปี = รายเดือน
   const trend = useMemo(() => {
     if (!docs || mode === 'day') return [];
-    if (mode === 'month') return docs.map((d) => ({ k: d.date.slice(8), v: d.visits }));
+    if (mode === 'month' || (mode === 'range' && docs.length <= 62)) return docs.map((d) => ({ k: d.date.slice(8) + (mode === 'range' ? '/' + d.date.slice(5, 7) : ''), v: d.visits }));
     const m = {}; docs.forEach((d) => { const k = d.date.slice(0, 7); m[k] = (m[k] || 0) + d.visits; });
     return Object.entries(m).map(([k, v]) => ({ k: thMonths[Number(k.slice(5)) - 1].slice(0, 3), v }));
   }, [docs, mode]);
@@ -126,7 +128,7 @@ export default function ServiceStats() {
     if (!docs?.length) return say({ type: 'error', text: 'ไม่มีข้อมูลให้ออกรายงาน' });
     exportXlsx(docs.map((d) => ({ 'วันที่': fmtDate(d.date), 'ครั้งที่รับบริการ': d.visits, 'จำนวนคน': d.persons, 'ฝากครรภ์': d.anc || 0, 'วัคซีน (เข็ม)': Object.values(d.vaccines || {}).reduce((a, b) => a + b, 0), 'เสียชีวิต': d.deaths || 0 })), 'สถานะการให้บริการ', `สถานะการให้บริการ_${range[0]}_${range[1]}`);
   };
-  const lbl = { day: fmtDate(day), month: `${thMonths[mon - 1]} ${yr}`, year: fiscal ? `ปีงบประมาณ ${yr}` : `ปี ${yr}` }[mode];
+  const lbl = { day: fmtDate(day), month: `${thMonths[mon - 1]} ${yr}`, year: fiscal ? `ปีงบประมาณ ${yr}` : `ปี ${yr}`, range: `${fmtDate(range[0])} – ${fmtDate(range[1])}` }[mode];
   const years = Array.from({ length: 6 }, (_, i) => ty + 543 - i);
 
   return (
@@ -134,12 +136,18 @@ export default function ServiceStats() {
       <PageHeader icon={Activity} emoji="📈" title="รายงานสถานะการให้บริการของ รพ.สต." subtitle="สรุปจำนวนผู้รับบริการจากโปรแกรม JHCIS — รายวัน รายเดือน รายปี (ตัวเลขสรุป ไม่แสดงข้อมูลผู้ป่วยรายบุคคล)"
         actions={<button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doExport}><FileSpreadsheet className="h-4 w-4" /> Excel</button>} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {[['day', 'รายวัน'], ['month', 'รายเดือน'], ['year', 'รายปี']].map(([k, l]) => (
+        {[['day', 'รายวัน'], ['range', 'ช่วงวันที่'], ['month', 'รายเดือน'], ['year', 'รายปี']].map(([k, l]) => (
           <button key={k} onClick={() => setMode(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${mode === k ? 'bg-brand-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50'}`}>{l}</button>
         ))}
         {mode === 'day' && <div className="w-44"><ThaiDateInput value={day} onChange={(v) => v && setDay(v)} yearsBack={3} yearsForward={0} /></div>}
+        {mode === 'range' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-slate-600">ตั้งแต่วันที่</span><div className="w-44"><ThaiDateInput value={rFrom} onChange={(v) => v && setRFrom(v)} yearsBack={3} yearsForward={0} /></div>
+            <span className="text-sm text-slate-600">ถึงวันที่</span><div className="w-44"><ThaiDateInput value={rTo} onChange={(v) => v && setRTo(v)} yearsBack={3} yearsForward={0} /></div>
+          </div>
+        )}
         {mode === 'month' && <select className="input !w-auto" value={mon} onChange={(e) => setMon(Number(e.target.value))} aria-label="เดือน">{thMonths.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select>}
-        {mode !== 'day' && <select className="input !w-auto" value={yr} onChange={(e) => setYr(Number(e.target.value))} aria-label="ปี พ.ศ.">{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>}
+        {(mode === 'month' || mode === 'year') && <select className="input !w-auto" value={yr} onChange={(e) => setYr(Number(e.target.value))} aria-label="ปี พ.ศ.">{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>}
         {mode === 'year' && <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={fiscal} onChange={(e) => setFiscal(e.target.checked)} /> ปีงบประมาณ (ต.ค.–ก.ย.)</label>}
         <span className="ml-auto text-sm font-semibold text-brand-800">{lbl}</span>
       </div>
@@ -156,7 +164,7 @@ export default function ServiceStats() {
           </div>
           {trend.length > 0 && (
             <section className="card mb-4 p-4">
-              <h3 className="mb-2 font-bold text-slate-700">{mode === 'month' ? 'จำนวนครั้งที่รับบริการรายวัน' : 'จำนวนครั้งที่รับบริการรายเดือน'}</h3>
+              <h3 className="mb-2 font-bold text-slate-700">{mode === 'month' || (mode === 'range' && docs.length <= 62) ? 'จำนวนครั้งที่รับบริการรายวัน' : 'จำนวนครั้งที่รับบริการรายเดือน'}</h3>
               <div className="flex items-end gap-1 overflow-x-auto pb-1">
                 {trend.map((x) => (
                   <div key={x.k} className="flex min-w-[18px] flex-1 flex-col items-center justify-end" title={`${x.k}: ${nf(x.v)} ครั้ง`}>
@@ -178,6 +186,25 @@ export default function ServiceStats() {
             <Bars title="ตามประเภทบริการ (ในแดชบอร์ดนับเฉพาะที่ให้บริการแล้ว)" data={agg.byFlag} labelOf={(k) => FLAG[k] || `รหัส ${k}`} color="from-slate-600 to-slate-400" />
           </div>
         </>
+      )}
+      {docs && docs.length > 0 && mode !== 'day' && (
+        <section className="card mt-4 overflow-x-auto p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold text-slate-700">รายงานรายวัน ({lbl})</h3>
+            <button className="btn btn-outline" onClick={doExport}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+          </div>
+          <table className="w-full min-w-[520px] text-sm">
+            <thead><tr className="border-b bg-slate-50 text-left text-slate-600"><th className="p-2">วันที่</th><th className="p-2 text-right">ครั้งที่รับบริการ</th><th className="p-2 text-right">จำนวนคน</th><th className="p-2 text-right">ฝากครรภ์</th><th className="p-2 text-right">วัคซีน (เข็ม)</th><th className="p-2 text-right">เสียชีวิต</th></tr></thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.date} className="border-b last:border-0 hover:bg-sky-50">
+                  <td className="p-2">{fmtDate(d.date)}</td><td className="p-2 text-right tabular-nums">{nf(d.visits)}</td><td className="p-2 text-right tabular-nums">{nf(d.persons)}</td><td className="p-2 text-right tabular-nums">{nf(d.anc)}</td><td className="p-2 text-right tabular-nums">{nf(Object.values(d.vaccines || {}).reduce((a, b) => a + b, 0))}</td><td className="p-2 text-right tabular-nums">{nf(d.deaths)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr className="border-t-2 font-bold"><td className="p-2">รวม</td><td className="p-2 text-right tabular-nums">{nf(agg.visits)}</td><td className="p-2 text-right tabular-nums">{nf(agg.persons)}</td><td className="p-2 text-right tabular-nums">{nf(agg.anc)}</td><td className="p-2 text-right tabular-nums">{nf(Object.values(agg.vaccines).reduce((a, b) => a + b, 0))}</td><td className="p-2 text-right tabular-nums">{nf(agg.deaths)}</td></tr></tfoot>
+          </table>
+        </section>
       )}
       {isAdmin && <div className="mt-4"><ConnectPanel say={say} /></div>}
       <Toast toast={toast} onClose={() => setToast(null)} />

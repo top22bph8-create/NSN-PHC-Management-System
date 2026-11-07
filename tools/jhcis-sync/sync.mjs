@@ -308,7 +308,7 @@ if (args.includes('--rights')) {
   const PCU = String(cfg.pcucode || '05449');
   const [pc] = await conn.query('show columns from person'); const has = (c) => pc.some((x) => x.Field === c);
   const alive = has('dischar') ? "and (p.dischar is null or p.dischar in ('9','','0'))" : '';
-  const rows = await conn.query(`select p.pid, t.titlename, p.fname, p.lname, p.birth, p.typelive, p.hossub, h.hosname, c.rightgroup, c.rightname, p.dateexpire,
+  const rows = await conn.query(`select p.pid, t.titlename, p.fname, p.lname, p.sex, p.birth, p.typelive, p.hossub, h.hosname, c.rightgroup, c.rightname, p.dateexpire,
       hs.hno, hs.villcode, concat(ifnull(hs.hno,''), ' ม.', cast(substr(hs.villcode,7,2) as unsigned)) addr
     from person p
     left join ctitle t on t.titlecode = p.prename
@@ -326,13 +326,13 @@ if (args.includes('--rights')) {
     const here = String(r.hossub || '').trim() === PCU; const t14 = ['1', '2', '3', '4'].includes(tl);
     if (tl === '1' || tl === '3') { // ประชากรตามทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามประเภทสิทธิ; สิทธิหมดอายุนับเป็นไร้สิทธิ
       const key = !g || (r.dateexpire && new Date(r.dateexpire) < today) ? 'RNON' : uc ? 'RUC' : (RK[g] || 'ROTH');
-      cats[key].push([r.pid, nm(r), age(r.birth), (r.addr || '').trim(), tl, r.rightname || 'ไม่มีสิทธิ', r.hosname || (r.hossub ? `รหัส ${r.hossub}` : 'ไม่ระบุ'), g]);
+      cats[key].push([r.pid, nm(r), age(r.birth), (r.addr || '').trim(), tl, r.rightname || 'ไม่มีสิทธิ', r.hosname || (r.hossub ? `รหัส ${r.hossub}` : 'ไม่ระบุ'), g, String(r.sex || '')]);
       sum.reg[key] = (sum.reg[key] || 0) + 1; if (key === 'RUC') sum.regUcWel[g === '3' ? 0 : 1]++;
     }
     if (inArea && t14 && !uc) { sum.inAreaNoUcWel++; continue; }
     if (!uc) continue;
     if (r.dateexpire && new Date(r.dateexpire) < today) { sum.expired++; continue; }
-    const row = [r.pid, nm(r), age(r.birth), (r.addr || '').trim(), tl, r.rightname || '', r.hosname || (r.hossub ? `รหัส ${r.hossub}` : 'ไม่ระบุ'), g];
+    const row = [r.pid, nm(r), age(r.birth), (r.addr || '').trim(), tl, r.rightname || '', r.hosname || (r.hossub ? `รหัส ${r.hossub}` : 'ไม่ระบุ'), g, String(r.sex || '')];
     const bt = (sum.byType[tl] ||= { A: [0, 0], C: [0, 0] }); const gi = g === '3' ? 0 : 1;
     if (inArea && t14 && here) { cats.A.push(row); bt.A[gi]++; }
     else if (inArea && t14) { cats.C.push(row); bt.C[gi]++; sum.hosC[row[6]] = (sum.hosC[row[6]] || 0) + 1; }

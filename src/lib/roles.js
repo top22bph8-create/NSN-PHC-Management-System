@@ -56,6 +56,7 @@ export const ACCESS = {
   'service-stats': { read: ALL, write: [] },
   'rights-registry': { read: ALL, write: [] },
   'pp-fee': { read: ALL, write: [] },
+  'pop-export': { read: ALL, write: [] },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },
   audit: { read: ['super_admin'], write: [] },

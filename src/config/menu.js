@@ -53,8 +53,9 @@ export const GROUPS = [
   {
     key: 'info', title: 'งานข้อมูลข่าวสารและสารสนเทศ', emoji: '🌐', icon: Globe, tone: 'from-violet-500 to-purple-600', soft: 'bg-violet-50 text-violet-700',
     items: [
+      { key: 'pop-export', label: 'รายงานประชากรตามเงื่อนไข (ส่งออก Excel)', path: '/pop-export', icon: Activity, ready: true, module: 'pop-export', tone: 'from-violet-600 to-fuchsia-500', desc: 'เลือกกลุ่มอายุ หมู่บ้าน เพศ สิทธิ สถานบริการ แล้วส่งออกรายชื่อและตารางสรุปเป็น Excel' },
       { key: 'pp-fee', label: 'รายงานผลงาน P&P Fee Schedule 2570', path: '/pp-fee', icon: Activity, ready: true, module: 'pp-fee', tone: 'from-emerald-600 to-teal-500', desc: 'ผลงานตามกิจกรรมจาก JHCIS + ประมาณการเงินที่พึงได้รับจาก สปสช.' },
-      { key: 'service-stats', label: 'รายงานสถานะการให้บริการของ รพ.สต.', path: '/service-stats', icon: Activity, ready: true, module: 'service-stats', tone: 'from-sky-600 to-cyan-500', desc: 'แดชบอร์ดผู้รับบริการ รายวัน/รายเดือน/รายปี จาก JHCIS' },
+      { key: 'service-stats', label: 'รายงานสถานะการให้บริการของ รพ.สต.', path: '/service-stats', icon: Activity, ready: true, module: 'service-stats', tone: 'from-sky-600 to-cyan-500', desc: 'แดชบอร์ดผู้รับบริการ รายวัน/ช่วงวันที่/รายเดือน/รายปี จาก JHCIS' },
       { key: 'rights-registry', label: 'ทะเบียนสิทธิ UC/Wel ตรง–ไม่ตรง', path: '/rights-registry', icon: Activity, ready: true, module: 'rights-registry', tone: 'from-emerald-600 to-teal-500', desc: 'จำนวนผู้ขึ้นทะเบียนสิทธิ UC/Wel ตรง/ไม่ตรง กดดูรายชื่อได้' },
       { key: 'ndpmanual', label: 'คู่มือการบันทึก NDP – JHCIS (รพ.สต.บ้านหนองสนม 05449)', path: '/group/info', href: `${import.meta.env.BASE_URL}ndp-manual/index.html`, icon: BookOpenCheck, manual: true, emoji: '📘', tone: 'from-blue-600 to-cyan-500', ready: true, desc: 'คู่มือบันทึก NDP รหัสค่าใช้จ่าย Mapping Error Msg (ปรับปรุงจากต้นฉบับ)' },
       { key: 'jhcis', label: 'โปรแกรม JHCIS', path: '/group/info', protocol: 'jhcis://open', copyText: 'C:\\Program Files\\jhcis\\JHCIS_Launcher.bat', icon: Database, tone: 'from-blue-500 to-indigo-600', ready: true, desc: 'ฐานข้อมูลสุขภาพ รพ.สต. (โปรแกรมในเครื่อง — กดเพื่อเปิด)' },
