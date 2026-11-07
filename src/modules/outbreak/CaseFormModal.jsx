@@ -9,6 +9,7 @@ import { writeAudit } from '../../lib/audit';
 import { todayStr } from '../../lib/thai';
 import ThaiDateInput from '../../components/ThaiDateInput';
 import { Modal } from '../../components/ui';
+import { TEMPLATES } from './diseaseTemplates';
 import { DISEASES, FILE_SOURCES, LEVELS, STATUS, validThaiId } from './outbreakLib';
 import { useOfficers, useVillages } from './outbreakRefs';
 
@@ -17,7 +18,7 @@ const OK_EXT = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'webp
 
 export default function CaseFormModal({ initial, onClose, onSaved }) {
   const { profile } = useAuth();
-  const base = initial || { title: '', disease: DISEASES[0], diseaseOther: '', reportDate: todayStr(), place: '', villageNo: '', responsible: profile?.name || '', status: 'investigating', popAtRisk: '', detail: '' };
+  const base = initial || { title: '', disease: DISEASES[0], diseaseOther: '', reportDate: todayStr(), place: '', villageNo: '', responsible: profile?.name || '', status: 'investigating', popAtRisk: '', detail: '', caseDef: '' };
   const villages = useVillages(); const officers = useOfficers();
   const [f, setF] = useState({ ...base });
   const [p, setP] = useState({ firstName: '', lastName: '', idCard: '', age: '', sex: '', houseNo: '', onsetDate: '', admitDate: '', hospital: '', dischargeDate: '', symptoms: '' });
@@ -34,7 +35,7 @@ export default function CaseFormModal({ initial, onClose, onSaved }) {
     for (const fl of files) { const ext = fl.name.split('.').pop().toLowerCase(); if (!OK_EXT.includes(ext)) return setErr(`ไม่รองรับไฟล์ .${ext}`); if (fl.size > 20 * 1024 * 1024) return setErr(`${fl.name} ใหญ่เกิน 20 MB`); }
     setBusy(true); setErr('');
     try {
-      const data = { title: f.title.trim(), disease: f.disease, diseaseOther: f.disease.startsWith('อื่นๆ') ? f.diseaseOther.trim() : '', reportDate: f.reportDate, place: f.place.trim(), villageNo: String(f.villageNo || '').trim(), villageName: (villages || []).find((v) => v.no === String(f.villageNo))?.name || '', responsible: f.responsible.trim(), status: f.status, popAtRisk: f.popAtRisk === '' ? '' : Number(f.popAtRisk), detail: f.detail.trim(), updatedAt: serverTimestamp() };
+      const data = { title: f.title.trim(), disease: f.disease, diseaseOther: f.disease.startsWith('อื่นๆ') ? f.diseaseOther.trim() : '', reportDate: f.reportDate, place: f.place.trim(), villageNo: String(f.villageNo || '').trim(), villageName: (villages || []).find((v) => v.no === String(f.villageNo))?.name || '', responsible: f.responsible.trim(), status: f.status, popAtRisk: f.popAtRisk === '' ? '' : Number(f.popAtRisk), detail: f.detail.trim(), caseDef: String(f.caseDef || '').trim(), updatedAt: serverTimestamp() };
       if (initial?.id) { await updateDoc(doc(db, 'outbreakCases', initial.id), data); await writeAudit({ action: 'update', module: 'outbreak', docId: initial.id, label: data.title }); onSaved?.(initial.id); }
       else {
         const r = await addDoc(collection(db, 'outbreakCases'), { ...data, timeline: [], labs: [], measures: [], files: [], createdAt: serverTimestamp(), createdBy: profile?.email || '' });
@@ -73,6 +74,13 @@ export default function CaseFormModal({ initial, onClose, onSaved }) {
         <label><span className="mb-1 block text-sm text-slate-600">เจ้าหน้าที่ผู้สอบสวนโรค (ข้าราชการในทะเบียนบุคลากร)</span>
           <select className="input" value={f.responsible} onChange={set('responsible')}><option value="">— เลือกเจ้าหน้าที่ —</option>{(officers || []).map((o) => <option key={o.email || o.name} value={o.name}>{o.name}{o.position ? ` (${o.position})` : ''}</option>)}{f.responsible && !(officers || []).some((o) => o.name === f.responsible) && <option value={f.responsible}>{f.responsible}</option>}</select></label>
         <label><span className="mb-1 block text-sm text-slate-600">ประชากรเสี่ยง (คน) — ใช้คำนวณ Attack rate</span><input className="input" type="number" min="0" value={f.popAtRisk} onChange={set('popAtRisk')} /></label>
+        {TEMPLATES[f.disease] && (
+          <div className="rounded-lg bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-200 sm:col-span-2">
+            <b>เกณฑ์ลงสอบสวนตามแนวทางกรมควบคุมโรค:</b> {TEMPLATES[f.disease].criteria}{TEMPLATES[f.disease].hours ? ` · ภายใน ${TEMPLATES[f.disease].hours} ชั่วโมง` : ''}
+          </div>)}
+        <label className="sm:col-span-2"><span className="mb-1 block text-sm text-slate-600">นิยามผู้ป่วยของเหตุการณ์นี้ (บุคคล เวลา สถานที่ — ไม่ใส่ปัจจัยสัมผัสในนิยาม)</span>
+          <textarea className="input min-h-[72px]" value={f.caseDef || ''} onChange={set('caseDef')} placeholder="กำหนดเองให้เหมาะกับเหตุการณ์" />
+          {TEMPLATES[f.disease]?.definition && !f.caseDef && <button type="button" className="mt-1 text-xs text-brand-700 underline" onClick={() => setF((x) => ({ ...x, caseDef: TEMPLATES[x.disease].definition }))}>ใช้นิยามตัวอย่างของโรคนี้เป็นร่างตั้งต้น</button>}</label>
         <label className="sm:col-span-2"><span className="mb-1 block text-sm text-slate-600">รายละเอียดการสอบสวน / ความเป็นมา</span><textarea className="input min-h-[96px]" value={f.detail} onChange={set('detail')} /></label>
       </div>
 

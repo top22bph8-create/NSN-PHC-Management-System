@@ -1,6 +1,7 @@
 // โมดูลสอบสวนโรคและเฝ้าระวังทางระบาดวิทยา — ค่าคงที่และฟังก์ชันวิเคราะห์ (แยกจากระบบเดิม)
 // ข้อมูลเก็บใน Firestore: outbreakCases (เหตุการณ์) และ outbreakPeople (ผู้ป่วย/ผู้สัมผัส; kind = patient | contact)
-export const DISEASES = ['ไข้เลือดออก (DHF/DF)', 'อุจจาระร่วงเฉียบพลัน', 'อาหารเป็นพิษ', 'ไข้หวัดใหญ่', 'โควิด-19', 'มือ เท้า ปาก', 'สุกใส', 'หัด', 'ตาแดง', 'วัณโรค', 'ไข้หวัดนก', 'ไข้ปวดข้อยุงลาย (ชิคุนกุนยา)', 'โรคฉี่หนู (เลปโตสไปโรซิส)', 'อื่นๆ (ระบุ)'];
+import { DISEASE_LIST } from './diseaseTemplates';
+export const DISEASES = DISEASE_LIST;
 export const STATUS = { investigating: 'กำลังสอบสวน', controlled: 'ควบคุมโรคแล้ว', closed: 'ปิดเหตุการณ์' };
 export const STATUS_TONE = { investigating: 'bg-amber-100 text-amber-800', controlled: 'bg-emerald-100 text-emerald-800', closed: 'bg-slate-200 text-slate-700' };
 export const PERSON_STATUS = ['ป่วย (รักษาอยู่)', 'หายแล้ว', 'เสียชีวิต', 'ติดตามอยู่ (ผู้สัมผัส)', 'ไม่ป่วย'];

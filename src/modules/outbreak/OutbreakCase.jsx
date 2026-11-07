@@ -15,8 +15,10 @@ import { Curve, HBars } from './OutbreakBars';
 import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, fullName, maskId, nf, validThaiId } from './outbreakLib';
 import { useOfficers, useVillages } from './outbreakRefs';
 import CaseFiles from './CaseFiles';
+import GuideTab from './GuideTab';
+import { CLASSIFICATION, TEMPLATES } from './diseaseTemplates';
 
-const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['patients', 'ผู้ป่วย'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
+const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['guide', 'แนวทางสอบสวน/นิยามโรค'], ['patients', 'ผู้ป่วย'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
 const lab = 'mb-1 block text-sm text-slate-600';
 
 function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
@@ -25,7 +27,7 @@ function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
   const split = (n) => { const t = String(n || '').trim(); const k = t.indexOf(' '); return k < 0 ? [t, ''] : [t.slice(0, k), t.slice(k + 1)]; };
   const [f, setF] = useState(() => (initial ? { ...initial, firstName: initial.firstName ?? split(initial.name)[0], lastName: initial.lastName ?? split(initial.name)[1] } : {
     firstName: '', lastName: '', idCard: '', age: '', sex: '', houseNo: '', villageNo: caseDefaults?.villageNo || '', reportDate: caseDefaults?.reportDate || '', onsetDate: '', admitDate: '', hospital: '', dischargeDate: '', symptoms: '', investigator: caseDefaults?.responsible || '',
-    status: isP ? PERSON_STATUS[0] : PERSON_STATUS[3], relation: '', lastContact: '', lat: '', lng: '', note: '' }));
+    classification: '', ext: {}, status: isP ? PERSON_STATUS[0] : PERSON_STATUS[3], relation: '', lastContact: '', lat: '', lng: '', note: '' }));
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const dt = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
@@ -38,12 +40,14 @@ function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
       const vil = (villages || []).find((v) => v.no === String(f.villageNo));
       const data = { caseId, kind, firstName: f.firstName.trim(), lastName: String(f.lastName || '').trim(), name: `${f.firstName.trim()} ${String(f.lastName || '').trim()}`.trim(), idCard: id, age: f.age === '' ? '' : Number(f.age), sex: f.sex || '', houseNo: String(f.houseNo || '').trim(), villageNo: String(f.villageNo || '').trim(), villageName: vil?.name || '', address: String(f.address || '').trim(),
         reportDate: f.reportDate || '', onsetDate: f.onsetDate || '', admitDate: f.admitDate || '', hospital: String(f.hospital || '').trim(), dischargeDate: f.dischargeDate || '', symptoms: String(f.symptoms || '').trim(), investigator: String(f.investigator || '').trim(),
-        status: f.status, relation: String(f.relation || '').trim(), lastContact: f.lastContact || '', lat: f.lat === '' || f.lat == null ? '' : Number(f.lat), lng: f.lng === '' || f.lng == null ? '' : Number(f.lng), note: String(f.note || '').trim(), updatedAt: serverTimestamp() };
+        classification: f.classification || '', ext: f.ext || {}, status: f.status, relation: String(f.relation || '').trim(), lastContact: f.lastContact || '', lat: f.lat === '' || f.lat == null ? '' : Number(f.lat), lng: f.lng === '' || f.lng == null ? '' : Number(f.lng), note: String(f.note || '').trim(), updatedAt: serverTimestamp() };
       if (initial?.id) await updateDoc(doc(db, 'outbreakPeople', initial.id), data);
       else { const r = await addDoc(collection(db, 'outbreakPeople'), { ...data, createdAt: serverTimestamp() }); await writeAudit({ action: 'create', module: 'outbreak', docId: r.id, label: `${isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'} ในเคส ${caseId}` }); }
       onClose();
     } catch (e) { setErr('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); }
   };
+  const tpl = TEMPLATES[caseDefaults?.disease];
+  const setExt = (k, v) => setF((x) => ({ ...x, ext: { ...(x.ext || {}), [k]: v } }));
   const D = (k, t) => <label><span className={lab}>{t}</span><ThaiDateInput value={f[k] || ''} onChange={dt(k)} yearsBack={3} yearsForward={0} /></label>;
   return (
     <Modal title={`${initial ? 'แก้ไข' : 'เพิ่ม'}${isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'}`} onClose={onClose} wide
@@ -73,6 +77,16 @@ function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
         </>)}
         <label className="sm:col-span-2"><span className={lab}>เจ้าหน้าที่ผู้สอบสวนโรค (เฉพาะข้าราชการในทะเบียนบุคลากร)</span>
           <select className="input" value={f.investigator || ''} onChange={set('investigator')}><option value="">— เลือกเจ้าหน้าที่ —</option>{(officers || []).map((o) => <option key={o.email || o.name} value={o.name}>{o.name}{o.position ? ` (${o.position})` : ''}</option>)}{f.investigator && !(officers || []).some((o) => o.name === f.investigator) && <option value={f.investigator}>{f.investigator}</option>}</select></label>
+        {isP && (
+          <fieldset className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-3 sm:col-span-2">
+            <legend className="px-1 text-sm font-semibold text-sky-900">การจำแนกผู้ป่วย{tpl ? ` และข้อมูลเฉพาะโรค: ${caseDefaults.disease}` : ''}</legend>
+            <label className="block"><span className={lab}>การจำแนกตามนิยาม</span><select className="input" value={f.classification || ''} onChange={set('classification')}><option value="">— ยังไม่จำแนก —</option>{CLASSIFICATION.map((c) => <option key={c}>{c}</option>)}</select></label>
+            {tpl && <div className="grid gap-3 sm:grid-cols-2">{tpl.fields.map((x) => (
+              <label key={x.k} className={x.type === 'text' && x.label.length > 36 ? 'sm:col-span-2' : ''}><span className={lab}>{x.label}</span>
+                {x.type === 'yn' ? <select className="input" value={(f.ext || {})[x.k] || ''} onChange={(e) => setExt(x.k, e.target.value)}><option value="">ไม่ทราบ/ไม่ระบุ</option><option>มี/ใช่</option><option>ไม่มี/ไม่ใช่</option></select>
+                  : x.type === 'date' ? <ThaiDateInput value={(f.ext || {})[x.k] || ''} onChange={(v) => setExt(x.k, v)} yearsBack={3} yearsForward={0} />
+                  : <input className="input" value={(f.ext || {})[x.k] || ''} onChange={(e) => setExt(x.k, e.target.value)} placeholder={x.ph || ''} />}</label>))}</div>}
+          </fieldset>)}
         <label><span className={lab}>ละติจูด (GPS — ใช้กับแผนที่ในรอบถัดไป)</span><input className="input" type="number" step="any" value={f.lat ?? ''} onChange={set('lat')} placeholder="เช่น 17.1234" /></label>
         <label><span className={lab}>ลองจิจูด</span><input className="input" type="number" step="any" value={f.lng ?? ''} onChange={set('lng')} placeholder="เช่น 104.1234" /></label>
         <label className="sm:col-span-2"><span className={lab}>หมายเหตุ</span><input className="input" value={f.note || ''} onChange={set('note')} /></label>
@@ -175,6 +189,7 @@ export default function OutbreakCase() {
           {an.missing.length ? <ul className="list-inside list-disc space-y-0.5 text-sm text-amber-800">{an.missing.map((m) => <li key={m}>{m}</li>)}</ul> : <p className="text-sm text-emerald-700">ข้อมูลหลักครบถ้วน</p>}
           <p className="mt-2 text-xs text-slate-400">ตัวเลขทั้งหมดคำนวณจากข้อมูลที่บันทึกในเคสนี้เท่านั้น</p></section>
       </>)}
+      {tab === 'guide' && <GuideTab cs={cs} say={say} />}
       {tab === 'patients' && <PeopleTable list={patients} isP />}
       {tab === 'contacts' && <PeopleTable list={contacts} isP={false} />}
       {tab === 'timeline' && <ListTab cs={cs} field="timeline" say={say} columns={[{ k: 'text', t: 'เหตุการณ์/สิ่งที่ดำเนินการ' }]} blank={{ date: todayStr(), text: '' }} empty="ยังไม่มี Timeline — บันทึกวันรับแจ้ง วันออกสอบสวน วันพบผู้ป่วยรายสำคัญ ฯลฯ" />}
