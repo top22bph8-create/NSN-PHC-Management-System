@@ -39,6 +39,7 @@ import Backup from './pages/Backup';
 import Account from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
 import OutbreakHome from './modules/outbreak/OutbreakHome';
+import OutbreakMapPage from './modules/outbreak/OutbreakMapPage';
 import OutbreakCase from './modules/outbreak/OutbreakCase';
 
 function Blocked({ problem, error }) {
@@ -203,6 +204,7 @@ function Shell() {
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
           <Route path="rights-registry" element={<Guard module="rights-registry"><RightsRegistry /></Guard>} />
           <Route path="outbreak" element={<Guard module="outbreak"><OutbreakHome /></Guard>} />
+          <Route path="outbreak/map" element={<Guard module="outbreak"><OutbreakMapPage /></Guard>} />
           <Route path="outbreak/:id" element={<Guard module="outbreak"><OutbreakCase /></Guard>} />
           <Route path="pop-export" element={<Guard module="pop-export"><PopExport /></Guard>} />
           <Route path="pp-fee" element={<Guard module="pp-fee"><PPFee /></Guard>} />

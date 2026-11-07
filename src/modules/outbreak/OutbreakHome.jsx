@@ -40,7 +40,7 @@ export default function OutbreakHome() {
       <PageHeader icon={Biohazard} emoji="🦠" title="สอบสวนโรค & แผนที่การระบาด" subtitle="เปิดเคสสอบสวนโรค บันทึกผู้ป่วย/ผู้สัมผัส วิเคราะห์ Person–Time–Place และ Epidemic Curve" />
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary" onClick={() => setForm(true)}><Plus className="h-4 w-4" /> เปิดสอบสวนโรคใหม่</button>
-        <button className="btn btn-outline" onClick={() => setHint('แผนที่การระบาด (Leaflet + OpenStreetMap) อยู่ในรอบพัฒนาที่ 2')}><MapIcon className="h-4 w-4" /> ดูแผนที่การระบาด</button>
+        <button className="btn btn-outline" onClick={() => nav('/outbreak/map')}><MapIcon className="h-4 w-4" /> ดูแผนที่การระบาด</button>
         <button className="btn btn-outline" onClick={() => setHint('ออกรายงานสอบสวนโรค (PDF/Word) อยู่ในรอบพัฒนาที่ 3 — เปิดเคสแล้วใช้ปุ่มพิมพ์สรุปในหน้าเคสได้ก่อน')}><FileText className="h-4 w-4" /> ออกรายงานสอบสวนโรค</button>
         {hint && <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-800 ring-1 ring-amber-200">{hint}</span>}
       </div>

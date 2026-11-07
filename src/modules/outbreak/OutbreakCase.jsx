@@ -16,9 +16,10 @@ import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, fullName, 
 import { useOfficers, useVillages } from './outbreakRefs';
 import CaseFiles from './CaseFiles';
 import GuideTab from './GuideTab';
+import OutbreakMap from './OutbreakMap';
 import { CLASSIFICATION, TEMPLATES } from './diseaseTemplates';
 
-const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['guide', 'แนวทางสอบสวน/นิยามโรค'], ['patients', 'ผู้ป่วย'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
+const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['guide', 'แนวทางสอบสวน/นิยามโรค'], ['patients', 'ผู้ป่วย'], ['map', 'แผนที่'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
 const lab = 'mb-1 block text-sm text-slate-600';
 
 function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
@@ -89,6 +90,7 @@ function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
           </fieldset>)}
         <label><span className={lab}>ละติจูด (GPS — ใช้กับแผนที่ในรอบถัดไป)</span><input className="input" type="number" step="any" value={f.lat ?? ''} onChange={set('lat')} placeholder="เช่น 17.1234" /></label>
         <label><span className={lab}>ลองจิจูด</span><input className="input" type="number" step="any" value={f.lng ?? ''} onChange={set('lng')} placeholder="เช่น 104.1234" /></label>
+        <div className="sm:col-span-2"><button type="button" className="text-sm text-brand-700 underline" onClick={() => navigator.geolocation ? navigator.geolocation.getCurrentPosition((pos) => setF((x) => ({ ...x, lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) })), () => setErr('ไม่สามารถอ่านตำแหน่งได้ (ตรวจสอบสิทธิ์ตำแหน่งของเบราว์เซอร์)')) : setErr('เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง')}>📍 ใช้ตำแหน่งปัจจุบันของอุปกรณ์เป็นพิกัด</button></div>
         <label className="sm:col-span-2"><span className={lab}>หมายเหตุ</span><input className="input" value={f.note || ''} onChange={set('note')} /></label>
       </div>
       {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
@@ -190,6 +192,7 @@ export default function OutbreakCase() {
           <p className="mt-2 text-xs text-slate-400">ตัวเลขทั้งหมดคำนวณจากข้อมูลที่บันทึกในเคสนี้เท่านั้น</p></section>
       </>)}
       {tab === 'guide' && <GuideTab cs={cs} say={say} />}
+      {tab === 'map' && <OutbreakMap patients={patients} label={{ [id]: cs.title }} />}
       {tab === 'patients' && <PeopleTable list={patients} isP />}
       {tab === 'contacts' && <PeopleTable list={contacts} isP={false} />}
       {tab === 'timeline' && <ListTab cs={cs} field="timeline" say={say} columns={[{ k: 'text', t: 'เหตุการณ์/สิ่งที่ดำเนินการ' }]} blank={{ date: todayStr(), text: '' }} empty="ยังไม่มี Timeline — บันทึกวันรับแจ้ง วันออกสอบสวน วันพบผู้ป่วยรายสำคัญ ฯลฯ" />}
