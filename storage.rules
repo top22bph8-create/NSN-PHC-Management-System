@@ -14,6 +14,11 @@ service firebase.storage {
     }
     // รวมบทบาทเหลือ 2 แบบแล้ว (Super Admin/ผู้ใช้งาน) ต้องตรงกับ src/lib/roles.js — ผู้ใช้งานที่ active ทุกคน
     // แนบ/ลบไฟล์ได้เท่ากันหมดทุกทะเบียนด้านล่าง ไม่แยกตามแผนกอีกต่อไปตามที่แจ้ง จึงไม่ต้องเช็ค role() แยกโมดูลอีก
+    // ไฟล์การสอบสวนโรค (โมดูลสอบสวนโรค ทะเบียน E0/E1/E2) — ผู้ใช้ที่เปิดใช้งานแล้วอ่าน/แนบ/ลบได้ ไฟล์ละไม่เกิน 20 MB
+    match /outbreak/{caseId}/{file} {
+      allow read, delete: if isActive();
+      allow create, update: if isActive() && request.resource.size < 20 * 1024 * 1024;
+    }
     match /docs/{module}/{id}/{file} {
       allow read: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit',
                   'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate'];

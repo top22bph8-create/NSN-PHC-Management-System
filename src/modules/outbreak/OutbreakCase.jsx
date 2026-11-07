@@ -1,7 +1,7 @@
 // รายละเอียดเคสสอบสวนโรค: ภาพรวม/วิเคราะห์ · ผู้ป่วย · ผู้สัมผัส · Timeline · ผลแล็บ · มาตรการควบคุมโรค
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { ArrowLeft, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Paperclip, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -12,43 +12,70 @@ import { PageHeader } from '../../components/Logo';
 import { Badge, ConfirmDialog, Modal, Spinner } from '../../components/ui';
 import CaseFormModal from './CaseFormModal';
 import { Curve, HBars } from './OutbreakBars';
-import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, nf, vilLabel } from './outbreakLib';
+import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, fullName, maskId, nf, validThaiId } from './outbreakLib';
+import { useOfficers, useVillages } from './outbreakRefs';
+import CaseFiles from './CaseFiles';
 
-const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['patients', 'ผู้ป่วย'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค']];
+const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['patients', 'ผู้ป่วย'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
 const lab = 'mb-1 block text-sm text-slate-600';
 
-function PersonModal({ kind, caseId, initial, onClose }) {
+function PersonModal({ kind, caseId, caseDefaults, initial, onClose }) {
   const isP = kind === 'patient';
-  const [f, setF] = useState(initial || { name: '', age: '', sex: '', villageNo: '', address: '', onsetDate: '', status: isP ? PERSON_STATUS[0] : PERSON_STATUS[3], symptoms: '', relation: '', lastContact: '', lat: '', lng: '', note: '' });
+  const villages = useVillages(); const officers = useOfficers();
+  const split = (n) => { const t = String(n || '').trim(); const k = t.indexOf(' '); return k < 0 ? [t, ''] : [t.slice(0, k), t.slice(k + 1)]; };
+  const [f, setF] = useState(() => (initial ? { ...initial, firstName: initial.firstName ?? split(initial.name)[0], lastName: initial.lastName ?? split(initial.name)[1] } : {
+    firstName: '', lastName: '', idCard: '', age: '', sex: '', houseNo: '', villageNo: caseDefaults?.villageNo || '', reportDate: caseDefaults?.reportDate || '', onsetDate: '', admitDate: '', hospital: '', dischargeDate: '', symptoms: '', investigator: caseDefaults?.responsible || '',
+    status: isP ? PERSON_STATUS[0] : PERSON_STATUS[3], relation: '', lastContact: '', lat: '', lng: '', note: '' }));
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const dt = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
   const save = async () => {
-    if (!f.name.trim()) return setErr('กรุณาใส่ชื่อ-สกุล');
+    if (!String(f.firstName || '').trim()) return setErr('กรุณาใส่ชื่อ');
+    const id = String(f.idCard || '').replace(/\D/g, '');
+    if (id && !validThaiId(id)) return setErr('เลขบัตรประชาชนไม่ถูกต้อง (ต้อง 13 หลัก และผ่านการตรวจเลขหลักสุดท้าย) หรือเว้นว่างไว้');
     setBusy(true); setErr('');
     try {
-      const data = { caseId, kind, name: f.name.trim(), age: f.age === '' ? '' : Number(f.age), sex: f.sex, villageNo: String(f.villageNo || '').trim(), address: f.address.trim(), onsetDate: f.onsetDate || '', status: f.status, symptoms: f.symptoms.trim(), relation: f.relation.trim(), lastContact: f.lastContact || '', lat: f.lat === '' ? '' : Number(f.lat), lng: f.lng === '' ? '' : Number(f.lng), note: f.note.trim(), updatedAt: serverTimestamp() };
+      const vil = (villages || []).find((v) => v.no === String(f.villageNo));
+      const data = { caseId, kind, firstName: f.firstName.trim(), lastName: String(f.lastName || '').trim(), name: `${f.firstName.trim()} ${String(f.lastName || '').trim()}`.trim(), idCard: id, age: f.age === '' ? '' : Number(f.age), sex: f.sex || '', houseNo: String(f.houseNo || '').trim(), villageNo: String(f.villageNo || '').trim(), villageName: vil?.name || '', address: String(f.address || '').trim(),
+        reportDate: f.reportDate || '', onsetDate: f.onsetDate || '', admitDate: f.admitDate || '', hospital: String(f.hospital || '').trim(), dischargeDate: f.dischargeDate || '', symptoms: String(f.symptoms || '').trim(), investigator: String(f.investigator || '').trim(),
+        status: f.status, relation: String(f.relation || '').trim(), lastContact: f.lastContact || '', lat: f.lat === '' || f.lat == null ? '' : Number(f.lat), lng: f.lng === '' || f.lng == null ? '' : Number(f.lng), note: String(f.note || '').trim(), updatedAt: serverTimestamp() };
       if (initial?.id) await updateDoc(doc(db, 'outbreakPeople', initial.id), data);
       else { const r = await addDoc(collection(db, 'outbreakPeople'), { ...data, createdAt: serverTimestamp() }); await writeAudit({ action: 'create', module: 'outbreak', docId: r.id, label: `${isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'} ในเคส ${caseId}` }); }
       onClose();
     } catch (e) { setErr('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); }
   };
+  const D = (k, t) => <label><span className={lab}>{t}</span><ThaiDateInput value={f[k] || ''} onChange={dt(k)} yearsBack={3} yearsForward={0} /></label>;
   return (
     <Modal title={`${initial ? 'แก้ไข' : 'เพิ่ม'}${isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'}`} onClose={onClose} wide
       footer={<><button className="btn btn-outline" onClick={onClose} disabled={busy}>ยกเลิก</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button></>}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="sm:col-span-2"><span className={lab}>ชื่อ-สกุล * (ไม่ต้องใส่เลขบัตรประชาชน)</span><input className="input" value={f.name} onChange={set('name')} /></label>
-        <label><span className={lab}>อายุ (ปี)</span><input className="input" type="number" min="0" value={f.age} onChange={set('age')} /></label>
-        <label><span className={lab}>เพศ</span><select className="input" value={f.sex} onChange={set('sex')}><option value="">ไม่ระบุ</option><option value="1">ชาย</option><option value="2">หญิง</option></select></label>
-        <label><span className={lab}>หมู่ที่</span><input className="input" value={f.villageNo} onChange={set('villageNo')} /></label>
-        <label><span className={lab}>ที่อยู่ (บ้านเลขที่/จุดสังเกต)</span><input className="input" value={f.address} onChange={set('address')} /></label>
-        {isP ? <label><span className={lab}>วันเริ่มป่วย</span><ThaiDateInput value={f.onsetDate} onChange={(v) => setF((x) => ({ ...x, onsetDate: v }))} yearsBack={3} yearsForward={0} /></label>
-          : <label><span className={lab}>วันที่สัมผัสล่าสุด</span><ThaiDateInput value={f.lastContact} onChange={(v) => setF((x) => ({ ...x, lastContact: v }))} yearsBack={3} yearsForward={0} /></label>}
-        <label><span className={lab}>สถานะ</span><select className="input" value={f.status} onChange={set('status')}>{PERSON_STATUS.map((s) => <option key={s}>{s}</option>)}</select></label>
-        {isP ? <label className="sm:col-span-2"><span className={lab}>อาการ/ประวัติการป่วย/การรักษา</span><textarea className="input min-h-[72px]" value={f.symptoms} onChange={set('symptoms')} /></label>
-          : <label className="sm:col-span-2"><span className={lab}>ความสัมพันธ์/ลักษณะการสัมผัส</span><input className="input" value={f.relation} onChange={set('relation')} placeholder="เช่น ญาติในบ้านเดียวกัน, เพื่อนร่วมชั้น" /></label>}
-        <label><span className={lab}>ละติจูด (GPS — ใช้กับแผนที่ในรอบถัดไป)</span><input className="input" type="number" step="any" value={f.lat} onChange={set('lat')} placeholder="เช่น 17.1234" /></label>
-        <label><span className={lab}>ลองจิจูด</span><input className="input" type="number" step="any" value={f.lng} onChange={set('lng')} placeholder="เช่น 104.1234" /></label>
-        <label className="sm:col-span-2"><span className={lab}>หมายเหตุ</span><input className="input" value={f.note} onChange={set('note')} /></label>
+        <label><span className={lab}>ชื่อ *</span><input className="input" value={f.firstName || ''} onChange={set('firstName')} /></label>
+        <label><span className={lab}>สกุล</span><input className="input" value={f.lastName || ''} onChange={set('lastName')} /></label>
+        <label><span className={lab}>เลขบัตรประจำตัวประชาชน 13 หลัก (ไม่บังคับ)</span><input className="input" inputMode="numeric" maxLength={17} value={f.idCard || ''} onChange={set('idCard')} autoComplete="off" /></label>
+        <div className="grid grid-cols-2 gap-3">
+          <label><span className={lab}>อายุ (ปี)</span><input className="input" type="number" min="0" value={f.age} onChange={set('age')} /></label>
+          <label><span className={lab}>เพศ</span><select className="input" value={f.sex || ''} onChange={set('sex')}><option value="">ไม่ระบุ</option><option value="1">ชาย</option><option value="2">หญิง</option></select></label>
+        </div>
+        <label><span className={lab}>บ้านเลขที่</span><input className="input" value={f.houseNo || ''} onChange={set('houseNo')} /></label>
+        <label><span className={lab}>หมู่บ้าน (ในเขตรับผิดชอบ)</span>
+          {villages && villages.length ? <select className="input" value={f.villageNo || ''} onChange={set('villageNo')}><option value="">— เลือกหมู่บ้าน —</option>{villages.map((v) => <option key={v.no} value={v.no}>หมู่ {v.no} {v.name}</option>)}<option value="0">นอกเขตรับผิดชอบ</option></select>
+            : <input className="input" value={f.villageNo || ''} onChange={set('villageNo')} placeholder="หมู่ที่ (ยังไม่มีรายชื่อหมู่บ้านจาก JHCIS)" />}</label>
+        {isP ? (<>
+          {D('reportDate', 'วันรับแจ้ง')}{D('onsetDate', 'วันเริ่มป่วย')}{D('admitDate', 'วันที่เข้ารับการรักษา')}
+          <label><span className={lab}>สถานพยาบาลที่รักษา</span><input className="input" value={f.hospital || ''} onChange={set('hospital')} placeholder="เช่น โรงพยาบาลสกลนคร" /></label>
+          {D('dischargeDate', 'วันที่ออกจากโรงพยาบาล')}
+          <label><span className={lab}>สถานะ</span><select className="input" value={f.status} onChange={set('status')}>{PERSON_STATUS.map((s) => <option key={s}>{s}</option>)}</select></label>
+          <label className="sm:col-span-2"><span className={lab}>อาการ/ประวัติการป่วย/การรักษา</span><textarea className="input min-h-[72px]" value={f.symptoms || ''} onChange={set('symptoms')} /></label>
+        </>) : (<>
+          {D('lastContact', 'วันที่สัมผัสล่าสุด')}
+          <label><span className={lab}>สถานะ</span><select className="input" value={f.status} onChange={set('status')}>{PERSON_STATUS.map((s) => <option key={s}>{s}</option>)}</select></label>
+          <label className="sm:col-span-2"><span className={lab}>ความสัมพันธ์/ลักษณะการสัมผัส</span><input className="input" value={f.relation || ''} onChange={set('relation')} placeholder="เช่น ญาติในบ้านเดียวกัน, เพื่อนร่วมชั้น" /></label>
+        </>)}
+        <label className="sm:col-span-2"><span className={lab}>เจ้าหน้าที่ผู้สอบสวนโรค (เฉพาะข้าราชการในทะเบียนบุคลากร)</span>
+          <select className="input" value={f.investigator || ''} onChange={set('investigator')}><option value="">— เลือกเจ้าหน้าที่ —</option>{(officers || []).map((o) => <option key={o.email || o.name} value={o.name}>{o.name}{o.position ? ` (${o.position})` : ''}</option>)}{f.investigator && !(officers || []).some((o) => o.name === f.investigator) && <option value={f.investigator}>{f.investigator}</option>}</select></label>
+        <label><span className={lab}>ละติจูด (GPS — ใช้กับแผนที่ในรอบถัดไป)</span><input className="input" type="number" step="any" value={f.lat ?? ''} onChange={set('lat')} placeholder="เช่น 17.1234" /></label>
+        <label><span className={lab}>ลองจิจูด</span><input className="input" type="number" step="any" value={f.lng ?? ''} onChange={set('lng')} placeholder="เช่น 104.1234" /></label>
+        <label className="sm:col-span-2"><span className={lab}>หมายเหตุ</span><input className="input" value={f.note || ''} onChange={set('note')} /></label>
       </div>
       {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
     </Modal>
@@ -98,11 +125,16 @@ export default function OutbreakCase() {
   };
   const PeopleTable = ({ list, isP }) => (
     <section className="card overflow-x-auto p-4">
-      <div className="mb-2 flex items-center justify-between"><h3 className="font-bold text-slate-700">{isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'} {nf(list.length)} ราย</h3><button className="btn btn-primary" onClick={() => setPm({ kind: isP ? 'patient' : 'contact' })}><Plus className="h-4 w-4" /> เพิ่ม{isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'}</button></div>
+      <div className="mb-2 flex items-center justify-between"><h3 className="font-bold text-slate-700">{isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'} {nf(list.length)} ราย</h3><button className="btn btn-primary print:hidden" onClick={() => setPm({ kind: isP ? 'patient' : 'contact' })}><Plus className="h-4 w-4" /> เพิ่ม{isP ? 'ผู้ป่วย' : 'ผู้สัมผัส'}</button></div>
       {!list.length ? <p className="text-sm text-slate-500">ยังไม่มีข้อมูล</p> : (
-        <table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b bg-slate-50 text-left text-slate-600"><th className="p-2">ชื่อ-สกุล</th><th className="p-2">เพศ/อายุ</th><th className="p-2">หมู่</th><th className="p-2">{isP ? 'วันเริ่มป่วย' : 'สัมผัสล่าสุด'}</th><th className="p-2">สถานะ</th><th className="p-2">{isP ? 'อาการ' : 'ความสัมพันธ์'}</th><th className="w-20" /></tr></thead>
-          <tbody>{list.map((p) => (<tr key={p.id} className="border-b last:border-0 hover:bg-rose-50"><td className="p-2 font-medium">{p.name}</td><td className="p-2">{SEX[p.sex] || '-'} / {p.age === '' ? '-' : p.age}</td><td className="p-2">{p.villageNo || '-'}</td><td className="p-2">{fmtDate(isP ? p.onsetDate : p.lastContact) || '-'}</td><td className="p-2">{p.status}</td><td className="p-2 max-w-[260px] truncate" title={isP ? p.symptoms : p.relation}>{(isP ? p.symptoms : p.relation) || '-'}</td>
-            <td className="p-2 whitespace-nowrap"><button className="mr-2 text-brand-700" aria-label="แก้ไข" onClick={() => setPm({ kind: p.kind, initial: p })}><Pencil className="h-4 w-4" /></button><button className="text-red-600" aria-label="ลบ" onClick={() => setDel(p)}><Trash2 className="h-4 w-4" /></button></td></tr>))}</tbody></table>)}
+        <table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b bg-slate-50 text-left text-slate-600"><th className="p-2">ชื่อ-สกุล</th><th className="p-2">เลขบัตร</th><th className="p-2">เพศ/อายุ</th><th className="p-2">บ้านเลขที่/หมู่</th>
+          {isP ? <><th className="p-2">วันรับแจ้ง</th><th className="p-2">เริ่มป่วย</th><th className="p-2">เข้ารักษา</th><th className="p-2">สถานพยาบาล</th><th className="p-2">ออก รพ.</th></> : <><th className="p-2">สัมผัสล่าสุด</th><th className="p-2">ความสัมพันธ์</th></>}
+          <th className="p-2">สถานะ</th><th className="p-2">ผู้สอบสวน</th><th className="w-20 print:hidden" /></tr></thead>
+          <tbody>{list.map((p) => (<tr key={p.id} className="border-b align-top last:border-0 hover:bg-rose-50"><td className="p-2 font-medium">{fullName(p)}{isP && p.symptoms && <div className="max-w-[220px] truncate text-xs font-normal text-slate-500" title={p.symptoms}>{p.symptoms}</div>}</td><td className="p-2 whitespace-nowrap text-slate-500">{maskId(p.idCard)}</td><td className="p-2 whitespace-nowrap">{SEX[p.sex] || '-'} / {p.age === '' || p.age == null ? '-' : p.age}</td><td className="p-2 whitespace-nowrap">{p.houseNo || '-'} / {p.villageNo ? `ม.${p.villageNo}` : '-'}</td>
+            {isP ? <><td className="p-2 whitespace-nowrap">{fmtDate(p.reportDate) || '-'}</td><td className="p-2 whitespace-nowrap">{fmtDate(p.onsetDate) || '-'}</td><td className="p-2 whitespace-nowrap">{fmtDate(p.admitDate) || '-'}</td><td className="p-2">{p.hospital || '-'}</td><td className="p-2 whitespace-nowrap">{fmtDate(p.dischargeDate) || '-'}</td></> : <><td className="p-2 whitespace-nowrap">{fmtDate(p.lastContact) || '-'}</td><td className="p-2">{p.relation || '-'}</td></>}
+            <td className="p-2">{p.status}</td><td className="p-2">{p.investigator || '-'}</td>
+            <td className="p-2 whitespace-nowrap print:hidden"><button className="mr-2 text-brand-700" aria-label="แก้ไข" onClick={() => setPm({ kind: p.kind, initial: p })}><Pencil className="h-4 w-4" /></button><button className="text-red-600" aria-label="ลบ" onClick={() => setDel(p)}><Trash2 className="h-4 w-4" /></button></td></tr>))}</tbody></table>)}
+      <p className="mt-2 text-xs text-slate-400">เลขบัตรประชาชนแสดงเฉพาะ 4 ตัวท้าย — เปิดดูเต็มได้ในหน้าแก้ไข · เอกสารมีข้อมูลระบุตัวบุคคล ห้ามเผยแพร่</p>
     </section>
   );
   return (
@@ -119,6 +151,11 @@ export default function OutbreakCase() {
       </div>
       <div className="flex flex-wrap gap-2 print:hidden">{TABS.map(([k, t]) => <button key={k} onClick={() => setTab(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === k ? 'bg-brand-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50'}`}>{t}</button>)}</div>
 
+      {(cs.files || []).length > 0 && (
+        <button type="button" onClick={() => setTab('files')} className="flex w-full items-center gap-2 rounded-xl bg-emerald-50 p-3 text-left text-sm text-emerald-900 ring-1 ring-emerald-200 print:hidden">
+          <Paperclip className="h-4 w-4 shrink-0" /> <b>มีไฟล์การสอบสวนโรคแนบในเคสนี้ {(cs.files || []).length} ไฟล์</b>
+          <span className="text-emerald-700">({['E0', 'E1', 'E2'].map((l) => `${l}: ${(cs.files || []).filter((x) => x.level === l).length}`).join(' · ')}) — กดเพื่อดูทะเบียน</span>
+        </button>)}
       {tab === 'overview' && (<>
         <section className="card grid gap-3 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div><div className="text-slate-500">ผู้ป่วย</div><div className="text-2xl font-bold">{nf(an.n)} ราย</div></div>
@@ -144,8 +181,10 @@ export default function OutbreakCase() {
       {tab === 'labs' && <ListTab cs={cs} field="labs" say={say} columns={[{ k: 'who', t: 'ผู้ถูกตรวจ' }, { k: 'specimen', t: 'ตัวอย่าง' }, { k: 'test', t: 'การตรวจ' }, { k: 'result', t: 'ผล' }]} blank={{ date: todayStr(), who: '', specimen: '', test: '', result: '' }} empty="ยังไม่มีผลตรวจทางห้องปฏิบัติการ" />}
       {tab === 'measures' && <ListTab cs={cs} field="measures" say={say} columns={[{ k: 'text', t: 'มาตรการ' }, { k: 'owner', t: 'ผู้รับผิดชอบ' }, { k: 'result', t: 'ผล/หมายเหตุ' }]} blank={{ date: todayStr(), text: '', owner: '', result: '' }} empty="ยังไม่มีมาตรการควบคุมโรค — เช่น พ่นหมอกควัน กำจัดลูกน้ำ ให้ความรู้ แยกผู้ป่วย" />}
 
+      {tab === 'files' && <CaseFiles cs={cs} say={say} />}
+
       {edit && <CaseFormModal initial={cs} onClose={() => setEdit(false)} />}
-      {pm && <PersonModal kind={pm.kind} caseId={id} initial={pm.initial} onClose={() => setPm(null)} />}
+      {pm && <PersonModal kind={pm.kind} caseId={id} caseDefaults={cs} initial={pm.initial} onClose={() => setPm(null)} />}
       {del && <ConfirmDialog busy={busy} onCancel={() => setDel(null)} onConfirm={doDel} message={del === 'case' ? `ลบเคส “${cs.title}” พร้อมผู้ป่วยและผู้สัมผัสทั้งหมด ${nf(people.length)} ราย?` : `ลบ “${del.name}” ออกจากเคสนี้?`} />}
       <p className="hidden text-xs text-slate-400 print:block">พิมพ์โดย {profile?.name || profile?.email} · {fmtDate(todayStr())} · เอกสารนี้มีข้อมูลระบุตัวบุคคล ห้ามเผยแพร่</p>
     </div>

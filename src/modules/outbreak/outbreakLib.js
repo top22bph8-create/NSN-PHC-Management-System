@@ -47,3 +47,16 @@ export function analyze(cs, patients, contacts) {
     curve: epiCurve(patients), missing,
   };
 }
+
+// ทะเบียนไฟล์สอบสวนโรค E0/E1/E2 — ชื่อเรียกอ้างอิงตามระยะของรายงานสอบสวน (ปรับข้อความได้ที่นี่ที่เดียว)
+export const LEVELS = {
+  E0: { t: 'E0 — รับแจ้ง/ตรวจสอบข่าวเหตุการณ์', tone: 'bg-sky-100 text-sky-800' },
+  E1: { t: 'E1 — รายงานสอบสวนเบื้องต้น', tone: 'bg-amber-100 text-amber-800' },
+  E2: { t: 'E2 — รายงานสอบสวนฉบับสมบูรณ์', tone: 'bg-emerald-100 text-emerald-800' },
+};
+export const FILE_SOURCES = ['โรงพยาบาล', 'สำนักงานสาธารณสุขอำเภอ', 'สำนักงานสาธารณสุขจังหวัด', 'ทีม SRRT/หน่วยงานอื่น', 'รพ.สต.เอง'];
+export const fullName = (p) => (p.firstName || p.lastName ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : p.name || '');
+export const maskId = (s) => { const d = String(s || '').replace(/\D/g, ''); return d.length === 13 ? `•••••••••${d.slice(-4)}` : d ? '•••••' : '-'; };
+// ตรวจเลขหลักตรวจสอบของเลขบัตรประชาชน 13 หลัก
+export const validThaiId = (s) => { const d = String(s || '').replace(/\D/g, ''); if (d.length !== 13) return false; let sum = 0; for (let i = 0; i < 12; i++) sum += Number(d[i]) * (13 - i); return (11 - (sum % 11)) % 10 === Number(d[12]); };
+export const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ceil((b || 0) / 1024)} KB`);
