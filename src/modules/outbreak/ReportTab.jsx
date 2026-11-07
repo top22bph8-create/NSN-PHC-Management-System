@@ -8,6 +8,8 @@ import { todayStr } from '../../lib/thai';
 import ThaiDateInput from '../../components/ThaiDateInput';
 import { writeAudit } from '../../lib/audit';
 import { SECTIONS, buildBlocks, draftBackground, draftConclusion } from './reportBuild';
+import { choiceGroups, sectionText } from './reportChoices';
+import CaseDefBuilder from './CaseDefBuilder';
 import { downloadDocx, openPrint } from './reportExport';
 import { f2, fp, twoByTwo } from './reportStats';
 
@@ -21,11 +23,28 @@ export default function ReportTab({ cs, patients, contacts, an, dname, say }) {
   const set = (k, v) => { setRp((x) => ({ ...x, [k]: v })); setDirty(true); };
   const setEx = (i, k, v) => set('exposures', rp.exposures.map((e, j) => (j === i ? { ...e, [k]: v } : e)));
   const cc = rp.design !== 'cohort';
-  const done = useMemo(() => WRITE.filter(([k]) => String(rp[k] || '').trim()).length, [rp]);
+  const done = useMemo(() => WRITE.filter(([k]) => sectionText(rp, k)).length, [rp]);
+  const ctx = { cs, dname, org: rp.org };
+  const toggle = (k, g, item) => {
+    const cur = (rp.sel || {})[k] || []; const has = cur.includes(item);
+    let next = has ? cur.filter((x) => x !== item) : [...cur, item];
+    if (!g.multi && !has) next = [...cur.filter((x) => !g.items.includes(x)), item];
+    set('sel', { ...(rp.sel || {}), [k]: next });
+  };
+  const allOf = (k, g, on) => { const cur = ((rp.sel || {})[k] || []).filter((x) => !g.items.includes(x)); set('sel', { ...(rp.sel || {}), [k]: on ? [...cur, ...g.items] : cur }); };
+  const Choices = ({ k }) => choiceGroups(k, ctx).filter((g) => g.items.length).map((g) => {
+    const cur = (rp.sel || {})[k] || [];
+    return (
+      <div key={g.id} className="mb-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600"><span>{g.label} {g.multi ? '(เลือกได้หลายข้อ)' : '(เลือกได้ 1 ข้อ)'}</span>{g.multi && <span className="flex gap-2 font-normal"><button type="button" className="text-brand-700 underline" onClick={() => allOf(k, g, true)}>เลือกทั้งหมด</button><button type="button" className="text-slate-500 underline" onClick={() => allOf(k, g, false)}>ล้าง</button></span>}</div>
+        {g.items.map((it) => (
+          <label key={it} className="flex cursor-pointer items-start gap-2 py-0.5 text-sm"><input type={g.multi ? 'checkbox' : 'radio'} name={`${k}-${g.id}`} className="mt-1" checked={cur.includes(it)} onChange={() => toggle(k, g, it)} onClick={() => { if (!g.multi && cur.includes(it)) toggle(k, g, it); }} /><span>{it}</span></label>))}
+      </div>);
+  });
 
   const save = async () => {
     setBusy(true);
-    try { await updateDoc(doc(db, 'outbreakCases', cs.id), { report: { ...rp, updatedAt: new Date().toISOString() }, updatedAt: serverTimestamp() }); await writeAudit({ action: 'update', module: 'outbreak', docId: cs.id, label: `บันทึกรายงานสอบสวนโรค ${cs.title}` }); setDirty(false); say('บันทึกรายงานแล้ว'); }
+    try { await updateDoc(doc(db, 'outbreakCases', cs.id), { report: { ...rp, updatedAt: new Date().toISOString() }, ...(rp.caseDef ? { caseDef: rp.caseDef } : {}), updatedAt: serverTimestamp() }); await writeAudit({ action: 'update', module: 'outbreak', docId: cs.id, label: `บันทึกรายงานสอบสวนโรค ${cs.title}` }); setDirty(false); say('บันทึกรายงานแล้ว'); }
     catch (e) { say('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); }
   };
   const blocks = () => buildBlocks({ cs, patients, contacts, an, rp, dname, opts: { showNames, mapImg } });
@@ -73,10 +92,17 @@ export default function ReportTab({ cs, patients, contacts, an, dname, say }) {
             {!rp.discussion && an.n > 0 && <button className="text-brand-700 underline" onClick={() => set('discussion', draftConclusion(an, dname))}>ร่างสรุปจากข้อมูลเคส</button>}
           </span></div>
         {WRITE.map(([k, t, hint]) => (
-          <label key={k} className="block"><span className={lab}><b>{t}</b>{hint ? <span className="text-slate-400"> — {hint}</span> : null}</span>
-            <textarea className="input min-h-[84px]" value={rp[k] || ''} onChange={(e) => set(k, e.target.value)} /></label>))}
-        <label className="block"><span className={lab}><b>{SECTIONS.find((s) => s[0] === 'references')[1]}</b> <span className="text-slate-400">— {SECTIONS.find((s) => s[0] === 'references')[2]}</span></span>
-          <textarea className="input min-h-[64px]" value={rp.references || ''} onChange={(e) => set('references', e.target.value)} /></label>
+          <div key={k} className="space-y-1">
+            <div className="text-sm"><b>{t}</b>{hint ? <span className="text-slate-400"> — {hint}</span> : null}</div>
+            <Choices k={k} />
+            {k === 'methods' && <CaseDefBuilder cs={cs} dname={dname} value={rp.caseDef || ''} onApply={(txt) => set('caseDef', txt)} />}
+            <textarea className="input min-h-[64px]" value={rp[k] || ''} onChange={(e) => set(k, e.target.value)} placeholder="ข้อความเพิ่มเติม (ต่อท้ายข้อความที่เลือก) — เว้นว่างได้ถ้าเลือกครบแล้ว" />
+          </div>))}
+        <div className="space-y-1">
+          <div className="text-sm"><b>เอกสารอ้างอิง</b></div>
+          <Choices k="references" />
+          <textarea className="input min-h-[64px]" value={rp.references || ''} onChange={(e) => set('references', e.target.value)} placeholder="เอกสารอ้างอิงเพิ่มเติม" />
+        </div>
       </section>
 
       <section className="card space-y-3 p-4">

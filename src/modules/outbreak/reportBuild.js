@@ -6,6 +6,7 @@ import { AGE_ORDER, SEX, STATUS, fullName, nf } from './outbreakLib';
 import { TEMPLATES } from './diseaseTemplates';
 import { curvePng } from './reportChart';
 import { f2, fp, twoByTwo } from './reportStats';
+import { sectionText } from './reportChoices';
 
 export const EMPTY = '(ยังไม่ได้บันทึก)';
 export const SECTIONS = [
@@ -41,7 +42,7 @@ const para = (txt) => (String(txt || '').trim() ? String(txt).trim().split(/\n+/
 export function buildBlocks({ cs, patients, contacts, an, rp = {}, dname, opts = {} }) {
   const tpl = TEMPLATES[cs.disease]; const B = []; const org = rp.org || 'รพ.สต.บ้านหนองสนม';
   const sec = (k) => SECTIONS.find((s) => s[0] === k);
-  const text = (k) => { B.push({ t: 'h2', text: sec(k)[1] }); B.push(...para(rp[k])); };
+  const text = (k) => { B.push({ t: 'h2', text: sec(k)[1] }); B.push(...para(sectionText(rp, k))); };
   B.push({ t: 'title', text: 'รายงานการสอบสวนโรคฉบับสมบูรณ์', sub: `${cs.title}`, lines: [`โรค: ${dname}`, `หน่วยงาน: ${org}`, `วันที่รับแจ้ง: ${fmtDate(cs.reportDate)}`, `สถานะ: ${STATUS[cs.status] || cs.status || '-'}`, `วันที่ออกรายงาน: ${fmtDate(rp.reportDate)}`, `ผู้รายงาน: ${rp.reporter || cs.responsible || EMPTY}${rp.reporterPos ? ` (${rp.reporterPos})` : ''}`] });
   B.push({ t: 'h1', text: 'บทสรุปผู้บริหาร' });
   B.push({ t: 'p', text: `พบผู้ป่วย ${nf(an.n)} ราย${an.dead ? ` เสียชีวิต ${nf(an.dead)} ราย อัตราป่วยตาย ${an.cfr.toFixed(1)}%` : ''}${an.attack != null ? ` อัตราป่วย ${an.attack.toFixed(2)}% (ประชากรเสี่ยง ${nf(an.risk)} คน)` : ''}${an.first ? ` ระยะเวลาการระบาด ${an.days} วัน (${fmtDate(an.first)} – ${fmtDate(an.last)})` : ''} ผู้สัมผัสที่ติดตาม ${nf(contacts.length)} ราย` });
@@ -53,7 +54,7 @@ export function buildBlocks({ cs, patients, contacts, an, rp = {}, dname, opts =
 
   text('methods');
   B.push({ t: 'h2', text: '3.1 นิยามผู้ป่วย' });
-  if (cs.caseDef) B.push(...para(cs.caseDef));
+  if (rp.caseDef || cs.caseDef) B.push(...para(rp.caseDef || cs.caseDef));
   else if (tpl?.definition) B.push({ t: 'p', text: `(นิยามตัวอย่างของโรคจากแนวทางกรมควบคุมโรค — ควรปรับเป็นนิยามของเหตุการณ์นี้) ${tpl.definition}` });
   else B.push(...para(''));
 
@@ -98,7 +99,9 @@ export function buildBlocks({ cs, patients, contacts, an, rp = {}, dname, opts =
       rows: ex.map(({ e, r }) => [e.name || '-', cc ? `${e.a}/${e.c}` : `${e.a}/${e.b}`, cc ? `${e.b}/${e.d}` : `${e.c}/${e.d}`, f2(r.est) + (r.zero ? '*' : ''), `${f2(r.lo)} – ${f2(r.hi)}`, fp(r.p)]), align: ['l', 'c', 'c', 'r', 'c', 'r'] });
     if (ex.some((x) => x.r.zero)) B.push({ t: 'p', text: '* มีช่องที่เป็นศูนย์ จึงบวก 0.5 ในทุกช่องก่อนคำนวณ' });
   } else B.push({ t: 'p', text: 'ไม่ได้ทำการศึกษาเชิงวิเคราะห์ หรือยังไม่ได้บันทึกข้อมูลตาราง 2×2', missing: true });
-  B.push(...para(rp.analyticNote).filter((x) => !x.missing));
+  const sig = ex.filter(({ r }) => r.p != null && r.p < 0.05 && r.lo > 1);
+  if (sig.length) B.push({ t: 'p', text: `ปัจจัยที่สัมพันธ์กับการป่วยอย่างมีนัยสำคัญทางสถิติ (p < 0.05 และ 95% CI ไม่คร่อม 1) ได้แก่ ${sig.map(({ e, r }) => `${e.name || 'ปัจจัยที่ ' + (ex.indexOf(ex.find((x) => x.e === e)) + 1)} (${r.measure} = ${f2(r.est)}, 95% CI ${f2(r.lo)}–${f2(r.hi)})`).join('; ')}` });
+  B.push(...para(sectionText(rp, 'analyticNote')).filter((x) => !x.missing));
 
   B.push({ t: 'h1', text: '5. มาตรการควบคุมและป้องกันโรค' });
   if ((cs.measures || []).length) B.push({ t: 'table', head: ['วันที่', 'มาตรการ', 'ผู้รับผิดชอบ', 'ผล/หมายเหตุ'], rows: [...cs.measures].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((m) => [fmtDate(m.date), m.text || '', m.owner || '-', m.result || '-']), align: ['l', 'l', 'l', 'l'] });

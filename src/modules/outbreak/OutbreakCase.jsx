@@ -13,6 +13,7 @@ import { Badge, ConfirmDialog, Modal, Spinner } from '../../components/ui';
 import CaseFormModal from './CaseFormModal';
 import { Curve, HBars } from './OutbreakBars';
 import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, fullName, maskId, nf, validThaiId } from './outbreakLib';
+import { SYMPTOMS, labOpts, LAB_RESULT, LAB_WHO } from './reportChoices';
 import { locate, useAreas, useOfficers, useVillages } from './outbreakRefs';
 import CaseFiles from './CaseFiles';
 import GuideTab from './GuideTab';
@@ -72,7 +73,9 @@ export function PersonModal({ kind, caseId, caseDefaults, initial, preset, onClo
           <label><span className={lab}>สถานพยาบาลที่รักษา</span><input className="input" value={f.hospital || ''} onChange={set('hospital')} placeholder="เช่น โรงพยาบาลสกลนคร" /></label>
           {D('dischargeDate', 'วันที่ออกจากโรงพยาบาล')}
           <label><span className={lab}>สถานะ</span><select className="input" value={f.status} onChange={set('status')}>{PERSON_STATUS.map((s) => <option key={s}>{s}</option>)}</select></label>
-          <label className="sm:col-span-2"><span className={lab}>อาการ/ประวัติการป่วย/การรักษา</span><textarea className="input min-h-[72px]" value={f.symptoms || ''} onChange={set('symptoms')} /></label>
+          <div className="sm:col-span-2"><span className={lab}>อาการ (คลิกเลือก)</span>
+            <div className="mb-2 flex flex-wrap gap-1.5">{SYMPTOMS.map((x) => { const on = String(f.symptoms || '').split(/[,\n]\s*/).includes(x); return <button type="button" key={x} className={`rounded-full px-2.5 py-1 text-xs ${on ? 'bg-brand-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-300'}`} onClick={() => setF((z) => { const parts = String(z.symptoms || '').split(/[,\n]\s*/).map((t) => t.trim()).filter(Boolean); const next = on ? parts.filter((t) => t !== x) : [...parts, x]; return { ...z, symptoms: next.join(', ') }; })}>{x}</button>; })}</div>
+            <span className={lab}>อาการ/ประวัติการป่วย/การรักษา (พิมพ์เพิ่มได้)</span><textarea className="input min-h-[72px]" value={f.symptoms || ''} onChange={set('symptoms')} /></div>
         </>) : (<>
           {D('lastContact', 'วันที่สัมผัสล่าสุด')}
           <label><span className={lab}>สถานะ</span><select className="input" value={f.status} onChange={set('status')}>{PERSON_STATUS.map((s) => <option key={s}>{s}</option>)}</select></label>
@@ -102,6 +105,7 @@ export function PersonModal({ kind, caseId, caseDefaults, initial, preset, onClo
 
 // รายการย่อยในเอกสารเคส (Timeline/แล็บ/มาตรการ): เก็บเป็นอาร์เรย์ในเอกสารเคสเดียวกัน
 function ListTab({ cs, field, columns, empty, blank, say }) {
+  const lid = `lt-${field}`;
   const [f, setF] = useState(blank); const [busy, setBusy] = useState(false);
   const items = [...(cs[field] || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const put = async (next) => { setBusy(true); try { await updateDoc(doc(db, 'outbreakCases', cs.id), { [field]: next, updatedAt: serverTimestamp() }); } catch (e) { say('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); } };
@@ -110,7 +114,7 @@ function ListTab({ cs, field, columns, empty, blank, say }) {
     <section className="card space-y-3 p-4">
       <div className="grid items-end gap-2 sm:grid-cols-[170px_repeat(auto-fit,minmax(140px,1fr))_auto]">
         <div><span className={lab}>วันที่</span><ThaiDateInput value={f.date} onChange={(v) => setF((x) => ({ ...x, date: v }))} yearsBack={3} yearsForward={1} /></div>
-        {columns.map((c) => <label key={c.k}><span className={lab}>{c.t}</span><input className="input" value={f[c.k] || ''} onChange={(e) => setF((x) => ({ ...x, [c.k]: e.target.value }))} /></label>)}
+        {columns.map((c) => <label key={c.k}><span className={lab}>{c.t}</span><input className="input" list={c.opts ? `${lid}-${c.k}` : undefined} value={f[c.k] || ''} onChange={(e) => setF((x) => ({ ...x, [c.k]: e.target.value }))} />{c.opts && <datalist id={`${lid}-${c.k}`}>{c.opts.map((o) => <option key={o} value={o} />)}</datalist>}</label>)}
         <button className="btn btn-primary" onClick={add} disabled={busy}><Plus className="h-4 w-4" /> เพิ่ม</button>
       </div>
       {!items.length ? <p className="text-sm text-slate-500">{empty}</p> : (
@@ -129,7 +133,7 @@ export default function OutbreakCase() {
   const patients = useMemo(() => (people || []).filter((p) => p.kind === 'patient').sort((a, b) => String(a.onsetDate || '9').localeCompare(String(b.onsetDate || '9'))), [people]);
   const contacts = useMemo(() => (people || []).filter((p) => p.kind === 'contact'), [people]);
   const an = useMemo(() => (cs ? analyze(cs, patients, contacts) : null), [cs, patients, contacts]);
-  const areas = useAreas();
+  const areas = useAreas(); const officers = useOfficers();
   const moveP = async (p, lat, lng) => { try { await updateDoc(doc(db, 'outbreakPeople', p.id), { lat, lng, updatedAt: serverTimestamp() }); const l = locate(areas, lat, lng); say(`ย้ายหมุดแล้ว${l.inside === false ? ' — ตำแหน่งนี้อยู่นอกเขตรับผิดชอบ' : ''}`); } catch (e) { say('ย้ายหมุดไม่สำเร็จ: ' + (e.code || e.message)); } };
   const placeP = async (p, lat, lng) => { const l = locate(areas, lat, lng); try { await updateDoc(doc(db, 'outbreakPeople', p.id), { lat, lng, ...(l.villageNo && !p.villageNo ? { villageNo: l.villageNo } : {}), updatedAt: serverTimestamp() }); say(`วางพิกัดให้ ${p.name} แล้ว${l.inside === false ? ' — อยู่นอกเขตรับผิดชอบ' : ''}`); } catch (e) { say('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } };
   if (cs === undefined || !people) return <Spinner />;
@@ -202,8 +206,8 @@ export default function OutbreakCase() {
       {tab === 'patients' && <PeopleTable list={patients} isP />}
       {tab === 'contacts' && <PeopleTable list={contacts} isP={false} />}
       {tab === 'timeline' && <ListTab cs={cs} field="timeline" say={say} columns={[{ k: 'text', t: 'เหตุการณ์/สิ่งที่ดำเนินการ' }]} blank={{ date: todayStr(), text: '' }} empty="ยังไม่มี Timeline — บันทึกวันรับแจ้ง วันออกสอบสวน วันพบผู้ป่วยรายสำคัญ ฯลฯ" />}
-      {tab === 'labs' && <ListTab cs={cs} field="labs" say={say} columns={[{ k: 'who', t: 'ผู้ถูกตรวจ' }, { k: 'specimen', t: 'ตัวอย่าง' }, { k: 'test', t: 'การตรวจ' }, { k: 'result', t: 'ผล' }]} blank={{ date: todayStr(), who: '', specimen: '', test: '', result: '' }} empty="ยังไม่มีผลตรวจทางห้องปฏิบัติการ" />}
-      {tab === 'measures' && <ListTab cs={cs} field="measures" say={say} columns={[{ k: 'text', t: 'มาตรการ' }, { k: 'owner', t: 'ผู้รับผิดชอบ' }, { k: 'result', t: 'ผล/หมายเหตุ' }]} blank={{ date: todayStr(), text: '', owner: '', result: '' }} empty="ยังไม่มีมาตรการควบคุมโรค — เช่น พ่นหมอกควัน กำจัดลูกน้ำ ให้ความรู้ แยกผู้ป่วย" />}
+      {tab === 'labs' && <ListTab cs={cs} field="labs" say={say} columns={[{ k: 'who', t: 'ผู้ถูกตรวจ', opts: LAB_WHO }, { k: 'specimen', t: 'ตัวอย่าง', opts: labOpts(cs.disease).specimen }, { k: 'test', t: 'การตรวจ', opts: labOpts(cs.disease).test }, { k: 'result', t: 'ผล', opts: LAB_RESULT }]} blank={{ date: todayStr(), who: '', specimen: '', test: '', result: '' }} empty="ยังไม่มีผลตรวจทางห้องปฏิบัติการ" />}
+      {tab === 'measures' && <ListTab cs={cs} field="measures" say={say} columns={[{ k: 'text', t: 'มาตรการ', opts: TEMPLATES[cs.disease]?.measures }, { k: 'owner', t: 'ผู้รับผิดชอบ', opts: (officers || []).map((o) => o.name) }, { k: 'result', t: 'ผล/หมายเหตุ' }]} blank={{ date: todayStr(), text: '', owner: '', result: '' }} empty="ยังไม่มีมาตรการควบคุมโรค — เช่น พ่นหมอกควัน กำจัดลูกน้ำ ให้ความรู้ แยกผู้ป่วย" />}
 
       {tab === 'files' && <CaseFiles cs={cs} say={say} />}
 
