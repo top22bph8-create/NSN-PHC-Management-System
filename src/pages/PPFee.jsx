@@ -7,7 +7,8 @@ import { ChevronDown, ChevronRight, FileSpreadsheet, Search, Users } from 'lucid
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
 import { FEE_ACTS, QUARTERS, fyMonths, money } from '../lib/ppFee';
-import { fmtDateTime, thMonths } from '../lib/thai';
+import { fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
+import ThaiDateInput from '../components/ThaiDateInput';
 import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
 
@@ -75,24 +76,36 @@ export default function PPFee() {
   const [mode, setMode] = useState('year');
   const [q, setQ] = useState(0);
   const [mon, setMon] = useState('');
+  const [day, setDay] = useState('');
   const [open, setOpen] = useState(() => new Set());
   const [tgt, setTgt] = useState(null);
   useEffect(() => onSnapshot(collection(db, 'ppFee'), (s) => setDocs(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.fy - a.fy)), () => setDocs([])), []);
   useEffect(() => onSnapshot(collection(db, 'ppTargets'), (s) => setTdocs(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setTdocs([])), []);
   const cur = docs?.find((d) => d.fy === fy) || docs?.[0];
   const months = useMemo(() => (cur ? fyMonths(cur.fy) : []), [cur]);
+  const dayKeys = useMemo(() => Object.keys(cur?.days || {}).sort(), [cur]);
+  const dayVal = day || dayKeys[dayKeys.length - 1] || todayStr();
   const pick = useMemo(() => (mode === 'year' ? months : mode === 'quarter' ? months.filter((m) => QUARTERS[q][1].includes(Number(m.slice(5)))) : [mon || months[0]]), [mode, q, mon, months]);
   const byId = useMemo(() => Object.fromEntries(FEE_ACTS.map((a) => {
     const auto = !!a.auto && (cur?.mapped || []).includes(a.id);
-    let n = 0; let e = 0; pick.forEach((m) => { const x = cur?.months?.[m]?.[a.id]; if (x) { n += x.n || 0; e += x.e || 0; } });
+    let n = 0; let e = 0;
+    if (mode === 'day') { const x = cur?.days?.[dayVal]?.[a.id]; if (x) { n = x.n || 0; e = x.e || 0; } }
+    else pick.forEach((m) => { const x = cur?.months?.[m]?.[a.id]; if (x) { n += x.n || 0; e += x.e || 0; } });
     return [a.id, { a, auto, n, e, baht: auto ? money(a, e) : 0 }];
-  })), [cur, pick]);
+  })), [cur, pick, mode, dayVal]);
   const trend = useMemo(() => months.map((m) => ({ m, v: FEE_ACTS.reduce((s, a) => s + (cur?.mapped?.includes(a.id) ? money(a, cur?.months?.[m]?.[a.id]?.e || 0) : 0), 0) })), [cur, months]);
+  // กราฟรายวันของเดือนที่เลือก (โหมดรายเดือน/รายวัน)
+  const dmon = mode === 'day' ? dayVal.slice(0, 7) : (mon || months[0]);
+  const dtrend = useMemo(() => {
+    if (!cur || !dmon) return [];
+    const [yy, mm] = dmon.split('-').map(Number); const n = new Date(yy, mm, 0).getDate();
+    return Array.from({ length: n }, (_, i) => { const d = `${dmon}-${String(i + 1).padStart(2, '0')}`; return { d, v: FEE_ACTS.reduce((s, a) => s + (cur.mapped?.includes(a.id) ? money(a, cur.days?.[d]?.[a.id]?.e || 0) : 0), 0) }; });
+  }, [cur, dmon]);
   const tsum = tdocs.find((d) => d.id === 'summary');
   if (!docs) return <Spinner />;
   const all = Object.values(byId); const total = all.reduce((s, r) => s + r.baht, 0); const mappedN = all.filter((r) => r.auto).length;
-  const maxB = Math.max(1, ...all.map((r) => r.baht)); const maxT = Math.max(1, ...trend.map((t) => t.v));
-  const label = mode === 'year' ? `ปีงบประมาณ ${cur?.fy}` : mode === 'quarter' ? QUARTERS[q][0] : `${mLabel(pick[0] || '2026-10')} ${Number(pick[0]?.slice(0, 4)) + 543}`;
+  const maxB = Math.max(1, ...all.map((r) => r.baht)); const maxT = Math.max(1, ...trend.map((t) => t.v)); const maxD = Math.max(1, ...dtrend.map((t) => t.v));
+  const label = mode === 'day' ? fmtDate(dayVal) : mode === 'year' ? `ปีงบประมาณ ${cur?.fy}` : mode === 'quarter' ? QUARTERS[q][0] : `${mLabel(pick[0] || '2026-10')} ${Number(pick[0]?.slice(0, 4)) + 543}`;
   const toggle = (id) => setOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toXlsx = () => exportXlsx(all.map(({ a, auto, n, e, baht }) => ({ 'กิจกรรม': a.name, 'อัตราจ่าย (บาท)': a.rate * (a.mult || 1), 'สิทธิ': a.right, 'รหัส NDP': a.ndp, 'ICD-10': a.icd, 'จำนวนครั้งสูงสุด/คน': a.cap, 'บันทึกใน JHCIS (ครั้ง)': auto ? n : '', 'เบิกได้หลังจำกัดครั้ง': auto ? e : '', 'ประมาณการเงิน (บาท)': auto ? baht : 'ยังไม่ผูกรหัส' })), 'PP Fee Schedule', `PPFeeSchedule_${label}`);
   return (
@@ -100,9 +113,10 @@ export default function PPFee() {
       <PageHeader title="รายงานผลงาน P&P Fee Schedule" subtitle={cur ? `ปีงบประมาณ ${cur.fy} · ข้อมูล ณ ${cur.asOf || ''}${cur.updatedAt?.toDate ? ` · ส่งล่าสุด ${fmtDateTime(cur.updatedAt.toDate())}` : ''}` : 'ยังไม่มีข้อมูล'} actions={<button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>} />
       {!cur ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --pp</code></p> : (<>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex overflow-hidden rounded-lg border bg-white">{[['year', 'รายปีงบ'], ['quarter', 'รายไตรมาส'], ['month', 'รายเดือน']].map(([k, t]) => <button key={k} className={`px-3 py-1.5 text-sm ${mode === k ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setMode(k)}>{t}</button>)}</div>
+          <div className="inline-flex overflow-hidden rounded-lg border bg-white">{[['year', 'รายปีงบ'], ['quarter', 'รายไตรมาส'], ['month', 'รายเดือน'], ['day', 'รายวัน']].map(([k, t]) => <button key={k} className={`px-3 py-1.5 text-sm ${mode === k ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setMode(k)}>{t}</button>)}</div>
           {docs.length > 1 && <select className="input !w-auto" value={cur.fy} onChange={(e) => setFy(Number(e.target.value))}>{docs.map((d) => <option key={d.fy} value={d.fy}>ปีงบ {d.fy}</option>)}</select>}
           {mode === 'quarter' && <select className="input !w-auto" value={q} onChange={(e) => setQ(Number(e.target.value))}>{QUARTERS.map((x, i) => <option key={i} value={i}>{x[0]}</option>)}</select>}
+          {mode === 'day' && <div className="w-44"><ThaiDateInput value={dayVal} onChange={(v) => v && setDay(v)} yearsBack={3} yearsForward={1} /></div>}
           {mode === 'month' && <select className="input !w-auto" value={mon || months[0]} onChange={(e) => setMon(e.target.value)}>{months.map((m) => <option key={m} value={m}>{mLabel(m)} {Number(m.slice(0, 4)) + 543}</option>)}</select>}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
@@ -112,6 +126,12 @@ export default function PPFee() {
             <div className="mt-1 flex h-14 items-end gap-1">{trend.map((t) => <div key={t.m} className="flex-1" title={`${mLabel(t.m)}: ${nf(t.v)} บาท`}><div className="rounded-t bg-gradient-to-t from-emerald-600 to-emerald-300" style={{ height: `${Math.max(2, Math.round((t.v / maxT) * 54))}px` }} /></div>)}</div>
             <div className="flex gap-1 text-[10px] text-slate-400">{trend.map((t) => <span key={t.m} className="flex-1 text-center">{mLabel(t.m).slice(0, 3)}</span>)}</div></div>
         </div>
+        {(mode === 'month' || mode === 'day') && (
+          <div className="card p-4"><div className="text-xs text-slate-500">เงินรายวัน — {mLabel(dmon)} {Number(dmon.slice(0, 4)) + 543}{mode === 'day' ? ' (วันที่เลือกไฮไลต์)' : ''}</div>
+            <div className="mt-1 flex h-16 items-end gap-0.5">{dtrend.map((t) => <button type="button" key={t.d} onClick={() => { setDay(t.d); setMode('day'); }} className="flex-1" title={`${fmtDate(t.d)}: ${nf(t.v)} บาท`}><div className={`rounded-t ${mode === 'day' && t.d === dayVal ? 'bg-gradient-to-t from-amber-500 to-amber-300' : 'bg-gradient-to-t from-emerald-600 to-emerald-300'}`} style={{ height: `${Math.max(2, Math.round((t.v / maxD) * 60))}px` }} /></button>)}</div>
+            <div className="flex gap-0.5 text-[9px] text-slate-400">{dtrend.map((t) => <span key={t.d} className="flex-1 text-center">{Number(t.d.slice(8))}</span>)}</div>
+            <p className="mt-1 text-[11px] text-slate-400">กดที่แท่งเพื่อดูผลงานของวันนั้น</p></div>
+        )}
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead><tr className="bg-slate-50 text-left text-xs text-slate-500"><th className="w-8 px-2 py-2" /><th className="px-2">กิจกรรม</th><th className="px-2 text-right">อัตราจ่าย</th><th className="px-2 text-right">เบิกได้ (ครั้ง)</th><th className="w-52 px-2">ประมาณการเงิน (บาท)</th><th className="w-44 px-2">กลุ่มเป้าหมาย</th></tr></thead>

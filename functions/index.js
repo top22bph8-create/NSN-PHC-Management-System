@@ -1279,8 +1279,16 @@ exports.ingestPpFee = onRequest({ cors: false }, async (req, res) => {
       months[m] = {};
       for (const [id, v] of Object.entries(acts).slice(0, 40)) months[m][String(id).slice(0, 8)] = { n: Number(v && v.n) || 0, e: Number(v && v.e) || 0 };
     }
+    const days = {};
+    if (b.days && typeof b.days === 'object') {
+      for (const [d, acts] of Object.entries(b.days).slice(0, 400)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !acts || typeof acts !== 'object') continue;
+        days[d] = {};
+        for (const [id, v] of Object.entries(acts).slice(0, 40)) days[d][String(id).slice(0, 8)] = { n: Number(v && v.n) || 0, e: Number(v && v.e) || 0 };
+      }
+    }
     const mapped = (Array.isArray(b.mapped) ? b.mapped : []).slice(0, 40).map((x) => String(x).slice(0, 8));
-    await db.doc(`ppFee/fy${fy}`).set({ fy, asOf: String(b.asOf || '').slice(0, 10), months, mapped, updatedAt: FieldValue.serverTimestamp() });
+    await db.doc(`ppFee/fy${fy}`).set({ fy, asOf: String(b.asOf || '').slice(0, 10), months, days, mapped, updatedAt: FieldValue.serverTimestamp() });
     res.json({ ok: true });
   } catch (e) { console.error('ingestPpFee', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
 });

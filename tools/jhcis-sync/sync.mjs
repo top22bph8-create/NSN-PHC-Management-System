@@ -212,14 +212,15 @@ if (args.includes('--pp')) {
     for (const r of rr) if (String(r.rg) !== '5') events[sc.id].push({ k: String(r.pid), d: r.d });
   }
   const capFor = (id) => (id === '1' ? 8 : id === '18' ? Infinity : drugCap[id] || RULES.find((r) => r.id === id).cap);
-  const months = {}; const tot = {};
+  const months = {}; const days = {}; const tot = {};
   for (const [id, list] of Object.entries(events)) {
     const cap = capFor(id); const seen = {}; const byK = {};
     list.sort((a, b) => a.d.localeCompare(b.d));
     for (const ev of list) {
       const m = ev.d.slice(0, 7); const o = ((months[m] ||= {})[id] ||= { n: 0, e: 0 });
+      const od = ((days[ev.d] ||= {})[id] ||= { n: 0, e: 0 }); od.n++;
       o.n++; byK[ev.k] = (byK[ev.k] || new Set()); byK[ev.k].add(ev.d);
-      if ((seen[ev.k] = (seen[ev.k] || 0) + 1) <= cap) o.e++;
+      if ((seen[ev.k] = (seen[ev.k] || 0) + 1) <= cap) { o.e++; od.e++; }
     }
     tot[id] = { n: list.length, e: Object.values(months).reduce((a, mm) => a + (mm[id]?.e || 0), 0), persons: Object.keys(byK).length };
   }
@@ -242,7 +243,7 @@ if (args.includes('--pp')) {
   }
   await conn.end();
   const url = cfg.ppEndpoint || 'https://us-central1-nsn-phc-web.cloudfunctions.net/ingestPpFee';
-  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ fy, asOf: iso(new Date()), months, mapped }) });
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ fy, asOf: iso(new Date()), months, days, mapped }) });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
   console.log('ส่งสำเร็จ'); process.exit(0);
