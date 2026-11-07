@@ -81,6 +81,15 @@ service cloud.firestore {
       allow read: if isActive();
       allow write: if false;
     }
+    // โมดูลสอบสวนโรคและเฝ้าระวังทางระบาดวิทยา (เฉพาะผู้ใช้ที่ล็อกอินและเปิดใช้งานแล้ว; ไม่มีเลขบัตรประชาชน)
+    match /outbreakCases/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    match /outbreakPeople/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /rightsRegistry/{id} {
       allow read: if isActive();
       allow write: if false;

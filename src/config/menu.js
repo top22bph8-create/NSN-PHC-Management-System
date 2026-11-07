@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, Ambulance, Droplets, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, Ambulance, Droplets, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck, Biohazard,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -115,7 +115,10 @@ export const GROUPS = [
   },
   {
     key: 'disease', title: 'งานส่งเสริมป้องกันโรค', emoji: '🦠', icon: Activity, tone: 'from-teal-500 to-green-600', soft: 'bg-teal-50 text-teal-700',
-    items: [{ key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', path: '/soon/disease', icon: Activity, ready: false }],
+    items: [
+      { key: 'outbreak', label: 'สอบสวนโรค & แผนที่การระบาด', path: '/outbreak', icon: Biohazard, ready: true, module: 'outbreak', tone: 'from-rose-600 to-orange-500', desc: 'เปิดเคสสอบสวนโรค บันทึกผู้ป่วย/ผู้สัมผัส วิเคราะห์ Person-Time-Place และ Epidemic Curve' },
+      { key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', path: '/soon/disease', icon: Activity, ready: false },
+    ],
   },
   {
     key: 'ltc', title: 'งานดูแลผู้มีภาวะพึ่งพิง LTC', emoji: '🧓', icon: HeartHandshake, tone: 'from-fuchsia-500 to-purple-600', soft: 'bg-fuchsia-50 text-fuchsia-700',
