@@ -16,10 +16,12 @@ import { AGE_ORDER, PERSON_STATUS, SEX, STATUS, STATUS_TONE, analyze, fullName, 
 import { locate, useAreas, useOfficers, useVillages } from './outbreakRefs';
 import CaseFiles from './CaseFiles';
 import GuideTab from './GuideTab';
+import ReportTab from './ReportTab';
+import { deleteCaseFully } from './caseOps';
 import OutbreakMap from './OutbreakMap';
 import { CLASSIFICATION, TEMPLATES } from './diseaseTemplates';
 
-const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['guide', 'แนวทางสอบสวน/นิยามโรค'], ['patients', 'ผู้ป่วย'], ['map', 'แผนที่'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2']];
+const TABS = [['overview', 'ภาพรวม/วิเคราะห์'], ['guide', 'แนวทางสอบสวน/นิยามโรค'], ['patients', 'ผู้ป่วย'], ['map', 'แผนที่'], ['contacts', 'ผู้สัมผัส'], ['timeline', 'Timeline'], ['labs', 'ผลตรวจแล็บ'], ['measures', 'มาตรการควบคุมโรค'], ['files', 'ไฟล์สอบสวน / ทะเบียน E0–E2'], ['report', 'บันทึก/ออกรายงาน']];
 const lab = 'mb-1 block text-sm text-slate-600';
 
 export function PersonModal({ kind, caseId, caseDefaults, initial, preset, onClose }) {
@@ -138,7 +140,7 @@ export default function OutbreakCase() {
   const doDel = async () => {
     setBusy(true);
     try {
-      if (del === 'case') { for (const p of people) await deleteDoc(doc(db, 'outbreakPeople', p.id)); await deleteDoc(doc(db, 'outbreakCases', id)); await writeAudit({ action: 'delete', module: 'outbreak', docId: id, label: cs.title }); nav('/outbreak'); }
+      if (del === 'case') { await deleteCaseFully(cs, people); nav('/outbreak'); }
       else { await deleteDoc(doc(db, 'outbreakPeople', del.id)); await writeAudit({ action: 'delete', module: 'outbreak', docId: del.id, label: `${del.kind === 'patient' ? 'ผู้ป่วย' : 'ผู้สัมผัส'} ในเคส ${cs.title}` }); setDel(null); }
     } catch (e) { say('ลบไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); }
   };
@@ -194,6 +196,7 @@ export default function OutbreakCase() {
           {an.missing.length ? <ul className="list-inside list-disc space-y-0.5 text-sm text-amber-800">{an.missing.map((m) => <li key={m}>{m}</li>)}</ul> : <p className="text-sm text-emerald-700">ข้อมูลหลักครบถ้วน</p>}
           <p className="mt-2 text-xs text-slate-400">ตัวเลขทั้งหมดคำนวณจากข้อมูลที่บันทึกในเคสนี้เท่านั้น</p></section>
       </>)}
+      {tab === 'report' && <ReportTab cs={cs} patients={patients} contacts={contacts} an={an} dname={dname} say={say} />}
       {tab === 'guide' && <GuideTab cs={cs} say={say} />}
       {tab === 'map' && <OutbreakMap patients={patients} areas={areas} label={{ [id]: cs.title }} onMove={moveP} onPlace={placeP} onAddAt={(lat, lng) => setPm({ kind: 'patient', initial: null, preset: { lat, lng, villageNo: locate(areas, lat, lng).villageNo } })} />}
       {tab === 'patients' && <PeopleTable list={patients} isP />}

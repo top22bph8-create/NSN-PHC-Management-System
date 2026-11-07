@@ -1,12 +1,13 @@
 // หน้าหลักโมดูลสอบสวนโรค & แผนที่การระบาด — Dashboard + รายการเหตุการณ์
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { Biohazard, FilePlus2, FileText, Map as MapIcon, Paperclip, Plus } from 'lucide-react';
+import { Biohazard, FilePlus2, FileText, Map as MapIcon, Paperclip, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { fmtDate } from '../../lib/thai';
 import { PageHeader } from '../../components/Logo';
-import { Badge, Spinner } from '../../components/ui';
+import { Badge, ConfirmDialog, Spinner } from '../../components/ui';
+import { deleteCaseFully } from './caseOps';
 import CaseFormModal from './CaseFormModal';
 import { Curve, HBars } from './OutbreakBars';
 import { LEVELS, STATUS, STATUS_TONE, countBy, epiCurve, isDead, nf, vilLabel } from './outbreakLib';
@@ -18,7 +19,7 @@ function Kpi({ label, value, tone }) {
 export default function OutbreakHome() {
   const nav = useNavigate();
   const [cases, setCases] = useState(null); const [people, setPeople] = useState(null);
-  const [form, setForm] = useState(false); const [hint, setHint] = useState(''); const [lv, setLv] = useState('');
+  const [form, setForm] = useState(false); const [editCs, setEditCs] = useState(null); const [delCs, setDelCs] = useState(null); const [busy, setBusy] = useState(false); const [all, setAll] = useState(false); const [hint, setHint] = useState(''); const [lv, setLv] = useState('');
   useEffect(() => onSnapshot(collection(db, 'outbreakCases'), (s) => setCases(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setCases([])), []);
   useEffect(() => onSnapshot(collection(db, 'outbreakPeople'), (s) => setPeople(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setPeople([])), []);
   const d = useMemo(() => {
@@ -31,7 +32,7 @@ export default function OutbreakHome() {
       curve: epiCurve(pt, { from: iso(from), to: iso(today) }),
       reg: cs.flatMap((c) => (c.files || []).map((f) => ({ ...f, caseId: c.id, caseTitle: c.title }))).sort((a, b) => String(b.date).localeCompare(String(a.date))),
       withFiles: cs.filter((c) => (c.files || []).length).length,
-      recent: [...cs].sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate))).slice(0, 8), count: Object.fromEntries(cs.map((c) => [c.id, pt.filter((p) => p.caseId === c.id).length])), disease,
+      recent: [...cs].sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate))), count: Object.fromEntries(cs.map((c) => [c.id, pt.filter((p) => p.caseId === c.id).length])), disease,
     };
   }, [cases, people]);
   if (!cases || !people) return <Spinner />;
@@ -57,13 +58,14 @@ export default function OutbreakHome() {
         <HBars title="ผู้ป่วยแยกตามหมู่บ้าน" data={d.byVillage} color="from-teal-600 to-teal-400" />
       </div>
       <section className="card overflow-x-auto p-4">
-        <h3 className="mb-2 font-bold text-slate-700">เหตุการณ์ล่าสุด</h3>
+        <div className="mb-2 flex items-center justify-between"><h3 className="font-bold text-slate-700">{all ? 'เหตุการณ์ทั้งหมด' : 'เหตุการณ์ล่าสุด'} ({nf(d.recent.length)})</h3>{d.recent.length > 8 && <button className="text-sm text-brand-700 underline" onClick={() => setAll(!all)}>{all ? 'แสดงเฉพาะ 8 รายการล่าสุด' : 'แสดงทั้งหมด'}</button>}</div>
         {!d.recent.length ? <p className="text-sm text-slate-500"><FilePlus2 className="mr-1 inline h-4 w-4" />ยังไม่มีเหตุการณ์ — กด “เปิดสอบสวนโรคใหม่” เพื่อเริ่มต้น</p> : (
           <table className="w-full min-w-[640px] text-sm">
-            <thead><tr className="border-b bg-slate-50 text-left text-slate-600"><th className="p-2">วันที่รับแจ้ง</th><th className="p-2">เหตุการณ์</th><th className="p-2">โรค</th><th className="p-2">หมู่</th><th className="p-2 text-right">ผู้ป่วย</th><th className="p-2">สถานะ</th><th className="p-2">ไฟล์สอบสวน</th></tr></thead>
-            <tbody>{d.recent.map((c) => (
+            <thead><tr className="border-b bg-slate-50 text-left text-slate-600"><th className="p-2">วันที่รับแจ้ง</th><th className="p-2">เหตุการณ์</th><th className="p-2">โรค</th><th className="p-2">หมู่</th><th className="p-2 text-right">ผู้ป่วย</th><th className="p-2">สถานะ</th><th className="p-2">ไฟล์สอบสวน</th><th className="w-24 p-2" /></tr></thead>
+            <tbody>{(all ? d.recent : d.recent.slice(0, 8)).map((c) => (
               <tr key={c.id} className="cursor-pointer border-b last:border-0 hover:bg-rose-50" onClick={() => nav(`/outbreak/${c.id}`)}>
                 <td className="p-2">{fmtDate(c.reportDate)}</td><td className="p-2 font-medium text-brand-800"><Link to={`/outbreak/${c.id}`}>{c.title}</Link></td><td className="p-2">{d.disease[c.id]}</td><td className="p-2">{c.villageNo || '-'}</td><td className="p-2 text-right tabular-nums">{nf(d.count[c.id])}</td><td className="p-2"><Badge className={STATUS_TONE[c.status]}>{STATUS[c.status] || c.status}</Badge></td><td className="p-2">{(c.files || []).length ? <span className="inline-flex items-center gap-1 text-emerald-700"><Paperclip className="h-3.5 w-3.5" />มี {(c.files || []).length} ไฟล์</span> : <span className="text-slate-300">-</span>}</td>
+                <td className="p-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}><button className="mr-3 text-brand-700" aria-label="แก้ไขเคส" title="แก้ไขเคส" onClick={() => setEditCs(c)}><Pencil className="h-4 w-4" /></button><button className="text-red-600" aria-label="ลบเคส" title="ลบเคส" onClick={() => setDelCs(c)}><Trash2 className="h-4 w-4" /></button></td>
               </tr>))}</tbody>
           </table>)}
       </section>
@@ -78,6 +80,9 @@ export default function OutbreakHome() {
             <tbody>{d.reg.filter((f) => !lv || f.level === lv).map((f) => (<tr key={f.id} className="cursor-pointer border-b last:border-0 hover:bg-emerald-50" onClick={() => nav(`/outbreak/${f.caseId}`)}><td className="p-2"><Badge className={LEVELS[f.level]?.tone}>{f.level}</Badge></td><td className="p-2 font-medium text-brand-800">{f.caseTitle}</td><td className="p-2">{f.name}</td><td className="p-2">{f.source}</td><td className="p-2 whitespace-nowrap">{fmtDate(f.date)}</td></tr>))}</tbody></table>)}
       </section>
       {form && <CaseFormModal onClose={() => setForm(false)} onSaved={(id) => nav(`/outbreak/${id}`)} />}
+      {editCs && <CaseFormModal initial={editCs} onClose={() => setEditCs(null)} />}
+      {delCs && <ConfirmDialog busy={busy} onCancel={() => setDelCs(null)} message={`ลบเคส “${delCs.title}” พร้อมผู้ป่วย ผู้สัมผัส และไฟล์แนบทั้งหมดในเคสนี้ ใช่หรือไม่? (กู้คืนไม่ได้)`}
+        onConfirm={async () => { setBusy(true); try { await deleteCaseFully(delCs, (people || []).filter((p) => p.caseId === delCs.id)); setDelCs(null); } catch (e) { window.alert('ลบไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); } }} />}
     </div>
   );
 }
