@@ -19,7 +19,7 @@ const CATS = [
   { k: 'iron', t: 'ธาตุเหล็กและโลหิตจาง', ids: ['7', '8', '9'], head: 'bg-amber-50 text-amber-800 border-amber-300', chip: 'bg-amber-100 text-amber-800', bar: 'from-amber-500 to-amber-300' },
   { k: 'fp', t: 'วางแผนครอบครัว', ids: ['11', '12', '13'], head: 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-300', chip: 'bg-fuchsia-100 text-fuchsia-700', bar: 'from-fuchsia-500 to-fuchsia-300' },
   { k: 'vac', t: 'วัคซีน', ids: ['14', '18', '19'], head: 'bg-sky-50 text-sky-800 border-sky-300', chip: 'bg-sky-100 text-sky-700', bar: 'from-sky-500 to-sky-300' },
-  { k: 'scr', t: 'คัดกรองและโรคเรื้อรัง', ids: ['6', 'g1517', '20', '21'], head: 'bg-emerald-50 text-emerald-800 border-emerald-300', chip: 'bg-emerald-100 text-emerald-700', bar: 'from-emerald-500 to-emerald-300' },
+  { k: 'scr', t: 'คัดกรองและโรคเรื้อรัง', ids: ['6', '15', '16', '17', '20', '21'], head: 'bg-emerald-50 text-emerald-800 border-emerald-300', chip: 'bg-emerald-100 text-emerald-700', bar: 'from-emerald-500 to-emerald-300' },
   { k: 'den', t: 'ทันตกรรม', ids: ['10'], head: 'bg-teal-50 text-teal-800 border-teal-300', chip: 'bg-teal-100 text-teal-700', bar: 'from-teal-500 to-teal-300' },
 ];
 const TARGET_CAT = { 1: 'TANC', 6: 'TFIT', 9: 'TCH', 14: 'TFLU' }; // กิจกรรมที่มีรายชื่อกลุ่มเป้าหมาย
@@ -124,7 +124,7 @@ export default function PPFee() {
                   return (<Fragment key={a.id}>
                     <tr className={`border-b hover:bg-slate-50 ${auto ? '' : 'text-slate-400'}`}>
                       <td className="px-2"><button onClick={() => toggle(a.id)} className="rounded p-1 hover:bg-slate-200" aria-label="รายละเอียด">{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button></td>
-                      <td className="px-2 py-2"><span className={`mr-2 inline-block rounded-md px-1.5 text-xs font-bold ${c.chip}`}>{a.id === 'g1517' ? '15–17' : a.id}</span>{a.name}{!auto && <span className="ml-2 rounded bg-slate-100 px-1.5 text-xs">รอผูกรหัส</span>}</td>
+                      <td className="px-2 py-2"><span className={`mr-2 inline-block rounded-md px-1.5 text-xs font-bold ${c.chip}`}>{a.id}</span>{a.name}{!auto && <span className="ml-2 rounded bg-slate-100 px-1.5 text-xs">รอผูกรหัส</span>}</td>
                       <td className="px-2 text-right tabular-nums">{nf(a.rate)}{a.mult ? <span className="text-xs text-slate-400"> ×{a.mult}</span> : null}</td>
                       <td className="px-2 text-right font-medium tabular-nums">{auto ? nf(e) : '–'}</td>
                       <td className="px-2">{auto ? <div className="flex items-center gap-2"><div className="h-2 flex-1 rounded-full bg-slate-100"><div className={`h-2 rounded-full bg-gradient-to-r ${c.bar}`} style={{ width: `${(baht / maxB) * 100}%` }} /></div><b className="w-20 text-right tabular-nums">{nf(baht)}</b></div> : <span className="text-xs">ไม่รวมในยอดเงิน</span>}</td>

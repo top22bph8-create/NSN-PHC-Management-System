@@ -143,7 +143,6 @@ if (args.includes('--pp')) {
     { id: '9', codes: ['Z130'], cap: 1, ok: (r, d) => { const m = ageM(r.birth, d); return m >= 6 && m <= 12; } },
     { id: '10', codes: ['K060'], cap: 2, ok: (r, d) => ageY(r.birth, d) >= 25 && ageY(r.birth, d) <= 59 },
     { id: '14', codes: ['Z251'], cap: 1 },
-    { id: 'g1517', codes: ['Z115'], cap: 3 },
     { id: '19', codes: ['Z235', 'Z236'], cap: 1, ok: (r, d) => ageY(r.birth, d) >= 25 },
   ];
   const T = async (sql, p) => { try { return (await conn.query(sql, p))[0]; } catch (e) { console.log('  ! ดึงไม่ได้:', e.code || e.message); return []; } };
@@ -197,6 +196,19 @@ if (args.includes('--pp')) {
     const got = {};
     for (const r of lb) { if (!newHt.has(String(r.pid)) || String(r.rg) === '5') continue; const g = got[r.pid] || (got[r.pid] = {}); g[r.labcode] = r.d; }
     for (const [pid, g] of Object.entries(got)) if (g.CH09 && g.CH19) events['21'].push({ k: pid, d: g.CH09 > g.CH19 ? g.CH09 : g.CH19 });
+  }
+  // กิจกรรม 15–17 แยกตามรายการแล็บ: 15 HPV (หญิง 30–59 ปี), 16 HBsAg, 17 HCV-Ab — cap 1 ครั้ง/คน/ปี ไม่รวมสิทธิกลุ่ม 5
+  for (const sc of [
+    { id: '15', codes: ['CY1000HPV1'], women: true },
+    { id: '16', codes: ['SE1100', 'SE_HBsAg'] },
+    { id: '17', codes: ['SE1400', 'SE_HCV'] },
+  ]) {
+    events[sc.id] = []; drugCap[sc.id] = 1;
+    const rr = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, max(c.rightgroup) rg from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno left join cright c on c.rightcode = v.rightcode
+      ${sc.women ? 'join person pe on pe.pcucodeperson = v.pcucodeperson and pe.pid = v.pid' : ''}
+      where v.pcucode = ? and v.visitdate between ? and ? and l.labcode in (${sc.codes.map(() => '?').join(',')})
+      ${sc.women ? "and pe.sex = '2' and timestampdiff(year, pe.birth, v.visitdate) between 30 and 59" : ''} group by v.pid, v.visitdate`, [PCU, from2, to2, ...sc.codes]);
+    for (const r of rr) if (String(r.rg) !== '5') events[sc.id].push({ k: String(r.pid), d: r.d });
   }
   const capFor = (id) => (id === '1' ? 8 : id === '18' ? Infinity : drugCap[id] || RULES.find((r) => r.id === id).cap);
   const months = {}; const tot = {};
