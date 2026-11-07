@@ -197,7 +197,7 @@ if (args.includes('--pp')) {
     for (const r of lb) { if (!newHt.has(String(r.pid)) || String(r.rg) === '5') continue; const g = got[r.pid] || (got[r.pid] = {}); g[r.labcode] = r.d; }
     for (const [pid, g] of Object.entries(got)) if (g.CH09 && g.CH19) events['21'].push({ k: pid, d: g.CH09 > g.CH19 ? g.CH09 : g.CH19 });
   }
-  // กิจกรรม 15–17 แยกตามรายการแล็บ: 15 HPV (หญิง 30–59 ปี), 16 HBsAg, 17 HCV-Ab — cap 1 ครั้ง/คน/ปี ไม่รวมสิทธิกลุ่ม 5
+  // กิจกรรม 15–17 แยกตามรายการแล็บ: 15 HPV (หญิง 30–59 ปี), 16 HBsAg, 17 HCV-Ab — ต้องมีรหัส Z11.5 ในการมารับบริการครั้งนั้น, cap 1 ครั้ง/คน/ปี ไม่รวมสิทธิกลุ่ม 5
   for (const sc of [
     { id: '15', codes: ['CY1000HPV1'], women: true },
     { id: '16', codes: ['SE1100', 'SE_HBsAg'] },
@@ -207,6 +207,7 @@ if (args.includes('--pp')) {
     const rr = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, max(c.rightgroup) rg from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno left join cright c on c.rightcode = v.rightcode
       ${sc.women ? 'join person pe on pe.pcucodeperson = v.pcucodeperson and pe.pid = v.pid' : ''}
       where v.pcucode = ? and v.visitdate between ? and ? and l.labcode in (${sc.codes.map(() => '?').join(',')})
+      and exists (select 1 from visitdiag dz where dz.pcucode = v.pcucode and dz.visitno = v.visitno and replace(dz.diagcode,'.','') like 'Z115%')
       ${sc.women ? "and pe.sex = '2' and timestampdiff(year, pe.birth, v.visitdate) between 30 and 59" : ''} group by v.pid, v.visitdate`, [PCU, from2, to2, ...sc.codes]);
     for (const r of rr) if (String(r.rg) !== '5') events[sc.id].push({ k: String(r.pid), d: r.d });
   }
