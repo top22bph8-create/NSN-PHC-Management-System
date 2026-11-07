@@ -136,13 +136,17 @@ if (args.includes('--pp')) {
     { id: '11', like: '%ยาเม็ดคุมกำเนิดชนิดฮอร์โมนเดี่ยว%', cap: 5 },
     { id: '12', like: '%ยาเม็ดคุมกำเนิดชนิดฮอร์โมนรวม%', cap: 5 },
     { id: '13', like: '%ยาฉีดคุมกำเนิด%', cap: 5 },
+    { id: '8', like: '%Hct%', cap: 1, ageMonths: [6, 12] },
+    { id: '2', like: '%ขัดทำความสะอาดฟัน%', cap: 1 },
   ];
   const drugCap = {};
   for (const dr of DRUG_RULES) {
     events[dr.id] = []; drugCap[dr.id] = dr.cap;
     const rows2 = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, max(c.rightgroup) rg from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno
       join cdrug dg on dg.drugcode = vd.drugcode left join cright c on c.rightcode = v.rightcode
-      where v.pcucode = ? and v.visitdate between ? and ? and ${SVC} and dg.drugname like ? group by v.pid, v.visitdate`, [PCU, from2, to2, dr.like]);
+      ${dr.ageMonths ? 'join person pe on pe.pcucodeperson = v.pcucodeperson and pe.pid = v.pid' : ''}
+      where v.pcucode = ? and v.visitdate between ? and ? and ${SVC} and dg.drugname like ?
+      ${dr.ageMonths ? `and timestampdiff(month, pe.birth, v.visitdate) between ${dr.ageMonths[0]} and ${dr.ageMonths[1]}` : ''} group by v.pid, v.visitdate`, [PCU, from2, to2, dr.like]);
     for (const r of rows2) if (String(r.rg) !== '5') events[dr.id].push({ k: String(r.pid), d: r.d });
   }
   const capFor = (id) => (id === '1' ? 8 : id === '18' ? Infinity : drugCap[id] || RULES.find((r) => r.id === id).cap);
@@ -165,6 +169,9 @@ if (args.includes('--pp')) {
     const found = await T(`select dg.drugname nm, count(*) n from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno join cdrug dg on dg.drugcode = vd.drugcode
       where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 400 day) and (${kw.map(() => 'dg.drugname like ?').join(' or ')}) group by dg.drugname order by n desc limit 40`, [PCU, ...kw.map((k) => `%${k}%`)]);
     console.log('\nรายการค่าบริการ/ยาที่เกี่ยวข้อง (400 วัน):'); found.forEach((x) => console.log(`  ${x.nm} = ${x.n}`));
+    const all18 = await T(`select dg.drugname nm, count(*) n from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno join cdrug dg on dg.drugcode = vd.drugcode
+      where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 400 day) and (dg.drugname like '18%' or dg.drugname like '07%' or dg.drugname like '13%' or dg.drugname like '%HbA1c%' or dg.drugname like '%A1c%' or dg.drugname like '%creatinine%' or dg.drugname like '%HPV%') group by dg.drugname order by dg.drugname limit 120`, [PCU]);
+    console.log('\nรายการค่าบริการทั้งหมดที่ขึ้นต้น 18/07/13 (400 วัน):'); all18.forEach((x) => console.log(`  ${x.nm} = ${x.n}`));
     const dr = await T(`select d.drugname nm, count(*) n from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno
       join visitdrug vd on vd.pcucode = v.pcucode and vd.visitno = v.visitno join cdrug d on d.drugcode = vd.drugcode
       where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 400 day) and upper(replace(g.diagcode,'.','')) in ('Z304','Z300') group by d.drugname order by n desc limit 14`, [PCU]);
