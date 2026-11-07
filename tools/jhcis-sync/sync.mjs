@@ -90,6 +90,40 @@ if (args.includes('--explore-pp')) {
   if (tabs.includes('cdrug')) { const c = await T(`select count(*) n, sum(tmtcode is not null and tmtcode<>'') tmt from cdrug`); console.log('\ncdrug: จำนวน', JSON.stringify(c)); }
   await conn.end(); process.exit(0);
 }
+if (args.includes('--explore-lab')) {
+  // สำรวจตารางแล็บ (ชื่อคอลัมน์ + จำนวนแถวใน 400 วัน + ชื่อรายการแล็บ) เพื่อผูก HbA1c / Creatinine / Potassium — ไม่แสดงข้อมูลผู้ป่วย
+  const T = async (sql, p) => { try { return (await conn.query(sql, p))[0]; } catch (e) { console.log('  ! ', e.code || e.message); return []; } };
+  const tabs = (await T('show tables')).map((r) => Object.values(r)[0]);
+  const labTabs = tabs.filter((t) => /lab|ncdscreen|ncdperson|cproc|cicd9|ncd/i.test(t));
+  console.log('ตารางแล็บ/หัตถการ:', labTabs.join(', '));
+  for (const t of labTabs.filter((x) => /^(visitlab|ncdlab|labfu|visitlabblood|visitlabsugarblood)/i.test(x))) {
+    const cols = await T(`show columns from ${t}`);
+    console.log(`\n${t}: ${cols.map((c) => c.Field).join(', ')}`);
+    const hit = cols.map((c) => c.Field).filter((f) => /a1c|hba|creat|crea|pota|^k$|egfr|bun/i.test(f));
+    for (const f of hit) { const r = await T(`select count(*) n from ${t} where \`${f}\` is not null and \`${f}\` <> '' and \`${f}\` <> 0`); console.log(`   คอลัมน์ ${f}: มีค่า ${r[0]?.n ?? '?'} แถว (ทั้งตาราง)`); }
+  }
+  for (const t of ['cproc', 'clabmain', 'clab', 'clabtest', 'cdrug']) {
+    if (!tabs.includes(t)) continue;
+    const cols = (await T(`show columns from ${t}`)).map((c) => c.Field);
+    const nameCol = cols.find((c) => /name/i.test(c)); if (!nameCol) continue;
+    const rr = await T(`select \`${nameCol}\` nm, ${cols[0]} cd from ${t} where \`${nameCol}\` like '%A1c%' or \`${nameCol}\` like '%hba1c%' or \`${nameCol}\` like '%creatinine%' or \`${nameCol}\` like '%ครีเอตินิน%' or \`${nameCol}\` like '%potassium%' or \`${nameCol}\` like '%โพแทสเซียม%' or \`${nameCol}\` like '%น้ำตาลสะสม%' limit 30`);
+    console.log(`\nรายการใน ${t} ที่ชื่อเกี่ยวข้อง:`); rr.forEach((x) => console.log(`  ${x.cd} | ${x.nm}`));
+  }
+  await conn.end(); process.exit(0);
+}
+if (args.includes('--explore-lab2')) {
+  // รายการแล็บใน clabchcyhembmsse ที่เกี่ยวกับ HbA1c / Creatinine / Potassium + จำนวนครั้งใน 400 วัน (เฉพาะรหัส/ชื่อรายการและตัวเลขรวม)
+  const T = async (sql, p) => { try { return (await conn.query(sql, p))[0]; } catch (e) { console.log('  ! ', e.code || e.message); return []; } };
+  const cols = (await T('show columns from clabchcyhembmsse')).map((c) => c.Field); console.log('clabchcyhembmsse:', cols.join(', '));
+  const nameCol = cols.find((c) => /name/i.test(c)) || cols[1];
+  const rows = await T(`select c.labcode, c.\`${nameCol}\` nm, (select count(*) from visitlabchcyhembmsse v where v.labcode = c.labcode and v.datecheck >= date_sub(curdate(), interval 400 day)) n from clabchcyhembmsse c where c.\`${nameCol}\` like '%A1c%' or c.\`${nameCol}\` like '%creat%' or c.\`${nameCol}\` like '%ครีเอ%' or c.\`${nameCol}\` like '%pota%' or c.\`${nameCol}\` like '%โพแท%' or c.\`${nameCol}\` like '%น้ำตาลสะสม%' or c.\`${nameCol}\` like '%HPV%' or c.\`${nameCol}\` like '%ไวรัสตับ%'`);
+  console.log('\nรายการแล็บที่เกี่ยวข้อง (รหัส | ชื่อ | จำนวนครั้ง 400 วัน):'); rows.forEach((x) => console.log(`  ${x.labcode} | ${x.nm} | ${x.n}`));
+  const top = await T(`select c.labcode, c.\`${nameCol}\` nm, count(*) n from visitlabchcyhembmsse v join clabchcyhembmsse c on c.labcode = v.labcode where v.datecheck >= date_sub(curdate(), interval 400 day) group by c.labcode, c.\`${nameCol}\` order by n desc limit 30`);
+  console.log('\nรายการแล็บที่ใช้บ่อยสุด 30 อันดับ:'); top.forEach((x) => console.log(`  ${x.labcode} | ${x.nm} | ${x.n}`));
+  const cr = await T(`select dg.drugname nm, count(*) n from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno join cdrug dg on dg.drugcode = vd.drugcode where v.visitdate >= date_sub(curdate(), interval 400 day) and dg.drugname like '%Creatinine%' group by dg.drugname`);
+  console.log('\nค่าบริการ Creatinine ใน visitdrug:'); cr.forEach((x) => console.log(`  ${x.nm} | ${x.n}`));
+  await conn.end(); process.exit(0);
+}
 if (args.includes('--pp')) {
   // รายงาน P&P Fee Schedule: นับจำนวนครั้งของแต่ละกิจกรรมจาก JHCIS ตามรหัส ICD-10 (เลขรหัสไม่มีจุด) ทั้งปีงบประมาณ แล้วจำกัดจำนวนครั้งต่อคนต่อปีตามตาราง
   // ส่งเฉพาะตัวเลขรายเดือนต่อกิจกรรม (ไม่มีชื่อ/เลขบัตรผู้ป่วย) — เงินคำนวณที่หน้าเว็บจากอัตราจ่ายในตาราง
@@ -148,6 +182,21 @@ if (args.includes('--pp')) {
       where v.pcucode = ? and v.visitdate between ? and ? and ${SVC} and dg.drugname like ?
       ${dr.ageMonths ? `and timestampdiff(month, pe.birth, v.visitdate) between ${dr.ageMonths[0]} and ${dr.ageMonths[1]}` : ''} group by v.pid, v.visitdate`, [PCU, from2, to2, dr.like]);
     for (const r of rows2) if (String(r.rg) !== '5') events[dr.id].push({ k: String(r.pid), d: r.d });
+  }
+  // กิจกรรม 20: HbA1c (CH99) ผู้ป่วย DM type 2 (E11) สิทธิ UC (rightgroup 3) cap 2
+  // กิจกรรม 21: HT รายใหม่ (I10 ครั้งแรกในชีวิตอยู่ในปีงบนี้) ตรวจ Creatinine (CH09) และ Potassium (CH19) ครบทั้งคู่ cap 1
+  {
+    events['20'] = []; drugCap['20'] = 2; events['21'] = []; drugCap['21'] = 1;
+    const dm = new Set((await T(`select distinct v.pid from visitdiag d join visit v on v.pcucode = d.pcucode and v.visitno = d.visitno where v.pcucode = ? and d.diagcode like 'E11%' and v.visitdate >= date_sub(?, interval 3 year)`, [PCU, from2])).map((r) => String(r.pid)));
+    const hb = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, max(c.rightgroup) rg from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno left join cright c on c.rightcode = v.rightcode
+      where v.pcucode = ? and v.visitdate between ? and ? and l.labcode = 'CH99' group by v.pid, v.visitdate`, [PCU, from2, to2]);
+    for (const r of hb) if (dm.has(String(r.pid)) && String(r.rg) === '3') events['20'].push({ k: String(r.pid), d: r.d });
+    const newHt = new Set((await T(`select v.pid from visitdiag d join visit v on v.pcucode = d.pcucode and v.visitno = d.visitno where v.pcucode = ? and d.diagcode like 'I10%' group by v.pid having min(v.visitdate) between ? and ?`, [PCU, from2, to2])).map((r) => String(r.pid)));
+    const lb = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, l.labcode, max(c.rightgroup) rg from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno left join cright c on c.rightcode = v.rightcode
+      where v.pcucode = ? and v.visitdate between ? and ? and l.labcode in ('CH09','CH19') group by v.pid, v.visitdate, l.labcode`, [PCU, from2, to2]);
+    const got = {};
+    for (const r of lb) { if (!newHt.has(String(r.pid)) || String(r.rg) === '5') continue; const g = got[r.pid] || (got[r.pid] = {}); g[r.labcode] = r.d; }
+    for (const [pid, g] of Object.entries(got)) if (g.CH09 && g.CH19) events['21'].push({ k: pid, d: g.CH09 > g.CH19 ? g.CH09 : g.CH19 });
   }
   const capFor = (id) => (id === '1' ? 8 : id === '18' ? Infinity : drugCap[id] || RULES.find((r) => r.id === id).cap);
   const months = {}; const tot = {};
