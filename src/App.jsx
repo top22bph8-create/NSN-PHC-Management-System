@@ -38,6 +38,8 @@ import VehicleReport from './pages/VehicleReport';
 import Backup from './pages/Backup';
 import Account from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
+import BudgetPlan from './pages/BudgetPlan';
+import BudgetCat from './pages/BudgetCat';
 import SurveyHome from './modules/survey/SurveyHome';
 import SurveyPublic from './modules/survey/SurveyPublic';
 import OutbreakHome from './modules/outbreak/OutbreakHome';
@@ -205,6 +207,8 @@ function Shell() {
           ))}
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
           <Route path="rights-registry" element={<Guard module="rights-registry"><RightsRegistry /></Guard>} />
+          <Route path="reg-budget" element={<Guard module="reg-budget"><BudgetPlan /></Guard>} />
+          <Route path="reg-budget/:cat" element={<Guard module="reg-budget"><BudgetCat /></Guard>} />
           <Route path="survey" element={<Guard module="survey"><SurveyHome /></Guard>} />
           <Route path="outbreak" element={<Guard module="outbreak"><OutbreakHome /></Guard>} />
           <Route path="outbreak/map" element={<Guard module="outbreak"><OutbreakMapPage /></Guard>} />

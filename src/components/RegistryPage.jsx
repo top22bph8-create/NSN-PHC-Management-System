@@ -1071,6 +1071,9 @@ export default function RegistryPage({ cfg }) {
             {writable && isStockLedger && (
               <button className="btn bg-white text-brand-800 hover:bg-brand-50" onClick={openStockIn}><Plus className="h-4 w-4" /> เพิ่มเล่มเข้าคลัง</button>
             )}
+            {isDeeka && (
+              <Link to="/reg-budget" className="btn bg-white text-emerald-800 hover:bg-emerald-50">💰 งบประมาณตามหมวด</Link>
+            )}
             {isVehicle && (
               <Link to="/vehicle-report" className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25"><FileSpreadsheet className="h-4 w-4" /> รายงานผู้บริหาร</Link>
             )}

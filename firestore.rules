@@ -247,6 +247,11 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isActive();
     }
+    // งบประมาณตามหมวดแผนการใช้จ่ายเงินบำรุง (ตั้งต้นปี/เพิ่ม/ปรับปรุง/โอนย้ายระหว่างหมวด) — เจ้าหน้าที่ที่ล็อกอินอ่าน/เขียนได้ เช่นเดียวกับทะเบียนฎีกา
+    match /budgetEntries/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /reg-certificate/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

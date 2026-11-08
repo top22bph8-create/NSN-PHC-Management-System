@@ -46,6 +46,7 @@ export const ACCESS = {
   'reg-cheque': { read: ALL, write: ALL },
   'reg-receipt': { read: ALL, write: ALL },
   'reg-deeka': { read: ALL, write: ALL },
+  'reg-budget': { read: ALL, write: ALL },
   'reg-certificate': { read: ALL, write: ALL },
   // ทะเบียนรายบุคคลของงานการพยาบาล (ต้องตรงกับ firestore.rules)
   'thai-booking': { read: ALL, write: ALL },

@@ -42,6 +42,7 @@ export const GROUPS = [
     key: 'finance', title: 'งานการเงินและบัญชี', emoji: '💰', icon: Wallet, tone: 'from-emerald-500 to-teal-600', soft: 'bg-emerald-50 text-emerald-700',
     items: [
       R('reg-deeka', 'ฎีกาเบิกจ่าย ภาษี ประกันสังคม เช็ค'),
+      { key: 'reg-budget', label: 'งบประมาณตามหมวดเงินบำรุง', path: '/reg-budget', icon: Banknote, emoji: '💰', ready: true, module: 'reg-budget', desc: 'ตั้งงบต้นปี 12 หมวด ตัดยอดตามฎีกาอัตโนมัติ รายงานงบคงเหลือ' },
       R('reg-procurement', 'ใบสั่งซื้อ/สั่งจ้าง เลขที่เรียงอัตโนมัติ'),
       R('reg-loan', 'สัญญายืมเงิน ติดตามการส่งใช้'),
       R('reg-cheque', 'ควบคุมการเบิกจ่ายเล่มเช็ค'),
