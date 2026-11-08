@@ -2,6 +2,7 @@ import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
   Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, Ambulance, Droplets, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck, Biohazard,
+  Star,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -33,6 +34,7 @@ export const GROUPS = [
       R('reg-contract-no', 'ออกเลขหนังสือสัญญา'),
       R('reg-certificate', 'ออกเลขเกียรติบัตร'),
       { key: 'leave', label: 'ทะเบียนควบคุมวันลา', path: '/leave', icon: CalendarDays, ready: true, module: 'leave', desc: 'ยื่นใบลา อนุมัติ วันลาคงเหลือ' },
+      { key: 'survey', label: 'ประเมินความพึงพอใจ', path: '/survey', icon: Star, emoji: '📊', ready: true, module: 'survey', desc: 'แบบประเมินผ่าน QR Code · แดชบอร์ดและรายงานผลความพึงพอใจของผู้รับบริการ' },
       { key: 'vehicle', label: 'ทะเบียนควบคุมยานพาหนะ', path: '/vehicle', icon: Car, ready: true, module: 'vehicle', desc: 'ขอใช้รถ อนุมัติ เลขไมล์' },
     ],
   },

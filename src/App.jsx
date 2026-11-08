@@ -38,6 +38,8 @@ import VehicleReport from './pages/VehicleReport';
 import Backup from './pages/Backup';
 import Account from './pages/ChangePassword';
 import SettingsPage from './pages/SettingsPage';
+import SurveyHome from './modules/survey/SurveyHome';
+import SurveyPublic from './modules/survey/SurveyPublic';
 import OutbreakHome from './modules/outbreak/OutbreakHome';
 import OutbreakMapPage from './modules/outbreak/OutbreakMapPage';
 import OutbreakCase from './modules/outbreak/OutbreakCase';
@@ -203,6 +205,7 @@ function Shell() {
           ))}
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
           <Route path="rights-registry" element={<Guard module="rights-registry"><RightsRegistry /></Guard>} />
+          <Route path="survey" element={<Guard module="survey"><SurveyHome /></Guard>} />
           <Route path="outbreak" element={<Guard module="outbreak"><OutbreakHome /></Guard>} />
           <Route path="outbreak/map" element={<Guard module="outbreak"><OutbreakMapPage /></Guard>} />
           <Route path="outbreak/:id" element={<Guard module="outbreak"><OutbreakCase /></Guard>} />
@@ -238,6 +241,7 @@ export default function App() {
         <Routes>
           {/* หน้าสาธารณะ (ไม่ต้องล็อกอิน): จองคิวแพทย์แผนไทยผ่าน QR Code + ป้าย QR สำหรับพิมพ์ */}
           <Route path="/book-thai" element={<ThaiBookingPublic />} />
+          <Route path="/satisfaction" element={<SurveyPublic />} />
           <Route path="/print-thai-qr" element={<PrintThaiQr />} />
           <Route path="/print/:key" element={<PrintGate />} />
           <Route path="/print-personnel" element={<PrintPersonnelGate />} />

@@ -90,6 +90,36 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isActive();
     }
+    match /outbreakGeo/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    // ประเมินความพึงพอใจผู้รับบริการ: ประชาชนส่งคำตอบได้โดยไม่ล็อกอิน (ตรวจรูปแบบข้อมูลเข้ม — คะแนน 1-5 จำนวนเต็ม, ฟิลด์ที่อนุญาตเท่านั้น,
+    // ข้อความไม่เกิน 1,000 ตัวอักษร, เวลาจากเซิร์ฟเวอร์) · อ่านได้เฉพาะเจ้าหน้าที่ · แก้ไขไม่ได้ · ลบได้เฉพาะ Super Admin
+    match /satisfactionResponses/{id} {
+      allow read: if isActive();
+      allow update: if false;
+      allow delete: if hasRole(['super_admin']);
+      allow create: if request.resource.data.keys().hasOnly(['service', 'village', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'good', 'improve', 'other', 'createdAt'])
+        && request.resource.data.keys().hasAll(['service', 'village', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'createdAt'])
+        && request.resource.data.service is string && request.resource.data.service.size() > 0 && request.resource.data.service.size() <= 80
+        && request.resource.data.village is string && request.resource.data.village.size() > 0 && request.resource.data.village.size() <= 80
+        && request.resource.data.q1 is int && request.resource.data.q1 >= 1 && request.resource.data.q1 <= 5
+        && request.resource.data.q2 is int && request.resource.data.q2 >= 1 && request.resource.data.q2 <= 5
+        && request.resource.data.q3 is int && request.resource.data.q3 >= 1 && request.resource.data.q3 <= 5
+        && request.resource.data.q4 is int && request.resource.data.q4 >= 1 && request.resource.data.q4 <= 5
+        && request.resource.data.q5 is int && request.resource.data.q5 >= 1 && request.resource.data.q5 <= 5
+        && request.resource.data.q6 is int && request.resource.data.q6 >= 1 && request.resource.data.q6 <= 5
+        && (!('good' in request.resource.data) || (request.resource.data.good is string && request.resource.data.good.size() <= 1000))
+        && (!('improve' in request.resource.data) || (request.resource.data.improve is string && request.resource.data.improve.size() <= 1000))
+        && (!('other' in request.resource.data) || (request.resource.data.other is string && request.resource.data.other.size() <= 1000))
+        && request.resource.data.createdAt == request.time;
+    }
+    // ตั้งค่าแบบประเมิน (รายชื่อหมู่บ้าน/ประเภทบริการ): ประชาชนอ่านได้เพื่อแสดงตัวเลือก (ไม่มีข้อมูลอ่อนไหว) · เจ้าหน้าที่แก้ไขได้
+    match /satisfactionConfig/{id} {
+      allow read: if true;
+      allow write: if isActive();
+    }
     match /rightsRegistry/{id} {
       allow read: if isActive();
       allow write: if false;
