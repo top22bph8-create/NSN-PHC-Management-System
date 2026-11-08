@@ -102,7 +102,7 @@ service cloud.firestore {
       allow delete: if hasRole(['super_admin']);
       allow create: if request.resource.data.keys().hasOnly(['service', 'village', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'good', 'improve', 'other', 'createdAt'])
         && request.resource.data.keys().hasAll(['service', 'village', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'createdAt'])
-        && request.resource.data.service is string && request.resource.data.service.size() > 0 && request.resource.data.service.size() <= 80
+        && request.resource.data['service'] is string && request.resource.data['service'].size() > 0 && request.resource.data['service'].size() <= 80
         && request.resource.data.village is string && request.resource.data.village.size() > 0 && request.resource.data.village.size() <= 80
         && request.resource.data.q1 is int && request.resource.data.q1 >= 1 && request.resource.data.q1 <= 5
         && request.resource.data.q2 is int && request.resource.data.q2 >= 1 && request.resource.data.q2 <= 5
