@@ -1,24 +1,41 @@
 // คำนวณงบประมาณตามหมวด: งบรวม = ตั้งต้นปี + เพิ่มยอด + ปรับปรุง(±) + โอนเข้า − โอนออก ; เบิกจ่าย = มูลค่าตั้งเบิกตามฎีกาที่ระบุหมวดนั้น ; คงเหลือ = งบรวม − เบิกจ่าย
 // คอลเลกชัน budgetEntries: { fy, cat(id), type, amount, date, note, transferId?, otherCat?, createdBy }
 import { ALL_CATS, BUDGET_CATS, EXTRA_CATS, catByName } from '../config/budgetCats';
+import { BUDGET_SUBS, hasSubs, subByName, subsOf } from '../config/budgetSubs';
 
 export const ENTRY_TYPES = { initial: 'ตั้งยอดต้นปีงบประมาณ', add: 'เพิ่มยอด', adjust: 'ปรับปรุงยอด', transferIn: 'โอนเข้า (ย้ายมาจากหมวดอื่น)', transferOut: 'โอนออก (ย้ายไปหมวดอื่น)' };
 export const entrySign = (e) => (e.type === 'transferOut' ? -Number(e.amount || 0) : Number(e.amount || 0)); // adjust เก็บเป็นค่าติดลบได้เอง
 export const deekaAmount = (d) => Number(d.amount) || 0;
 
 export function computeBudget(entries, deekas) {
-  const out = {}; ALL_CATS.forEach((c) => { out[c.id] = { initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, n: 0, remain: 0, pct: null }; });
-  entries.forEach((e) => { const o = out[e.cat]; if (!o) return; const a = Number(e.amount) || 0;
-    if (e.type === 'initial') o.initial += a; else if (e.type === 'add') o.add += a; else if (e.type === 'adjust') o.adjust += a; else if (e.type === 'transferIn') o.tin += a; else if (e.type === 'transferOut') o.tout += a; });
-  deekas.forEach((d) => { const c = catByName(d.budgetCat); if (!c) return; out[c.id].spent += deekaAmount(d); out[c.id].n += 1; });
-  ALL_CATS.forEach((c) => { const o = out[c.id]; o.total = o.initial + o.add + o.adjust + o.tin - o.tout; o.remain = o.total - o.spent; o.pct = o.total > 0 ? (o.spent / o.total) * 100 : null; });
+  const blank = () => ({ initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, n: 0, remain: 0, pct: null });
+  const out = {}; ALL_CATS.forEach((c) => { out[c.id] = blank(); });
+  const bySub = {}; BUDGET_SUBS.forEach((s) => { bySub[s.id] = blank(); });
+  let legacy = 0; // รายการระดับหมวดใหญ่ 1–10 แบบเดิม (ไม่มีหมวดย่อย) — ไม่นำมาคำนวณ
+  const apply = (o, e) => { const a = Number(e.amount) || 0; if (e.type === 'initial') o.initial += a; else if (e.type === 'add') o.add += a; else if (e.type === 'adjust') o.adjust += a; else if (e.type === 'transferIn') o.tin += a; else if (e.type === 'transferOut') o.tout += a; };
+  entries.forEach((e) => {
+    if (e.sub) { if (bySub[e.sub]) apply(bySub[e.sub], e); return; }
+    if (hasSubs(e.cat)) { legacy += 1; return; }
+    if (out[e.cat]) apply(out[e.cat], e);
+  });
+  const fin = (o) => { o.total = o.initial + o.add + o.adjust + o.tin - o.tout; o.remain = o.total - o.spent; o.pct = o.total > 0 ? (o.spent / o.total) * 100 : null; };
+  deekas.forEach((d) => {
+    const c = catByName(d.budgetCat); if (!c) return; const a = deekaAmount(d);
+    out[c.id].spent += a; out[c.id].n += 1;
+    const sb = hasSubs(c.id) ? subByName(c.id, d.budgetSub) : null;
+    if (sb) { bySub[sb.id].spent += a; bySub[sb.id].n += 1; }
+  });
+  BUDGET_SUBS.forEach((s) => fin(bySub[s.id]));
+  // หมวดใหญ่ที่มีหมวดย่อย: งบ = ผลรวมของหมวดย่อย; เบิกจ่าย = ฎีกาทั้งหมดของหมวดนั้น (รวมฎีกาที่ยังไม่ระบุหมวดย่อย)
+  BUDGET_CATS.filter((c) => hasSubs(c.id)).forEach((c) => { const o = out[c.id]; ['initial', 'add', 'adjust', 'tin', 'tout'].forEach((k) => { o[k] = subsOf(c.id).reduce((a, x) => a + bySub[x.id][k], 0); }); });
+  ALL_CATS.forEach((c) => fin(out[c.id]));
   const mk = () => ({ initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, remain: 0, n: 0, pct: null });
   const sums = { main: mk(), other: mk(), all: mk(), extra: mk() };
   BUDGET_CATS.forEach((c) => ['all', c.g].forEach((g) => Object.keys(sums[g]).forEach((k) => { if (k !== 'pct') sums[g][k] += out[c.id][k]; })));
   EXTRA_CATS.forEach((c) => Object.keys(sums.extra).forEach((k) => { if (k !== 'pct') sums.extra[k] += out[c.id][k]; })); // รายจ่ายอื่น: ใช้เฉพาะ spent / n
   Object.values(sums).forEach((x) => { x.pct = x.total > 0 ? (x.spent / x.total) * 100 : null; });
   const sum = sums.all;
-  return { byCat: out, sum, sums };
+  return { byCat: out, bySub, legacy, sum, sums };
 }
 export const money = (n) => (n == null || !isFinite(n) ? '-' : Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 

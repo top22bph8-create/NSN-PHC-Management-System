@@ -1,16 +1,18 @@
 // งบประมาณตามแผนการใช้จ่ายเงินบำรุง (เชื่อมกับทะเบียนคุมฎีกาเบิกจ่าย): ตั้งยอดต้นปีตามหมวด → ฎีกาที่ระบุหมวดตัดยอดอัตโนมัติ → รายงานคงเหลือ
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, FileSpreadsheet, Loader2, Printer, Settings2 } from 'lucide-react';
+import { collection, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { ArrowLeft, ChevronDown, ChevronRight, FileSpreadsheet, Loader2, Printer, Settings2 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { PageHeader } from '../components/Logo';
-import { Modal, Spinner } from '../components/ui';
-import { ALL_CATS, BUDGET_CATS, CAT_NAMES, GROUPS, catsOf } from '../config/budgetCats';
+import { ConfirmDialog, Modal, Spinner } from '../components/ui';
+import { ALL_CATS, BUDGET_CATS, CAT_NAMES, GROUPS, catByName, catsOf } from '../config/budgetCats';
 import { computeBudget, deekaAmount, esc, money, openPrint } from '../lib/budget';
 import BudgetSpendTable from './BudgetSpendTable';
+import BudgetPicker, { budgetErrors } from '../components/BudgetPicker';
+import { hasSubs, subByName, subsOf } from '../config/budgetSubs';
 import useBudgetData from '../lib/useBudgetData';
 import { fmtDate, todayStr } from '../lib/thai';
 import { downloadXlsx } from '../modules/survey/surveyExport';
@@ -20,27 +22,37 @@ export const overviewRows = (b, cats = BUDGET_CATS) => cats.map((c) => { const o
 export default function BudgetPlan() {
   const { fy } = useFiscalYear(); const { profile } = useAuth(); const nav = useNavigate();
   const { entries, deekas, err } = useBudgetData(fy);
-  const [view, setView] = useState('main'); const [setup, setSetup] = useState(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState('');
+  const [view, setView] = useState('main'); const [openCats, setOpenCats] = useState({}); const [pick, setPick] = useState({}); const [confirmClear, setConfirmClear] = useState(false); const [setup, setSetup] = useState(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState('');
   const b = useMemo(() => (entries && deekas ? computeBudget(entries, deekas) : null), [entries, deekas]);
-  const unassigned = useMemo(() => (deekas || []).filter((d) => !CAT_NAMES.includes(d.budgetCat)).sort((a, c) => String(a.deekaDate).localeCompare(c.deekaDate)), [deekas]);
+  const unassigned = useMemo(() => (deekas || []).filter((d) => { const c = catByName(d.budgetCat); return !c || (hasSubs(c.id) && !subByName(c.id, d.budgetSub)); }).sort((a, c) => String(a.deekaDate).localeCompare(c.deekaDate)), [deekas]);
   const say = (t) => { setMsg(t); setTimeout(() => setMsg(''), 5000); };
   if (err) return <p className="rounded-xl bg-red-50 p-4 text-red-700">{err}</p>;
   if (!b) return <Spinner />;
 
   const cats = catsOf(view); const S = b.sums[view]; const gl = GROUPS.find((g) => g.id === view);
-  const openSetup = () => setSetup(Object.fromEntries(BUDGET_CATS.map((c) => [c.id, b.byCat[c.id].initial ? String(b.byCat[c.id].initial) : ''])));
+  // จุดตั้งยอด: หมวด 1–10 ตั้งที่หมวดย่อย; หมวด 11–13 ตั้งที่หมวด
+  const nodes = BUDGET_CATS.flatMap((c) => (hasSubs(c.id) ? subsOf(c.id).map((x) => ({ id: x.id, cat: c.id, sub: x.id, label: x.name, group: c.no + '. ' + c.name, st: b.bySub[x.id] })) : [{ id: c.id, cat: c.id, label: c.no + '. ' + c.name, group: '', st: b.byCat[c.id] }]));
+  const openSetup = () => setSetup(Object.fromEntries(nodes.map((n) => [n.id, n.st.initial ? String(n.st.initial) : ''])));
   const saveSetup = async () => {
     setBusy(true);
     try {
-      for (const c of BUDGET_CATS) {
-        const raw = String(setup[c.id] ?? '').replace(/,/g, '').trim(); if (raw === '') continue; const amount = Number(raw);
-        if (!isFinite(amount) || amount < 0) throw new Error(`ยอดหมวด ${c.no} ไม่ถูกต้อง`);
-        await setDoc(doc(db, 'budgetEntries', `${fy}_${c.id}_initial`), { fy, cat: c.id, type: 'initial', amount, date: todayStr(), note: 'ยอดตั้งต้นปีงบประมาณ', createdBy: profile?.email || '', updatedAt: serverTimestamp() }, { merge: true });
+      for (const n of nodes) {
+        const raw = String(setup[n.id] ?? '').replace(/,/g, '').trim(); if (raw === '') continue; const amount = Number(raw);
+        if (!isFinite(amount) || amount < 0) throw new Error(`ยอด “${n.label}” ไม่ถูกต้อง`);
+        await setDoc(doc(db, 'budgetEntries', `${fy}_${n.id}_initial`), { fy, cat: n.cat, ...(n.sub ? { sub: n.sub } : {}), type: 'initial', amount, date: todayStr(), note: 'ยอดตั้งต้นปีงบประมาณ', createdBy: profile?.email || '', updatedAt: serverTimestamp() }, { merge: true });
       }
       setSetup(null); say('บันทึกยอดตั้งต้นปีงบประมาณแล้ว');
     } catch (e) { say('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); }
   };
-  const assign = async (d, name) => { try { await updateDoc(doc(db, 'reg-deeka', d.id), { budgetCat: name, updatedAt: serverTimestamp(), updatedBy: profile?.email || '' }); } catch (e) { say('บันทึกหมวดไม่สำเร็จ: ' + (e.code || e.message)); } };
+  const assign = async (d) => {
+    const v = pick[d.id] || {}; if (!v.budgetCat) return say('กรุณาเลือกหมวดงบประมาณ'); const er = budgetErrors(v); if (er) return say(er);
+    try { await updateDoc(doc(db, 'reg-deeka', d.id), { budgetCat: v.budgetCat, budgetSub: v.budgetSub || '', budgetPeriodMonth: v.budgetPeriodMonth || '', budgetPeriodYear: v.budgetPeriodYear || '', updatedAt: serverTimestamp(), updatedBy: profile?.email || '' }); setPick((x) => { const y = { ...x }; delete y[d.id]; return y; }); say('ตัดยอดตามหมวดแล้ว'); } catch (e) { say('บันทึกหมวดไม่สำเร็จ: ' + (e.code || e.message)); }
+  };
+  const clearLegacy = async () => {
+    setBusy(true);
+    try { const old = (entries || []).filter((e) => !e.sub && hasSubs(e.cat)); for (let i = 0; i < old.length; i += 400) { const wb = writeBatch(db); old.slice(i, i + 400).forEach((e) => wb.delete(doc(db, 'budgetEntries', e.id))); await wb.commit(); } setConfirmClear(false); say(`ล้างยอดเดิมระดับหมวดใหญ่แล้ว ${old.length} รายการ`); }
+    catch (e) { say('ล้างไม่สำเร็จ: ' + (e.code || e.message)); } finally { setBusy(false); }
+  };
 
   const head = ['ที่', 'หมวดรายการ', 'ยอดตั้งต้นปี', 'เพิ่ม/ปรับปรุง', 'โอนเข้า(+)/ออก(−)', 'งบรวม', 'เบิกจ่ายแล้ว (ตามฎีกา)', 'คงเหลือ', '% ที่ใช้'];
   const excel = () => {
@@ -82,14 +94,21 @@ export default function BudgetPlan() {
       <section className="card overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead><tr className="border-b bg-emerald-50 text-left text-slate-700">{head.map((h, i) => <th key={h} className={`p-2.5 ${i > 1 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
-          <tbody>{cats.map((c) => { const o = b.byCat[c.id]; return (
-            <tr key={c.id} className="cursor-pointer border-b hover:bg-emerald-50/60" onClick={() => nav(`/reg-budget/${c.id}`)} title="คลิกเพื่อดูรายการตัดยอดของหมวดนี้">
-              <td className="p-2.5 text-center">{c.no}</td><td className="p-2.5 font-semibold text-emerald-900">{c.name}</td>
+          <tbody>{cats.map((c) => { const o = b.byCat[c.id]; const subs = subsOf(c.id); const isOpen = !!openCats[c.id]; return (<Fragment key={c.id}>
+            <tr className="cursor-pointer border-b hover:bg-emerald-50/60" onClick={() => nav(`/reg-budget/${c.id}`)} title="คลิกเพื่อดูรายการตัดยอดของหมวดนี้">
+              <td className="p-2.5 text-center">{c.no}</td><td className="p-2.5 font-semibold text-emerald-900">{subs.length > 0 && <button type="button" aria-label="แสดง/ซ่อนหมวดย่อย" className="mr-1 inline-flex align-middle text-slate-500" onClick={(e) => { e.stopPropagation(); setOpenCats((x) => ({ ...x, [c.id]: !x[c.id] })); }}>{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>}{c.name}{subs.length > 0 && <span className="ml-2 text-xs font-normal text-slate-400">{subs.length} หมวดย่อย</span>}</td>
               <td className="p-2.5 text-right tabular-nums">{money(o.initial)}</td><td className="p-2.5 text-right tabular-nums">{money(o.add + o.adjust)}</td><td className="p-2.5 text-right tabular-nums">{money(o.tin - o.tout)}</td>
               <td className="p-2.5 text-right font-semibold tabular-nums">{money(o.total)}</td><td className="p-2.5 text-right tabular-nums">{money(o.spent)}{o.n ? <span className="ml-1 text-xs text-slate-400">({o.n} ฎีกา)</span> : null}</td>
               <td className={`p-2.5 text-right font-bold tabular-nums ${o.remain < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{money(o.remain)}</td>
               <td className="p-2.5 text-right"><div className="ml-auto h-2 w-20 overflow-hidden rounded-full bg-slate-200"><div className={`h-full ${o.pct > 100 ? 'bg-red-500' : o.pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, o.pct || 0)}%` }} /></div><span className="text-xs text-slate-500">{o.pct == null ? '-' : `${o.pct.toFixed(1)}%`}</span></td>
-            </tr>); })}
+            </tr>
+            {isOpen && subs.map((x) => { const t = b.bySub[x.id]; return (
+              <tr key={x.id} className="cursor-pointer border-b bg-emerald-50/40 text-slate-700 hover:bg-emerald-50" onClick={() => nav(`/reg-budget/${c.id}?sub=${x.id}`)}>
+                <td className="p-2" /><td className="p-2 pl-10">↳ {x.name}{x.period && <span className="ml-1 text-xs text-slate-400">(ระบุเดือน/ปี)</span>}</td>
+                <td className="p-2 text-right tabular-nums">{money(t.initial)}</td><td className="p-2 text-right tabular-nums">{money(t.add + t.adjust)}</td><td className="p-2 text-right tabular-nums">{money(t.tin - t.tout)}</td>
+                <td className="p-2 text-right tabular-nums">{money(t.total)}</td><td className="p-2 text-right tabular-nums">{money(t.spent)}</td>
+                <td className={`p-2 text-right font-semibold tabular-nums ${t.remain < 0 ? 'text-red-600' : ''}`}>{money(t.remain)}</td><td className="p-2 text-right text-xs text-slate-500">{t.pct == null ? '-' : `${t.pct.toFixed(1)}%`}</td></tr>); })}
+          </Fragment>); })}
             <tr className="bg-slate-100 font-bold"><td className="p-2.5" /><td className="p-2.5">รวม{gl.short}</td><td className="p-2.5 text-right tabular-nums">{money(S.initial)}</td><td className="p-2.5 text-right tabular-nums">{money(S.add + S.adjust)}</td><td className="p-2.5 text-right tabular-nums">{money(S.tin - S.tout)}</td><td className="p-2.5 text-right tabular-nums">{money(S.total)}</td><td className="p-2.5 text-right tabular-nums">{money(S.spent)}</td><td className={`p-2.5 text-right tabular-nums ${S.remain < 0 ? 'text-red-600' : ''}`}>{money(S.remain)}</td><td className="p-2.5 text-right">{S.pct == null ? '-' : `${S.pct.toFixed(1)}%`}</td></tr>
           </tbody>
         </table>
@@ -98,22 +117,30 @@ export default function BudgetPlan() {
 
       <BudgetSpendTable fy={fy} deekas={deekas} />
 
+      {b.legacy > 0 && (
+        <p className="flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">มียอดเดิมระดับหมวดใหญ่ 1–10 ค้างอยู่ {b.legacy} รายการ — ระบบไม่นำมาคำนวณแล้ว (ใช้ยอดที่ตั้งตามหมวดย่อยแทน)
+          <button className="btn btn-outline !py-1 text-sm" onClick={() => setConfirmClear(true)}>ล้างยอดเดิมทิ้ง</button></p>)}
       {unassigned.length > 0 && (
         <section className="card space-y-2 p-4">
-          <h3 className="font-bold text-amber-800">ฎีกาที่ยังไม่ระบุหมวดงบประมาณ ({unassigned.length} ฉบับ · {money(unassigned.reduce((s, d) => s + deekaAmount(d), 0))} บาท) — ยังไม่ถูกตัดยอด</h3>
-          <p className="text-xs text-slate-500">เลือกหมวดจากรายการเพื่อตัดยอด (หรือแก้ในฟอร์มฎีกา ช่อง “หมวดงบประมาณ”) · การเลือกจะบันทึกลงฎีกาทันที</p>
-          <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><tbody>{unassigned.map((d) => (
-            <tr key={d.id} className="border-b last:border-0"><td className="p-2 whitespace-nowrap">{d.deekaNo}</td><td className="p-2 whitespace-nowrap">{fmtDate(d.deekaDate)}</td><td className="p-2">{d.subject}</td><td className="p-2 text-right tabular-nums">{money(deekaAmount(d))}</td>
-              <td className="p-2"><select className="input" value="" onChange={(e) => e.target.value && assign(d, e.target.value)}><option value="">— เลือกหมวด —</option>{ALL_CATS.map((c) => <option key={c.id} value={c.name}>{c.g === 'extra' ? `(ไม่ตั้งยอด) ${c.name}` : `${c.no}. ${c.name}`}</option>)}</select></td></tr>))}</tbody></table></div>
+          <h3 className="font-bold text-amber-800">ฎีกาที่ยังไม่ระบุหมวด/หมวดย่อย ({unassigned.length} ฉบับ · {money(unassigned.reduce((s, d) => s + deekaAmount(d), 0))} บาท) — ยังตัดยอดไม่ครบ</h3>
+          <p className="text-xs text-slate-500">เลือกหมวด → หมวดย่อย (และเดือน/ปีสำหรับค่าตอบแทน/สาธารณูปโภค) แล้วกด “ตัดยอด” — บันทึกลงฎีกาทันที</p>
+          <div className="space-y-2">{unassigned.map((d) => (
+            <div key={d.id} className="grid gap-2 rounded-lg border p-2 lg:grid-cols-[1fr_360px_auto]">
+              <div className="text-sm"><b>{d.deekaNo}</b> · {fmtDate(d.deekaDate)} · <b className="tabular-nums">{money(deekaAmount(d))}</b> บาท<div className="text-slate-600">{d.subject}</div>{d.budgetCat && <div className="text-xs text-amber-700">เลือกหมวดไว้แล้ว: {d.budgetCat} — ยังขาดหมวดย่อย</div>}</div>
+              <BudgetPicker compact fy={fy} value={pick[d.id] || { budgetCat: d.budgetCat || '' }} onChange={(patch) => setPick((x) => ({ ...x, [d.id]: { budgetCat: d.budgetCat || '', ...(x[d.id] || {}), ...patch } }))} />
+              <button className="btn btn-primary self-start" onClick={() => assign(d)}>ตัดยอด</button></div>))}</div>
         </section>)}
 
       {setup && (
         <Modal title={`ตั้งยอดงบประมาณต้นปีงบประมาณ ${fy}`} onClose={() => !busy && setSetup(null)} wide
           footer={<div className="flex justify-end gap-2"><button className="btn btn-outline" onClick={() => setSetup(null)} disabled={busy}>ยกเลิก</button><button className="btn btn-primary" onClick={saveSetup} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึกยอดต้นปี</button></div>}>
-          <p className="mb-3 text-sm text-slate-600">กรอกยอดเงินต้นปีของแต่ละหมวด (บาท) — เว้นว่างถ้าไม่มี · แก้ไขซ้ำได้ (จะแทนที่ยอดต้นปีเดิม) · การเพิ่มยอด ปรับปรุง และโอนย้ายระหว่างหมวด ทำได้ในหน้าของแต่ละหมวด</p>
-          <div className="grid gap-2">{BUDGET_CATS.map((c) => (
-            <label key={c.id} className="grid items-center gap-2 sm:grid-cols-[1fr_200px]"><span className="text-sm">{c.no}. {c.name}</span>
-              <input className="input text-right tabular-nums" inputMode="decimal" placeholder="0.00" value={setup[c.id]} onChange={(e) => setSetup((x) => ({ ...x, [c.id]: e.target.value }))} /></label>))}</div>
+          <p className="mb-3 text-sm text-slate-600">กรอกยอดเงินตามแผนต้นปีของแต่ละหมวดย่อย (บาท) — ยอดหมวดใหญ่ 1–10 คำนวณรวมจากหมวดย่อยอัตโนมัติ — เว้นว่างถ้าไม่มี · แก้ไขซ้ำได้ (จะแทนที่ยอดต้นปีเดิม) · การเพิ่มยอด ปรับปรุง และโอนย้ายระหว่างหมวด ทำได้ในหน้าของแต่ละหมวด</p>
+          <div className="grid gap-2">{nodes.map((n, i) => (<Fragment key={n.id}>
+            {n.group && (i === 0 || nodes[i - 1].group !== n.group) && <div className="mt-2 rounded bg-emerald-100 px-2 py-1 text-sm font-bold text-emerald-900">{n.group}</div>}
+            {!n.group && (i === 0 || nodes[i - 1].group) && <div className="mt-2 rounded bg-sky-100 px-2 py-1 text-sm font-bold text-sky-900">หมวด 11–13 (งบจากแหล่งอื่น)</div>}
+            <label className="grid items-center gap-2 sm:grid-cols-[1fr_200px]"><span className={`text-sm ${n.group ? 'pl-3' : ''}`}>{n.label}</span>
+              <input className="input text-right tabular-nums" inputMode="decimal" placeholder="0.00" value={setup[n.id]} onChange={(e) => setSetup((x) => ({ ...x, [n.id]: e.target.value }))} /></label></Fragment>))}</div>
         </Modal>)}
+      {confirmClear && <ConfirmDialog busy={busy} onCancel={() => setConfirmClear(false)} onConfirm={clearLegacy} message={`ลบยอดเดิมระดับหมวดใหญ่ 1–10 (ตั้งต้น/เพิ่ม/ปรับ/โอน) จำนวน ${b.legacy} รายการ ของปีงบประมาณ ${fy} ถาวร? (ไม่กระทบฎีกา)`} />}
     </div>);
 }

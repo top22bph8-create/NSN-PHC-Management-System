@@ -18,9 +18,11 @@ import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
 import { VEHICLE_TYPES, getVehicleFleet, vehicleLabel, asList, numberedText, groupMissions, normalizeMissionDoc, missionLines } from '../lib/vehicleConfig';
+import BudgetPicker, { budgetErrors } from './BudgetPicker';
 import useBudgetData from '../lib/useBudgetData';
 import { computeBudget } from '../lib/budget';
-import { CAT_NAMES } from '../config/budgetCats';
+import { catByName } from '../config/budgetCats';
+import { hasSubs, subByName } from '../config/budgetSubs';
 import TimeKeypadInput from './TimeKeypadInput';
 import OdometerKeypadInput from './OdometerKeypadInput';
 import MissionGroupPicker from './MissionGroupPicker';
@@ -58,7 +60,7 @@ function DeekaSummary({ items, filtered, month, yearBE, fy }) {
   const all = sumDeeka(items);
   const { entries: bEntries, deekas: bDeekas } = useBudgetData(fy);
   const bud = useMemo(() => (bEntries && bDeekas ? computeBudget(bEntries, bDeekas) : null), [bEntries, bDeekas]);
-  const noCat = (items || []).filter((it) => !CAT_NAMES.includes(it.budgetCat));
+  const noCat = (items || []).filter((it) => { const c = catByName(it.budgetCat); return !c || (hasSubs(c.id) && !subByName(c.id, it.budgetSub)); });
   const cell = 'px-3 py-2 text-right tabular-nums';
   // ภาษี/ประกันสังคม: แยกยอดที่ชำระแล้ว (ส่งสรรพากรแล้ว / จ่ายแล้ว) กับที่ค้างชำระ ตามตัวกรองปัจจุบัน
   const paidOf = (key, status, doneVal) => { const list = (filtered || []).filter((it) => num(it[key]) > 0); const paid = list.filter((it) => it[status] === doneVal).reduce((a, it) => a + num(it[key]), 0); const all = list.reduce((a, it) => a + num(it[key]), 0); return { paid, due: all - paid, nPaid: list.filter((it) => it[status] === doneVal).length, nDue: list.filter((it) => it[status] !== doneVal).length, all }; };
@@ -569,6 +571,7 @@ export default function RegistryPage({ cfg }) {
 
   const validate = (values) => {
     const e = {};
+    if (cfg.key === 'reg-deeka') { const be = budgetErrors(values); if (be) e.budgetCat = be; }
     cfg.fields.forEach((f) => {
       if (f.auto) return;
       if (!fieldVisible(f, values)) return; // ฟิลด์ที่ซ่อนอยู่ (showIf ไม่ตรงเงื่อนไข) ไม่ต้องตรวจ required
@@ -825,6 +828,7 @@ export default function RegistryPage({ cfg }) {
   const stockChequeMsg = (b, no) => `เลขที่เช็ค ${no} อยู่ในเล่มที่ ${b.bookNo} (${b.chequeFrom}-${b.chequeTo}) ซึ่งยังเป็น "คงคลัง" ไม่ได้เบิกออกใช้ — กรุณาไปทำรายการ "เบิกใช้" เล่มเช็คในทะเบียนคุมการเบิกจ่ายเล่มเช็คก่อน แล้วจึงกลับมาบันทึกการจ่าย`;
   const PAY_PAYEE_KEY = { cheque: 'chequePayee', tax: 'taxChequePayee', sso: 'ssoChequePayee' };
   const [payActionPayee, setPayActionPayee] = useState('');
+  const [payActionBudget, setPayActionBudget] = useState({ budgetCat: '', budgetSub: '', budgetPeriodMonth: '', budgetPeriodYear: '' });
   const [payActionChequeNo, setPayActionChequeNo] = useState('');
   const [payActionMethod, setPayActionMethod] = useState('');
   // ภาษี/ประกันสังคม: ชำระผ่านการตั้งฎีกาเบิกจ่าย (ระบุเลขฎีกาแล้วระบบตรวจยอด/ชื่ออัตโนมัติ) หรือจ่ายตรง
@@ -842,7 +846,7 @@ export default function RegistryPage({ cfg }) {
     ? (items || []).filter((c) => c.id !== payAction.item.id && (sameMoney(c.payAmount, expectedAmt(payAction.item, payAction.kind)) || sameMoney(c.amount, expectedAmt(payAction.item, payAction.kind))) && matchesKind(c, payAction.kind))
     : [];
   const [payActionMethodOther, setPayActionMethodOther] = useState('');
-  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionPayee(String(it[PAY_PAYEE_KEY[kind]] || (kind === 'cheque' ? '' : '')));  setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayStockWarn(''); setPayAction({ item: it, kind }); };
+  const openPayAction = (it, kind) => { setPayActionBudget({ budgetCat: it.budgetCat || '', budgetSub: it.budgetSub || '', budgetPeriodMonth: it.budgetPeriodMonth || '', budgetPeriodYear: it.budgetPeriodYear || '' }); setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionPayee(String(it[PAY_PAYEE_KEY[kind]] || (kind === 'cheque' ? '' : '')));  setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayStockWarn(''); setPayAction({ item: it, kind }); };
   const submitPayAction = async () => {
     if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
     const { item, kind } = payAction;
@@ -897,8 +901,9 @@ export default function RegistryPage({ cfg }) {
       if (hit) { setPayStockWarn(stockChequeMsg(hit, chequeNo)); return; }
     }
     const payee = chequeNo ? payActionPayee.trim() : '';
+    if (kind === 'cheque') { const be = budgetErrors(payActionBudget); if (be) { say({ type: 'error', text: 'หมวดงบประมาณ: ' + be }); return; } }
     const after = kind === 'cheque'
-      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo, chequePayee: payee }
+      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo, chequePayee: payee, ...payActionBudget }
       : kind === 'tax'
         ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate, taxPayMethod: payActionMethod, taxPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', taxChequeNo: chequeNo, taxChequePayee: payee }
         : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: payActionDate, ssoPayMethod: payActionMethod, ssoPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', ssoChequeNo: chequeNo, ssoChequePayee: payee };
@@ -1509,7 +1514,7 @@ export default function RegistryPage({ cfg }) {
                 {errors.sendNo && <p className="mt-1 text-sm text-red-600">{errors.sendNo}</p>}
               </div>
             )}
-            {cfg.fields.filter((f) => !f.auto && fieldVisible(f, form.values)).map((f) => (
+            {cfg.fields.filter((f) => !f.auto && !f.formHidden && fieldVisible(f, form.values)).map((f) => (
               <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
                 <label htmlFor={`f-${f.key}`} className="mb-1 block text-sm font-medium text-slate-600">{f.label}{f.required && <span className="text-red-600"> *</span>}</label>
                 {f.type === 'textarea' ? (
@@ -1520,6 +1525,8 @@ export default function RegistryPage({ cfg }) {
                   <OdometerKeypadInput id={`f-${f.key}`} value={form.values[f.key]} prev={formPrev} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
                 ) : f.type === 'time' ? (
                   <TimeKeypadInput id={`f-${f.key}`} value={form.values[f.key]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.key]: v } })} />
+                ) : f.type === 'budget-pick' ? (
+                  <BudgetPicker fy={fy} value={form.values} onChange={(patch) => setForm((x) => ({ ...x, values: { ...x.values, ...patch } }))} />
                 ) : f.type === 'select' ? (
                   <select id={`f-${f.key}`} className="input" value={form.values[f.key]} onChange={(e) => setForm({ ...form, values: { ...form.values, [f.key]: e.target.value } })}>
                     <option value="">-- เลือก --</option>
@@ -1798,6 +1805,12 @@ export default function RegistryPage({ cfg }) {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600">ระบุวิธีการจ่าย</label>
                 <input className="input" value={payActionMethodOther} onChange={(e) => setPayActionMethodOther(e.target.value)} />
+              </div>
+            )}
+            {payAction.kind === 'cheque' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">ตัดงบประมาณจากหมวด (หมวด → หมวดย่อย)</label>
+                <BudgetPicker fy={fy} value={payActionBudget} onChange={(patch) => setPayActionBudget((x) => ({ ...x, ...patch }))} />
               </div>
             )}
             {(payAction.kind === 'cheque' || (payVia === 'direct' && isChequeMethod(payActionMethod))) && (

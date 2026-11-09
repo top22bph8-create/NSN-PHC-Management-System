@@ -1,4 +1,3 @@
-import { CAT_NAMES } from './budgetCats';
 // นิยามทะเบียน: เพิ่มทะเบียนใหม่ได้โดยเพิ่มค่าในไฟล์นี้ ไม่ต้องเขียนหน้าใหม่
 import { VEHICLE_DRIVERS } from '../lib/vehicleConfig';
 
@@ -491,7 +490,11 @@ export const REGISTRIES = {
       { key: 'ssoAmount', label: 'หักจ่ายประกันสังคม', type: 'number', list: true },
       { key: 'amount', label: 'มูลค่าตั้งเบิกตามฎีกา', type: 'computed', computeFrom: ['payAmount', 'taxWithheld', 'ssoAmount'], list: true },
       // หมวดงบประมาณตามแผนการใช้จ่ายเงินบำรุง — ฎีกาที่ระบุหมวดจะตัดยอดงบคงเหลือของหมวดนั้นอัตโนมัติ (ดูหน้า /reg-budget)
-      { key: 'budgetCat', label: 'หมวดงบประมาณ (แผนการใช้จ่ายเงินบำรุง)', type: 'select', options: CAT_NAMES, list: true },
+      { key: 'budgetCat', label: 'หมวดงบประมาณ (แผนการใช้จ่ายเงินบำรุง)', type: 'budget-pick', list: true },
+      // หมวดย่อย + เดือน/ปีของยอดจ่าย — กรอกผ่านตัวเลือกหมวดงบประมาณด้านบน (ซ่อนไม่ให้แสดงซ้ำ)
+      { key: 'budgetSub', label: 'หมวดย่อย', type: 'text', list: true, formHidden: true },
+      { key: 'budgetPeriodMonth', label: 'ยอดจ่ายประจำเดือน', type: 'text', formHidden: true },
+      { key: 'budgetPeriodYear', label: 'ยอดจ่ายประจำปี (พ.ศ.)', type: 'text', formHidden: true },
       { key: 'chequeNo', label: 'เลขที่เช็ค (จ่ายตามฎีกา)', type: 'text', list: true, search: true },
       { key: 'chequePayee', label: 'ผู้รับเช็ค', type: 'text', list: true, search: true },
       // วิธีการจ่ายเช็ค (ช้อย) — เลือก "อื่นๆ" แล้วช่องพิมพ์วิธีจ่ายจะขึ้นมาให้อัตโนมัติ
