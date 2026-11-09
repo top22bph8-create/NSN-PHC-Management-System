@@ -1,5 +1,5 @@
 // หมวดย่อยของหมวดใหญ่ 1–10 (ตามไฟล์รายการหมวดย่อยของ รพ.สต.) — ยอดงบตามแผนตั้งที่ระดับหมวดย่อย
-// period:true = ค่าตอบแทน/ค่าสาธารณูปโภค ต้องระบุ "ยอดจ่ายของเดือนไหน ปีอะไร" ตอนเลือกรายการจ่าย
+// period:true = ค่าตอบแทน/ค่าสาธารณูปโภค/ค่าจ้างลูกจ้าง/ประกันสังคมนายจ้าง/น้ำมันเชื้อเพลิง ต้องระบุ "ยอดจ่ายของเดือนไหน ปีอะไร" ตอนเลือกรายการจ่าย
 // เก็บในฎีกา: budgetSub = ชื่อหมวดย่อย (อย่าเปลี่ยนข้อความของรายการที่ใช้งานแล้ว), id ใช้เป็นรหัสในคอลเลกชัน budgetEntries
 const mk = (cat, names, opt = {}) => names.map((n, i) => ({ id: `${cat}s${String(opt.start || i + 1).padStart(2, '0') && String((opt.start || 1) + i).padStart(2, '0')}`, cat, name: n, period: !!opt.period, group: opt.group || '' }));
 export const BUDGET_SUBS = [
@@ -15,6 +15,9 @@ export const BUDGET_SUBS = [
   ...mk('c09', ['ค่าตอบแทนปฏิบัติงานนอกเวลาราชการ'], { period: true }),
   ...mk('c10', ['ค่าลงทะเบียนฝึกอบรม', 'ค่าเบี้ยเลี้ยง/ค่าที่พัก/ค่าพาหนะ']),
 ];
+// หมวดย่อยที่ต้องระบุเดือน/ปีของยอดจ่ายเพิ่มเติม (นอกเหนือจากที่ตั้ง period ทั้งหมวด): น้ำมันเชื้อเพลิง, ค่าจ้างลูกจ้างชั่วคราว, ประกันสังคมส่วนนายจ้าง
+const PERIOD_EXTRA = new Set(['วัสดุเชื้อเพลิงและหล่อลื่น', 'ค่าจ้างลูกจ้างชั่วคราวรายเดือนรายวันและรายคาบ', 'เงินสมทบกองทุนประกันสังคมส่วนนายจ้าง']);
+BUDGET_SUBS.forEach((x) => { if (PERIOD_EXTRA.has(x.name)) x.period = true; });
 export const subsOf = (catId) => BUDGET_SUBS.filter((s) => s.cat === catId);
 export const hasSubs = (catId) => BUDGET_SUBS.some((s) => s.cat === catId);
 export const subById = (id) => BUDGET_SUBS.find((s) => s.id === id);
