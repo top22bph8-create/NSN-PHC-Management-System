@@ -11,6 +11,7 @@ import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
 import { GROUPS, QUBIT_PORTAL_URL } from '../config/menu';
 import { TodayCards } from '../components/DashboardToday';
+import DashboardBudget from '../components/DashboardBudget';
 import DashboardUnitDuty from '../components/DashboardUnitDuty';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import MenuLink from '../components/MenuLink';
@@ -165,6 +166,7 @@ export default function Dashboard() {
 
       <TodayCards />
       <DashboardUnitDuty />
+      {canRead(profile.role, 'reg-budget') && <DashboardBudget />}
 
       {error ? <ErrorState message={error} />
         : !data && readable.length ? <Spinner />
