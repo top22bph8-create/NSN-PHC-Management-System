@@ -493,6 +493,7 @@ export const REGISTRIES = {
       // หมวดงบประมาณตามแผนการใช้จ่ายเงินบำรุง — ฎีกาที่ระบุหมวดจะตัดยอดงบคงเหลือของหมวดนั้นอัตโนมัติ (ดูหน้า /reg-budget)
       { key: 'budgetCat', label: 'หมวดงบประมาณ (แผนการใช้จ่ายเงินบำรุง)', type: 'select', options: CAT_NAMES, list: true },
       { key: 'chequeNo', label: 'เลขที่เช็ค (จ่ายตามฎีกา)', type: 'text', list: true, search: true },
+      { key: 'chequePayee', label: 'ผู้รับเช็ค', type: 'text', list: true, search: true },
       // วิธีการจ่ายเช็ค (ช้อย) — เลือก "อื่นๆ" แล้วช่องพิมพ์วิธีจ่ายจะขึ้นมาให้อัตโนมัติ
       { key: 'payMethod', label: 'วิธีการจ่ายเช็ค', type: 'select', options: ['จ่ายโดย Corporate ธกส.', 'จ่ายโดย Corporate ธนาคารกรุงไทย', 'จ่ายโดยเช็คแก่ผู้รับเช็ค', 'โอนจ่ายโดยเช็ค', 'จ่ายเงินสด', 'อื่นๆ'], list: true },
       { key: 'payMethodOther', label: 'ระบุวิธีการจ่าย (อื่นๆ)', type: 'text', showIf: (v) => v.payMethod === 'อื่นๆ' },
@@ -508,6 +509,7 @@ export const REGISTRIES = {
       { key: 'taxPayMethod', label: 'วิธีการจ่ายภาษี', type: 'text', auto: true },
       { key: 'taxPayMethodOther', label: 'ระบุวิธีจ่ายภาษี (อื่นๆ)', type: 'text', auto: true },
       { key: 'taxChequeNo', label: 'เลขที่เช็คส่งภาษี', type: 'text', auto: true },
+      { key: 'taxChequePayee', label: 'ผู้รับเช็ค (ส่งภาษี)', type: 'text', auto: true },
       { key: 'ssoStatus', label: 'สถานะจ่ายประกันสังคม', type: 'select', auto: true, options: ['ค้างจ่าย', 'จ่ายแล้ว'], default: 'ค้างจ่าย' },
       { key: 'ssoPaidDate', label: 'วันที่จ่ายประกันสังคม', type: 'date', auto: true },
       { key: 'ssoPayDika', label: 'ชำระด้วยฎีกาเลขที่ (ประกันสังคม)', type: 'text', auto: true },
@@ -515,6 +517,7 @@ export const REGISTRIES = {
       { key: 'ssoPayMethod', label: 'วิธีการจ่ายประกันสังคม', type: 'text', auto: true },
       { key: 'ssoPayMethodOther', label: 'ระบุวิธีจ่ายประกันสังคม (อื่นๆ)', type: 'text', auto: true },
       { key: 'ssoChequeNo', label: 'เลขที่เช็คจ่ายประกันสังคม', type: 'text', auto: true },
+      { key: 'ssoChequePayee', label: 'ผู้รับเช็ค (ประกันสังคม)', type: 'text', auto: true },
     ],
     reportColor: 'B48EAD',
     reportColumns: ['deekaNo', 'deekaDate', 'subject', 'payAmount', 'taxWithheld', 'ssoAmount', 'amount', 'chequeNo', 'payMethod', 'payMethodOther', 'chequeStatus', 'chequePaidDate', 'taxStatus', 'taxPaidDate', 'taxPayDika', 'taxPayAmount', 'taxPayMethod', 'taxPayMethodOther', 'taxChequeNo', 'ssoStatus', 'ssoPaidDate', 'ssoPayDika', 'ssoPayAmount', 'ssoPayMethod', 'ssoPayMethodOther', 'ssoChequeNo'],

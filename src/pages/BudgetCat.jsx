@@ -34,7 +34,7 @@ export default function BudgetCat() {
   if (!c) return <p className="p-4">ไม่พบหมวดงบประมาณนี้ · <Link className="text-brand-700 underline" to="/reg-budget">กลับ</Link></p>;
   if (err) return <p className="rounded-xl bg-red-50 p-4 text-red-700">{err}</p>;
   if (!data) return <Spinner />;
-  const o = data.byCat[c.id];
+  const o = data.byCat[c.id]; const extra = c.g === 'extra';
 
   const open = (type, e) => setForm({ type, id: e?.id || '', date: e?.date || todayStr(), amount: e ? String(Math.abs(Number(e.amount))) : '', sign: e && Number(e.amount) < 0 ? '-' : '+', note: e?.note || '', dir: 'out', other: '', current: e });
   const save = async () => {
@@ -73,23 +73,24 @@ export default function BudgetCat() {
   return (
     <div className="space-y-4">
       <Link to="/reg-budget" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"><ArrowLeft className="h-4 w-4" /> กลับภาพรวมงบประมาณทุกหมวด</Link>
-      <PageHeader emoji="💰" title={`หมวด ${c.no}. ${c.name}`} tone="from-emerald-700 via-emerald-600 to-teal-500" subtitle={`ปีงบประมาณ ${fy} · รายการตัดยอดงบประมาณ`}
+      <PageHeader emoji="💰" title={extra ? c.name : `หมวด ${c.no}. ${c.name}`} tone="from-emerald-700 via-emerald-600 to-teal-500" subtitle={`ปีงบประมาณ ${fy} · รายการตัดยอดงบประมาณ`}
         actions={<div className="flex flex-wrap gap-2"><button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={excel}><FileSpreadsheet className="h-4 w-4" /> Excel</button><button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={print}><Printer className="h-4 w-4" /> พิมพ์/PDF</button></div>} />
       {msg && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sky-800 ring-1 ring-sky-200">{msg}</p>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[['งบรวมของหมวด', o.total, 'from-sky-600 to-cyan-500'], ['เบิกจ่ายแล้ว (ตามฎีกา)', o.spent, 'from-amber-600 to-orange-500'], ['คงเหลือ', o.remain, o.remain < 0 ? 'from-red-700 to-rose-500' : 'from-emerald-600 to-teal-500']].map(([l, v, t]) => <div key={l} className={`rounded-2xl bg-gradient-to-br ${t} p-4 text-white shadow`}><div className="text-sm opacity-90">{l}</div><div className="text-2xl font-extrabold tabular-nums">{money(v)}</div><div className="text-xs opacity-90">บาท</div></div>)}
-        <div className="rounded-2xl bg-white p-4 text-sm shadow ring-1 ring-slate-200"><div>ตั้งต้นปี <b className="float-right tabular-nums">{money(o.initial)}</b></div><div>เพิ่ม/ปรับปรุง <b className="float-right tabular-nums">{money(o.add + o.adjust)}</b></div><div>โอนเข้า(+)/ออก(−) <b className="float-right tabular-nums">{money(o.tin - o.tout)}</b></div></div>
+        {[['งบรวมของหมวด', o.total, 'from-sky-600 to-cyan-500'], ['เบิกจ่ายแล้ว (ตามฎีกา)', o.spent, 'from-amber-600 to-orange-500'], ['คงเหลือ', o.remain, o.remain < 0 ? 'from-red-700 to-rose-500' : 'from-emerald-600 to-teal-500']].filter(([l]) => !extra || l.startsWith('เบิก')).map(([l, v, t]) => <div key={l} className={`rounded-2xl bg-gradient-to-br ${t} p-4 text-white shadow`}><div className="text-sm opacity-90">{l}</div><div className="text-2xl font-extrabold tabular-nums">{money(v)}</div><div className="text-xs opacity-90">บาท</div></div>)}
+        {!extra && <div className="rounded-2xl bg-white p-4 text-sm shadow ring-1 ring-slate-200"><div>ตั้งต้นปี <b className="float-right tabular-nums">{money(o.initial)}</b></div><div>เพิ่ม/ปรับปรุง <b className="float-right tabular-nums">{money(o.add + o.adjust)}</b></div><div>โอนเข้า(+)/ออก(−) <b className="float-right tabular-nums">{money(o.tin - o.tout)}</b></div></div>}
       </div>
-      <section className="card flex flex-wrap items-center gap-2 p-3">
+      {!extra && <section className="card flex flex-wrap items-center gap-2 p-3">
         {ACTIONS.map(([k, t]) => <button key={k} className="btn btn-outline" onClick={() => open(k, k === 'initial' ? entries.find((e) => e.id === `${fy}_${c.id}_initial`) : null)}><Plus className="h-4 w-4" /> {t}</button>)}
         <span className="text-xs text-slate-500">ฎีกาตัดยอดอัตโนมัติเมื่อระบุ “หมวดงบประมาณ” นี้ในทะเบียนฎีกา</span>
-      </section>
+      </section>}
+      {extra && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">หมวดนี้ไม่ตั้งยอดงบประมาณและไม่รวมกับหมวด 1–13 — แสดงเฉพาะฎีกาที่ระบุหมวดนี้</p>}
       <section className="card overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
           <thead><tr className="border-b bg-emerald-50 text-left text-slate-700">{head.map((h, i) => <th key={h} className={`p-2.5 ${i > 2 ? 'text-right' : ''}`}>{h}</th>)}<th className="w-20" /></tr></thead>
           <tbody>{!ledger.length ? <tr><td colSpan={7} className="p-6 text-center text-slate-500">ยังไม่มีรายการ — ตั้งยอดต้นปีที่ปุ่ม “ตั้ง/แก้ยอดต้นปี” หรือระบุหมวดนี้ในฎีกาเบิกจ่าย</td></tr> : ledger.map((r) => (
             <tr key={r.k + r.id} className="border-b align-top last:border-0"><td className="p-2.5 whitespace-nowrap">{fmtDate(r.date)}</td><td className="p-2.5 font-semibold">{r.label}</td><td className="p-2.5">{r.note}</td>
-              <td className="p-2.5 text-right tabular-nums text-emerald-700">{r.plus ? money(r.plus) : ''}</td><td className="p-2.5 text-right tabular-nums text-red-600">{r.minus ? money(r.minus) : ''}</td><td className={`p-2.5 text-right font-semibold tabular-nums ${r.bal < 0 ? 'text-red-600' : ''}`}>{money(r.bal)}</td>
+              <td className="p-2.5 text-right tabular-nums text-emerald-700">{r.plus ? money(r.plus) : ''}</td><td className="p-2.5 text-right tabular-nums text-red-600">{r.minus ? money(r.minus) : ''}</td><td className={`p-2.5 text-right font-semibold tabular-nums ${r.bal < 0 ? 'text-red-600' : ''}`}>{extra ? '' : money(r.bal)}</td>
               <td className="p-2.5 whitespace-nowrap text-right">{r.k === 'e' ? <>{!r.e.transferId && r.e.type !== 'initial' && <button className="mr-3 text-brand-700" aria-label="แก้ไข" onClick={() => open(r.e.type, r.e)}><Pencil className="h-4 w-4" /></button>}<button className="text-red-600" aria-label="ลบ" onClick={() => setDel(r.e)}><Trash2 className="h-4 w-4" /></button></> : <Link className="text-xs text-brand-700 underline" to="/reg-deeka">ดูฎีกา</Link>}</td></tr>))}</tbody>
         </table>
       </section>

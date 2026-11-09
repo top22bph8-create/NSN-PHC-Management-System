@@ -1,20 +1,21 @@
 // คำนวณงบประมาณตามหมวด: งบรวม = ตั้งต้นปี + เพิ่มยอด + ปรับปรุง(±) + โอนเข้า − โอนออก ; เบิกจ่าย = มูลค่าตั้งเบิกตามฎีกาที่ระบุหมวดนั้น ; คงเหลือ = งบรวม − เบิกจ่าย
 // คอลเลกชัน budgetEntries: { fy, cat(id), type, amount, date, note, transferId?, otherCat?, createdBy }
-import { BUDGET_CATS } from '../config/budgetCats';
+import { ALL_CATS, BUDGET_CATS, EXTRA_CATS, catByName } from '../config/budgetCats';
 
 export const ENTRY_TYPES = { initial: 'ตั้งยอดต้นปีงบประมาณ', add: 'เพิ่มยอด', adjust: 'ปรับปรุงยอด', transferIn: 'โอนเข้า (ย้ายมาจากหมวดอื่น)', transferOut: 'โอนออก (ย้ายไปหมวดอื่น)' };
 export const entrySign = (e) => (e.type === 'transferOut' ? -Number(e.amount || 0) : Number(e.amount || 0)); // adjust เก็บเป็นค่าติดลบได้เอง
 export const deekaAmount = (d) => Number(d.amount) || 0;
 
 export function computeBudget(entries, deekas) {
-  const out = {}; BUDGET_CATS.forEach((c) => { out[c.id] = { initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, n: 0, remain: 0, pct: null }; });
+  const out = {}; ALL_CATS.forEach((c) => { out[c.id] = { initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, n: 0, remain: 0, pct: null }; });
   entries.forEach((e) => { const o = out[e.cat]; if (!o) return; const a = Number(e.amount) || 0;
     if (e.type === 'initial') o.initial += a; else if (e.type === 'add') o.add += a; else if (e.type === 'adjust') o.adjust += a; else if (e.type === 'transferIn') o.tin += a; else if (e.type === 'transferOut') o.tout += a; });
-  deekas.forEach((d) => { const c = BUDGET_CATS.find((x) => x.name === d.budgetCat); if (!c) return; out[c.id].spent += deekaAmount(d); out[c.id].n += 1; });
-  BUDGET_CATS.forEach((c) => { const o = out[c.id]; o.total = o.initial + o.add + o.adjust + o.tin - o.tout; o.remain = o.total - o.spent; o.pct = o.total > 0 ? (o.spent / o.total) * 100 : null; });
+  deekas.forEach((d) => { const c = catByName(d.budgetCat); if (!c) return; out[c.id].spent += deekaAmount(d); out[c.id].n += 1; });
+  ALL_CATS.forEach((c) => { const o = out[c.id]; o.total = o.initial + o.add + o.adjust + o.tin - o.tout; o.remain = o.total - o.spent; o.pct = o.total > 0 ? (o.spent / o.total) * 100 : null; });
   const mk = () => ({ initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, remain: 0, n: 0, pct: null });
-  const sums = { main: mk(), other: mk(), all: mk() };
+  const sums = { main: mk(), other: mk(), all: mk(), extra: mk() };
   BUDGET_CATS.forEach((c) => ['all', c.g].forEach((g) => Object.keys(sums[g]).forEach((k) => { if (k !== 'pct') sums[g][k] += out[c.id][k]; })));
+  EXTRA_CATS.forEach((c) => Object.keys(sums.extra).forEach((k) => { if (k !== 'pct') sums.extra[k] += out[c.id][k]; })); // รายจ่ายอื่น: ใช้เฉพาะ spent / n
   Object.values(sums).forEach((x) => { x.pct = x.total > 0 ? (x.spent / x.total) * 100 : null; });
   const sum = sums.all;
   return { byCat: out, sum, sums };
@@ -33,3 +34,21 @@ h1{font-size:19pt;text-align:center;margin:0}h2{font-size:16pt;text-align:center
   w.document.close(); return true;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// สรุปรายจ่ายตามฎีกาแยกเดือนของปีงบประมาณ (ต.ค.→ก.ย.) และแยกกลุ่ม: main=หมวด1-10, other=หมวด11-13, x01/x02/x03=รายจ่ายอื่น, none=ยังไม่ระบุหมวด
+export const FY_MONTHS = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+export const GROUP_KEYS = ['main', 'other', 'x01', 'x02', 'x03', 'none'];
+export function groupOfDeeka(d) { const c = catByName(d.budgetCat); if (!c) return 'none'; return c.g === 'extra' ? c.id : c.g; }
+export function monthlySpend(deekas) {
+  const rows = FY_MONTHS.map((m) => ({ m, main: 0, other: 0, x01: 0, x02: 0, x03: 0, none: 0, total: 0 }));
+  deekas.forEach((d) => { const m = Number(String(d.deekaDate || '').slice(5, 7)); const r = rows.find((x) => x.m === m); if (!r) return; const a = deekaAmount(d); r[groupOfDeeka(d)] += a; r.total += a; });
+  const tot = { m: 0, main: 0, other: 0, x01: 0, x02: 0, x03: 0, none: 0, total: 0 };
+  rows.forEach((r) => GROUP_KEYS.concat('total').forEach((k) => { tot[k] += r[k]; }));
+  return { rows, tot };
+}
+// สรุปรายปีงบประมาณ (ทุกปีที่มีฎีกา) แยกกลุ่มเดียวกัน
+export function yearlySpend(allDeekas) {
+  const by = {};
+  allDeekas.forEach((d) => { const y = d.fy; if (!y) return; const r = (by[y] ||= { fy: y, main: 0, other: 0, x01: 0, x02: 0, x03: 0, none: 0, total: 0 }); const a = deekaAmount(d); r[groupOfDeeka(d)] += a; r.total += a; });
+  return Object.values(by).sort((a, b) => b.fy - a.fy);
+}

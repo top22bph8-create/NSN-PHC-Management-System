@@ -18,9 +18,17 @@ export const BUDGET_CATS = [
 export const GROUPS = [
   { id: 'main', label: 'หมวด 1–10 (เงินบำรุง)', short: 'หมวด 1–10' },
   { id: 'other', label: 'หมวด 11–13 (งบจากแหล่งอื่น)', short: 'หมวด 11–13' },
-  { id: 'all', label: 'รวมทุกหมวด', short: 'รวมทุกหมวด' },
+  { id: 'all', label: 'รวมหมวด 1–13', short: 'รวมหมวด 1–13' },
+  { id: 'extra', label: 'รายจ่ายอื่น (ไม่ตั้งยอด)', short: 'รายจ่ายอื่น' },
 ];
-export const catsOf = (g) => BUDGET_CATS.filter((c) => g === 'all' || c.g === g);
-export const CAT_NAMES = BUDGET_CATS.map((c) => c.name);
-export const catByName = (n) => BUDGET_CATS.find((c) => c.name === n);
-export const catById = (id) => BUDGET_CATS.find((c) => c.id === id);
+export const catsOf = (g) => (g === 'extra' ? EXTRA_CATS : BUDGET_CATS.filter((c) => g === 'all' || c.g === g));
+// หมวดรายจ่ายที่ "ไม่ตั้งยอด" และไม่รวมในหมวด 1-13 — แสดงเฉพาะยอดเบิกจ่ายตามฎีกา (g:'extra')
+export const EXTRA_CATS = [
+  { id: 'x01', no: 'ก', g: 'extra', name: 'ภาษีหัก ณ ที่จ่าย' },
+  { id: 'x02', no: 'ข', g: 'extra', name: 'ค่าประกันสังคมฝ่ายลูกจ้าง' },
+  { id: 'x03', no: 'ค', g: 'extra', name: 'ค่าใช้จ่ายอื่นๆ' },
+];
+export const ALL_CATS = [...BUDGET_CATS, ...EXTRA_CATS];
+export const CAT_NAMES = ALL_CATS.map((c) => c.name);
+export const catByName = (n) => ALL_CATS.find((c) => c.name === n);
+export const catById = (id) => ALL_CATS.find((c) => c.id === id);

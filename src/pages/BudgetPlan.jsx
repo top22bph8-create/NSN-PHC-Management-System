@@ -8,8 +8,9 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
-import { BUDGET_CATS, CAT_NAMES, GROUPS, catsOf } from '../config/budgetCats';
+import { ALL_CATS, BUDGET_CATS, CAT_NAMES, GROUPS, catsOf } from '../config/budgetCats';
 import { computeBudget, deekaAmount, esc, money, openPrint } from '../lib/budget';
+import BudgetSpendDash from './BudgetSpendDash';
 import useBudgetData from '../lib/useBudgetData';
 import { fmtDate, todayStr } from '../lib/thai';
 import { downloadXlsx } from '../modules/survey/surveyExport';
@@ -64,12 +65,20 @@ export default function BudgetPlan() {
       <div className="flex flex-wrap items-center gap-2">{GROUPS.map((g) => <button key={g.id} type="button" onClick={() => setView(g.id)} className={`rounded-full px-4 py-2 text-sm font-semibold ${view === g.id ? 'bg-emerald-700 text-white shadow' : 'bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-emerald-50'}`}>{g.label}</button>)}
         <span className="text-xs text-slate-500">{view === 'all' ? 'แสดงยอดรวมทุกแหล่งงบ (ไม่แนะนำให้ใช้เป็นยอดเงินบำรุง)' : 'ยอดรวมแยกตามแหล่งงบประมาณ — หมวด 11–13 ไม่รวมกับหมวด 1–10'}</span></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[['งบรวม ' + gl.short, S.total, 'from-sky-600 to-cyan-500'], ['เบิกจ่ายแล้ว (ตามฎีกา)', S.spent, 'from-amber-600 to-orange-500'], ['คงเหลือ', S.remain, S.remain < 0 ? 'from-red-700 to-rose-500' : 'from-emerald-600 to-teal-500'], ['ใช้ไปแล้ว', null, 'from-slate-600 to-slate-500']].map(([l, v, t]) => (
+        {(view === 'extra' ? [['เบิกจ่ายแล้ว ' + gl.short, S.spent, 'from-amber-600 to-orange-500']] : [['งบรวม ' + gl.short, S.total, 'from-sky-600 to-cyan-500'], ['เบิกจ่ายแล้ว (ตามฎีกา)', S.spent, 'from-amber-600 to-orange-500'], ['คงเหลือ', S.remain, S.remain < 0 ? 'from-red-700 to-rose-500' : 'from-emerald-600 to-teal-500'], ['ใช้ไปแล้ว', null, 'from-slate-600 to-slate-500']]).map(([l, v, t]) => (
           <div key={l} className={`rounded-2xl bg-gradient-to-br ${t} p-4 text-white shadow`}><div className="text-sm opacity-90">{l}</div><div className="text-2xl font-extrabold tabular-nums">{v == null ? (S.pct == null ? '-' : `${S.pct.toFixed(1)}%`) : money(v)}</div>{v != null && <div className="text-xs opacity-90">บาท</div>}</div>))}
       </div>
 
-      {S.total === 0 && <p className="rounded-xl bg-amber-50 p-3 text-amber-900 ring-1 ring-amber-200">ยังไม่ได้ตั้งยอดงบประมาณต้นปีงบประมาณ {fy} — กดปุ่ม “ตั้งยอดต้นปีงบประมาณ” เพื่อกรอกยอดแต่ละหมวด (หมวดที่ไม่มีงบเว้นว่างได้)</p>}
+      {view !== 'extra' && S.total === 0 && <p className="rounded-xl bg-amber-50 p-3 text-amber-900 ring-1 ring-amber-200">ยังไม่ได้ตั้งยอดงบประมาณต้นปีงบประมาณ {fy} — กดปุ่ม “ตั้งยอดต้นปีงบประมาณ” เพื่อกรอกยอดแต่ละหมวด (หมวดที่ไม่มีงบเว้นว่างได้)</p>}
 
+      {view === 'extra' ? (
+        <section className="card overflow-x-auto p-0">
+          <p className="border-b bg-amber-50 p-3 text-sm text-amber-900">รายจ่ายกลุ่มนี้ไม่ตั้งยอดงบประมาณ และไม่รวมในหมวด 1–13 — แสดงเฉพาะยอดเบิกจ่ายตามฎีกาที่ระบุหมวด (คลิกแถวเพื่อดูรายการ)</p>
+          <table className="w-full min-w-[520px] text-sm"><thead><tr className="border-b bg-emerald-50 text-left"><th className="p-2.5">รายการ</th><th className="p-2.5 text-right">จำนวนฎีกา</th><th className="p-2.5 text-right">เบิกจ่ายแล้ว (บาท)</th></tr></thead>
+            <tbody>{cats.map((c) => { const o = b.byCat[c.id]; return <tr key={c.id} className="cursor-pointer border-b hover:bg-emerald-50/60" onClick={() => nav(`/reg-budget/${c.id}`)}><td className="p-2.5 font-semibold text-emerald-900">{c.name}</td><td className="p-2.5 text-right tabular-nums">{o.n}</td><td className="p-2.5 text-right font-semibold tabular-nums">{money(o.spent)}</td></tr>; })}
+              <tr className="bg-slate-100 font-bold"><td className="p-2.5">รวมรายจ่ายอื่น</td><td className="p-2.5 text-right tabular-nums">{S.n}</td><td className="p-2.5 text-right tabular-nums">{money(S.spent)}</td></tr></tbody></table>
+        </section>
+      ) : (
       <section className="card overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead><tr className="border-b bg-emerald-50 text-left text-slate-700">{head.map((h, i) => <th key={h} className={`p-2.5 ${i > 1 ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
@@ -85,6 +94,9 @@ export default function BudgetPlan() {
           </tbody>
         </table>
       </section>
+      )}
+
+      <BudgetSpendDash fy={fy} deekas={deekas} />
 
       {unassigned.length > 0 && (
         <section className="card space-y-2 p-4">
@@ -92,7 +104,7 @@ export default function BudgetPlan() {
           <p className="text-xs text-slate-500">เลือกหมวดจากรายการเพื่อตัดยอด (หรือแก้ในฟอร์มฎีกา ช่อง “หมวดงบประมาณ”) · การเลือกจะบันทึกลงฎีกาทันที</p>
           <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><tbody>{unassigned.map((d) => (
             <tr key={d.id} className="border-b last:border-0"><td className="p-2 whitespace-nowrap">{d.deekaNo}</td><td className="p-2 whitespace-nowrap">{fmtDate(d.deekaDate)}</td><td className="p-2">{d.subject}</td><td className="p-2 text-right tabular-nums">{money(deekaAmount(d))}</td>
-              <td className="p-2"><select className="input" value="" onChange={(e) => e.target.value && assign(d, e.target.value)}><option value="">— เลือกหมวด —</option>{BUDGET_CATS.map((c) => <option key={c.id} value={c.name}>{c.no}. {c.name}</option>)}</select></td></tr>))}</tbody></table></div>
+              <td className="p-2"><select className="input" value="" onChange={(e) => e.target.value && assign(d, e.target.value)}><option value="">— เลือกหมวด —</option>{ALL_CATS.map((c) => <option key={c.id} value={c.name}>{c.g === 'extra' ? `(ไม่ตั้งยอด) ${c.name}` : `${c.no}. ${c.name}`}</option>)}</select></td></tr>))}</tbody></table></div>
         </section>)}
 
       {setup && (

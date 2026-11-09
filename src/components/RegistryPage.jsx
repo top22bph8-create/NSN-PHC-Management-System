@@ -795,6 +795,8 @@ export default function RegistryPage({ cfg }) {
     return null;
   };
   const stockChequeMsg = (b, no) => `เลขที่เช็ค ${no} อยู่ในเล่มที่ ${b.bookNo} (${b.chequeFrom}-${b.chequeTo}) ซึ่งยังเป็น "คงคลัง" ไม่ได้เบิกออกใช้ — กรุณาไปทำรายการ "เบิกใช้" เล่มเช็คในทะเบียนคุมการเบิกจ่ายเล่มเช็คก่อน แล้วจึงกลับมาบันทึกการจ่าย`;
+  const PAY_PAYEE_KEY = { cheque: 'chequePayee', tax: 'taxChequePayee', sso: 'ssoChequePayee' };
+  const [payActionPayee, setPayActionPayee] = useState('');
   const [payActionChequeNo, setPayActionChequeNo] = useState('');
   const [payActionMethod, setPayActionMethod] = useState('');
   // ภาษี/ประกันสังคม: ชำระผ่านการตั้งฎีกาเบิกจ่าย (ระบุเลขฎีกาแล้วระบบตรวจยอด/ชื่ออัตโนมัติ) หรือจ่ายตรง
@@ -812,7 +814,7 @@ export default function RegistryPage({ cfg }) {
     ? (items || []).filter((c) => c.id !== payAction.item.id && (sameMoney(c.payAmount, expectedAmt(payAction.item, payAction.kind)) || sameMoney(c.amount, expectedAmt(payAction.item, payAction.kind))) && matchesKind(c, payAction.kind))
     : [];
   const [payActionMethodOther, setPayActionMethodOther] = useState('');
-  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayStockWarn(''); setPayAction({ item: it, kind }); };
+  const openPayAction = (it, kind) => { setPayActionDate(todayStr()); setPayActionChequeNo(String(it[PAY_CHEQUE_KEY[kind]] || '')); setPayActionPayee(String(it[PAY_PAYEE_KEY[kind]] || (kind === 'cheque' ? '' : '')));  setPayActionMethod(kind === 'tax' ? (it.taxPayMethod || '') : kind === 'sso' ? (it.ssoPayMethod || '') : ''); setPayActionMethodOther(''); setPayVia('dika'); setPayDikaNo(''); setPayForce(false); setPayWarn(''); setPayStockWarn(''); setPayAction({ item: it, kind }); };
   const submitPayAction = async () => {
     if (!payActionDate) { say({ type: 'error', text: 'กรุณาเลือกวันที่' }); return; }
     const { item, kind } = payAction;
@@ -866,11 +868,12 @@ export default function RegistryPage({ cfg }) {
       const hit = await findInStockCheque(chequeNo);
       if (hit) { setPayStockWarn(stockChequeMsg(hit, chequeNo)); return; }
     }
+    const payee = chequeNo ? payActionPayee.trim() : '';
     const after = kind === 'cheque'
-      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo }
+      ? { chequeStatus: 'จ่ายแล้ว', chequePaidDate: payActionDate, chequeNo, chequePayee: payee }
       : kind === 'tax'
-        ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate, taxPayMethod: payActionMethod, taxPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', taxChequeNo: chequeNo }
-        : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: payActionDate, ssoPayMethod: payActionMethod, ssoPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', ssoChequeNo: chequeNo };
+        ? { taxStatus: 'ส่งสรรพากรแล้ว', taxPaidDate: payActionDate, taxPayMethod: payActionMethod, taxPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', taxChequeNo: chequeNo, taxChequePayee: payee }
+        : { ssoStatus: 'จ่ายแล้ว', ssoPaidDate: payActionDate, ssoPayMethod: payActionMethod, ssoPayMethodOther: payActionMethod === 'อื่นๆ' ? methodOther : '', ssoChequeNo: chequeNo, ssoChequePayee: payee };
     setPayActionSaving(true);
     try {
       await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
@@ -1773,6 +1776,8 @@ export default function RegistryPage({ cfg }) {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600">เลขที่เช็ค</label>
                 <input className="input" inputMode="numeric" placeholder="เช่น 1234567" value={payActionChequeNo} onChange={(e) => { setPayActionChequeNo(e.target.value); setPayStockWarn(''); }} />
+                <label className="mb-1 mt-3 block text-sm font-medium text-slate-600">ผู้รับเช็ค</label>
+                <input className="input" placeholder="ชื่อผู้รับเช็ค / ผู้รับเงิน" value={payActionPayee} onChange={(e) => setPayActionPayee(e.target.value)} />
                 {payStockWarn && (
                   <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                     <p>⚠ {payStockWarn}</p>
