@@ -10,7 +10,6 @@ import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
 import { ALL_CATS, BUDGET_CATS, CAT_NAMES, GROUPS, catsOf } from '../config/budgetCats';
 import { computeBudget, deekaAmount, esc, money, openPrint } from '../lib/budget';
-import BudgetSpendDash from './BudgetSpendDash';
 import useBudgetData from '../lib/useBudgetData';
 import { fmtDate, todayStr } from '../lib/thai';
 import { downloadXlsx } from '../modules/survey/surveyExport';
@@ -95,8 +94,6 @@ export default function BudgetPlan() {
         </table>
       </section>
       )}
-
-      <BudgetSpendDash fy={fy} deekas={deekas} />
 
       {unassigned.length > 0 && (
         <section className="card space-y-2 p-4">
