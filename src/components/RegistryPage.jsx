@@ -60,10 +60,13 @@ function DeekaSummary({ items, filtered, month, yearBE, fy }) {
   const bud = useMemo(() => (bEntries && bDeekas ? computeBudget(bEntries, bDeekas) : null), [bEntries, bDeekas]);
   const noCat = (items || []).filter((it) => !CAT_NAMES.includes(it.budgetCat));
   const cell = 'px-3 py-2 text-right tabular-nums';
+  // ภาษี/ประกันสังคม: แยกยอดที่ชำระแล้ว (ส่งสรรพากรแล้ว / จ่ายแล้ว) กับที่ค้างชำระ ตามตัวกรองปัจจุบัน
+  const paidOf = (key, status, doneVal) => { const list = (filtered || []).filter((it) => num(it[key]) > 0); const paid = list.filter((it) => it[status] === doneVal).reduce((a, it) => a + num(it[key]), 0); const all = list.reduce((a, it) => a + num(it[key]), 0); return { paid, due: all - paid, nPaid: list.filter((it) => it[status] === doneVal).length, nDue: list.filter((it) => it[status] !== doneVal).length, all }; };
+  const taxP = paidOf('taxWithheld', 'taxStatus', 'ส่งสรรพากรแล้ว'); const ssoP = paidOf('ssoAmount', 'ssoStatus', 'จ่ายแล้ว');
   const cards = [
     { label: 'ยอดจ่ายเช็ค', v: cur.pay, grad: 'from-sky-500 to-blue-600', icon: '💳' },
-    { label: 'ภาษีหัก ณ ที่จ่าย', v: cur.tax, grad: 'from-amber-400 to-orange-500', icon: '🧾' },
-    { label: 'หักจ่ายประกันสังคม', v: cur.sso, grad: 'from-emerald-500 to-teal-600', icon: '🛡️' },
+    { label: 'ภาษีหัก ณ ที่จ่าย', v: cur.tax, grad: 'from-amber-400 to-orange-500', icon: '🧾', pay: taxP, done: 'ส่งสรรพากรแล้ว' },
+    { label: 'หักจ่ายประกันสังคม', v: cur.sso, grad: 'from-emerald-500 to-teal-600', icon: '🛡️', pay: ssoP, done: 'ชำระแล้ว' },
     { label: 'มูลค่าตั้งเบิกตามฎีกา', v: cur.total, grad: 'from-fuchsia-500 to-purple-700', icon: '💰' },
   ];
   return (
@@ -80,6 +83,12 @@ function DeekaSummary({ items, filtered, month, yearBE, fy }) {
             <div className="flex items-center justify-between text-base font-medium text-white/90"><span>{c.label}</span><span className="text-2xl">{c.icon}</span></div>
             <div className="mt-1 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl">{money(c.v)}</div>
             <div className="text-sm text-white/80">บาท</div>
+            {c.pay && c.pay.all > 0 && (
+              <div className="mt-2 space-y-0.5 rounded-xl bg-white/20 px-3 py-2 text-sm">
+                <div className="font-semibold">{c.pay.due <= 0.004 ? `✅ ${c.done}ครบแล้ว` : c.pay.paid > 0 ? '🟡 ชำระบางส่วน' : '⏳ ยังไม่ชำระ'}</div>
+                <div>✅ ชำระแล้ว {money(c.pay.paid)} บาท ({c.pay.nPaid} ฎีกา)</div>
+                {c.pay.due > 0.004 && <div>⏳ ค้างชำระ {money(c.pay.due)} บาท ({c.pay.nDue} ฎีกา)</div>}
+              </div>)}
           </div>
         ))}
       </div>
