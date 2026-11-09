@@ -72,37 +72,35 @@ function DeekaSummary({ items, filtered, month, yearBE, fy }) {
     { label: 'มูลค่าตั้งเบิกตามฎีกา', v: cur.total, grad: 'from-fuchsia-500 to-purple-700', icon: '💰' },
   ];
   return (
-    <div className="card mb-4 p-4">
+    <div className="card mb-4 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-lg font-bold text-slate-800">
+        <div className="text-base font-bold text-slate-800">
           📊 ยอดรวม {month ? `เดือน${thMonths[Number(month) - 1]}` : 'ทุกเดือน'}{yearBE ? ` พ.ศ. ${yearBE}` : ''} <span className="ml-1 rounded-full bg-slate-100 px-3 py-0.5 text-base font-semibold text-slate-600">{cur.n} ฎีกา</span>
         </div>
         <button type="button" className="btn btn-outline !py-1 text-sm" onClick={() => setOpen(!open)}>{open ? 'ซ่อนสรุปรายเดือน' : '📅 สรุปรายเดือนทั้งปีงบประมาณ'}</button>
       </div>
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-2.5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className={`rounded-2xl bg-gradient-to-br ${c.grad} p-4 text-white shadow-md`}>
-            <div className="flex items-center justify-between text-base font-medium text-white/90"><span>{c.label}</span><span className="text-2xl">{c.icon}</span></div>
-            <div className="mt-1 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl">{money(c.v)}</div>
-            <div className="text-sm text-white/80">บาท</div>
+          <div key={c.label} className={`flex flex-col rounded-xl bg-gradient-to-br ${c.grad} px-3.5 py-2.5 text-white shadow-sm`}>
+            <div className="flex items-center justify-between text-sm font-medium text-white/90"><span>{c.label}</span><span className="text-lg leading-none">{c.icon}</span></div>
+            <div className="mt-0.5 flex items-baseline gap-1.5"><span className="text-xl font-extrabold tracking-tight tabular-nums sm:text-2xl">{money(c.v)}</span><span className="text-xs text-white/80">บาท</span></div>
             {c.pay && c.pay.all > 0 && (
-              <div className="mt-2 space-y-0.5 rounded-xl bg-white/20 px-3 py-2 text-sm">
+              <div className="mt-1.5 rounded-lg bg-white/20 px-2.5 py-1 text-xs leading-snug">
                 <div className="font-semibold">{c.pay.due <= 0.004 ? `✅ ${c.done}ครบแล้ว` : c.pay.paid > 0 ? '🟡 ชำระบางส่วน' : '⏳ ยังไม่ชำระ'}</div>
-                <div>✅ ชำระแล้ว {money(c.pay.paid)} บาท ({c.pay.nPaid} ฎีกา)</div>
-                {c.pay.due > 0.004 && <div>⏳ ค้างชำระ {money(c.pay.due)} บาท ({c.pay.nDue} ฎีกา)</div>}
+                <div className="text-white/90">ชำระแล้ว {money(c.pay.paid)} ({c.pay.nPaid} ฎีกา){c.pay.due > 0.004 && <> · ค้าง {money(c.pay.due)} ({c.pay.nDue})</>}</div>
               </div>)}
           </div>
         ))}
       </div>
       {bud && (
-        <div className="mt-3">
-          <div className="mb-2 flex items-center justify-between"><div className="font-semibold text-slate-700">💰 งบประมาณเงินบำรุง ปีงบประมาณ {fy} (เชื่อมกับฎีกา)</div><Link to="/reg-budget" className="text-sm font-semibold text-brand-700 hover:underline">รายละเอียดรายหมวด →</Link></div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <div className="mb-1.5 flex items-center justify-between"><div className="text-sm font-semibold text-slate-700">💰 งบประมาณเงินบำรุง ปีงบประมาณ {fy} (เชื่อมกับฎีกา)</div><Link to="/reg-budget" className="text-sm font-semibold text-brand-700 hover:underline">รายละเอียดรายหมวด →</Link></div>
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
             {[['ตั้งงบต้นปี หมวด 1–10', bud.sums.main.initial, 'from-sky-600 to-cyan-500', `งบรวมหลังเพิ่ม/ปรับ/โอน ${money(bud.sums.main.total)}`],
               ['ยอดกันเงินรายจ่ายจากปีก่อน', bud.byCat.c13.total, 'from-violet-600 to-fuchsia-500', `เบิกแล้ว ${money(bud.byCat.c13.spent)} · คงเหลือ ${money(bud.byCat.c13.remain)}`],
               ['เบิกจ่ายแล้ว หมวด 1–10 (ตามฎีกา)', bud.sums.main.spent, 'from-amber-600 to-orange-500', bud.sums.main.pct == null ? 'ยังไม่ตั้งยอด' : `ใช้ไป ${bud.sums.main.pct.toFixed(1)}%`],
               ['คงเหลือแผนเงินบำรุง หมวด 1–10', bud.sums.main.remain, bud.sums.main.remain < 0 ? 'from-red-700 to-rose-500' : 'from-emerald-600 to-teal-500', 'งบรวม − เบิกจ่ายตามฎีกา']].map(([l, v, g, sub]) => (
-              <Link to="/reg-budget" key={l} className={`rounded-2xl bg-gradient-to-br ${g} p-4 text-white shadow-md transition hover:shadow-lg`}><div className="text-base font-medium text-white/90">{l}</div><div className="mt-1 text-3xl font-extrabold tracking-tight tabular-nums">{money(v)}</div><div className="text-sm text-white/80">บาท · {sub}</div></Link>))}
+              <Link to="/reg-budget" key={l} className={`rounded-xl bg-gradient-to-br ${g} px-3.5 py-2.5 text-white shadow-sm transition hover:shadow-md`}><div className="text-sm font-medium text-white/90">{l}</div><div className="mt-0.5 flex items-baseline gap-1.5"><span className="text-xl font-extrabold tracking-tight tabular-nums sm:text-2xl">{money(v)}</span><span className="text-xs text-white/80">บาท</span></div><div className="mt-0.5 text-xs leading-snug text-white/85">{sub}</div></Link>))}
           </div>
           {noCat.length > 0 && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">มีฎีกา {noCat.length} ฉบับ ({money(noCat.reduce((a, it) => a + (num(it.amount) || 0), 0))} บาท) ที่ยังไม่ระบุหมวดงบประมาณ — ยังไม่ถูกตัดยอด · <Link to="/reg-budget" className="font-semibold underline">ไประบุหมวด</Link></p>}
         </div>
