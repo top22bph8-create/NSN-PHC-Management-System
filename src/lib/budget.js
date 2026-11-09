@@ -12,10 +12,12 @@ export function computeBudget(entries, deekas) {
     if (e.type === 'initial') o.initial += a; else if (e.type === 'add') o.add += a; else if (e.type === 'adjust') o.adjust += a; else if (e.type === 'transferIn') o.tin += a; else if (e.type === 'transferOut') o.tout += a; });
   deekas.forEach((d) => { const c = BUDGET_CATS.find((x) => x.name === d.budgetCat); if (!c) return; out[c.id].spent += deekaAmount(d); out[c.id].n += 1; });
   BUDGET_CATS.forEach((c) => { const o = out[c.id]; o.total = o.initial + o.add + o.adjust + o.tin - o.tout; o.remain = o.total - o.spent; o.pct = o.total > 0 ? (o.spent / o.total) * 100 : null; });
-  const sum = { initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, remain: 0, n: 0 };
-  Object.values(out).forEach((o) => Object.keys(sum).forEach((k) => { sum[k] += o[k]; }));
-  sum.pct = sum.total > 0 ? (sum.spent / sum.total) * 100 : null;
-  return { byCat: out, sum };
+  const mk = () => ({ initial: 0, add: 0, adjust: 0, tin: 0, tout: 0, total: 0, spent: 0, remain: 0, n: 0, pct: null });
+  const sums = { main: mk(), other: mk(), all: mk() };
+  BUDGET_CATS.forEach((c) => ['all', c.g].forEach((g) => Object.keys(sums[g]).forEach((k) => { if (k !== 'pct') sums[g][k] += out[c.id][k]; })));
+  Object.values(sums).forEach((x) => { x.pct = x.total > 0 ? (x.spent / x.total) * 100 : null; });
+  const sum = sums.all;
+  return { byCat: out, sum, sums };
 }
 export const money = (n) => (n == null || !isFinite(n) ? '-' : Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
