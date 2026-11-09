@@ -51,6 +51,7 @@ export const GROUPS = [
       { key: 'sso-pay', label: 'ระบบจ่ายเงินประกันสังคมออนไลน์', path: '/group/finance', href: 'https://www.sso.go.th/eservices/esv/login.do', icon: ShieldCheck, tone: 'from-emerald-500 to-green-600', ready: true, desc: 'e-Service สำนักงานประกันสังคม' },
       { key: 'baac', label: 'ระบบ ธกส. (คอร์ปอเรท) BAAC Corporate Banking', path: '/group/finance', href: 'https://corp.inbaac.com/corp-webe/auth/login', icon: Landmark, tone: 'from-green-600 to-lime-600', ready: true, desc: 'โอนจ่ายผ่าน BAAC Corporate' },
       { key: 'ktb', label: 'ระบบ กรุงไทย (คอร์ปอเรท) Krungthai Corporate Online', path: '/group/finance', href: 'https://www.bizgrowing.krungthai.com/corporate/', icon: Building2, tone: 'from-sky-500 to-blue-600', ready: true, desc: 'โอนจ่ายผ่าน Krungthai Corporate' },
+      { key: 'qubit-portal', label: 'ระบบงานโรงพยาบาลส่งเสริมสุขภาพตำบล สังกัด อบจ.สกลนคร (Qubit Portal System)', path: '/group/finance', href: QUBIT_PORTAL_URL, icon: Globe, tone: 'from-violet-500 to-purple-600', ready: true, desc: 'Qubit Portal — ระบบงาน รพ.สต. สังกัด อบจ.สกลนคร' },
     ],
   },
   {
