@@ -9,9 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { REGISTRIES } from '../config/registries';
-import { GROUPS, QUBIT_PORTAL_URL } from '../config/menu';
+import { GROUPS } from '../config/menu';
 import { TodayCards } from '../components/DashboardToday';
-import DashboardBudget from '../components/DashboardBudget';
 import DashboardUnitDuty from '../components/DashboardUnitDuty';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import MenuLink from '../components/MenuLink';
@@ -33,18 +32,6 @@ const LEAVE_TYPE_TONE = {
   'อื่น ๆ': { bar: 'from-slate-400 to-slate-600', badge: 'bg-slate-100 text-slate-700' },
 };
 const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่น ๆ'];
-
-// ไอคอนเดี่ยว: ระบบงานโรงพยาบาลส่งเสริมสุขภาพตำบล Qubit Portal (ลิงก์ตั้งที่ config/menu.js → QUBIT_PORTAL_URL)
-function QubitCard() {
-  const inner = (
-    <>
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700"><Globe className="h-6 w-6" /></div>
-      <div><div className="font-bold leading-tight">Qubit Portal</div><div className="mt-1 text-sm text-slate-500">ระบบงานโรงพยาบาลส่งเสริมสุขภาพตำบล</div></div>
-    </>
-  );
-  if (!QUBIT_PORTAL_URL) return <div className="card flex items-center gap-3 p-4 opacity-60" title="ยังไม่ได้ตั้งลิงก์">{inner}</div>;
-  return <a href={QUBIT_PORTAL_URL} target="_blank" rel="noopener noreferrer" className="card flex items-center gap-3 p-4 transition hover:shadow-md focus-visible:outline focus-visible:outline-2">{inner}</a>;
-}
 
 function Stat({ icon: Icon, label, value, tone }) {
   return (
@@ -166,7 +153,6 @@ export default function Dashboard() {
 
       <TodayCards />
       <DashboardUnitDuty />
-      {canRead(profile.role, 'reg-budget') && <DashboardBudget />}
 
       {error ? <ErrorState message={error} />
         : !data && readable.length ? <Spinner />
@@ -178,7 +164,6 @@ export default function Dashboard() {
                 <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
                   <Stat icon={Inbox} label="หนังสือรับทั้งหมด" value={m.inTotal} tone="bg-brand-100 text-brand-700" />
                   <Stat icon={Send} label="หนังสือส่งทั้งหมด" value={m.outTotal} tone="bg-sky-100 text-sky-700" />
-                  <QubitCard />
                 </div>
               </>
             )}

@@ -18,6 +18,9 @@ import FileAttach from './FileAttach';
 import { PageHeader } from './Logo';
 import ThaiDateInput from './ThaiDateInput';
 import { VEHICLE_TYPES, getVehicleFleet, vehicleLabel, asList, numberedText, groupMissions, normalizeMissionDoc, missionLines } from '../lib/vehicleConfig';
+import useBudgetData from '../lib/useBudgetData';
+import { computeBudget } from '../lib/budget';
+import { CAT_NAMES } from '../config/budgetCats';
 import TimeKeypadInput from './TimeKeypadInput';
 import OdometerKeypadInput from './OdometerKeypadInput';
 import MissionGroupPicker from './MissionGroupPicker';
@@ -53,6 +56,9 @@ function DeekaSummary({ items, filtered, month, yearBE, fy }) {
   const cur = sumDeeka(filtered);
   const rows = FY_MONTH_ORDER.map((mm) => ({ mm, s: sumDeeka(items.filter((it) => String(it.deekaDate || '').slice(5, 7) === mm)) })).filter((r) => r.s.n > 0);
   const all = sumDeeka(items);
+  const { entries: bEntries, deekas: bDeekas } = useBudgetData(fy);
+  const bud = useMemo(() => (bEntries && bDeekas ? computeBudget(bEntries, bDeekas) : null), [bEntries, bDeekas]);
+  const noCat = (items || []).filter((it) => !CAT_NAMES.includes(it.budgetCat));
   const cell = 'px-3 py-2 text-right tabular-nums';
   const cards = [
     { label: 'ยอดจ่ายเช็ค', v: cur.pay, grad: 'from-sky-500 to-blue-600', icon: '💳' },
@@ -77,6 +83,19 @@ function DeekaSummary({ items, filtered, month, yearBE, fy }) {
           </div>
         ))}
       </div>
+      {bud && (
+        <div className="mt-3">
+          <div className="mb-2 flex items-center justify-between"><div className="font-semibold text-slate-700">💰 งบประมาณเงินบำรุง ปีงบประมาณ {fy} (เชื่อมกับฎีกา)</div><Link to="/reg-budget" className="text-sm font-semibold text-brand-700 hover:underline">รายละเอียดรายหมวด →</Link></div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[['ตั้งงบต้นปี หมวด 1–10', bud.sums.main.initial, 'from-sky-600 to-cyan-500', `งบรวมหลังเพิ่ม/ปรับ/โอน ${money(bud.sums.main.total)}`],
+              ['ยอดกันเงินรายจ่ายจากปีก่อน', bud.byCat.c13.total, 'from-violet-600 to-fuchsia-500', `เบิกแล้ว ${money(bud.byCat.c13.spent)} · คงเหลือ ${money(bud.byCat.c13.remain)}`],
+              ['เบิกจ่ายแล้ว หมวด 1–10 (ตามฎีกา)', bud.sums.main.spent, 'from-amber-600 to-orange-500', bud.sums.main.pct == null ? 'ยังไม่ตั้งยอด' : `ใช้ไป ${bud.sums.main.pct.toFixed(1)}%`],
+              ['คงเหลือแผนเงินบำรุง หมวด 1–10', bud.sums.main.remain, bud.sums.main.remain < 0 ? 'from-red-700 to-rose-500' : 'from-emerald-600 to-teal-500', 'งบรวม − เบิกจ่ายตามฎีกา']].map(([l, v, g, sub]) => (
+              <Link to="/reg-budget" key={l} className={`rounded-2xl bg-gradient-to-br ${g} p-4 text-white shadow-md transition hover:shadow-lg`}><div className="text-base font-medium text-white/90">{l}</div><div className="mt-1 text-3xl font-extrabold tracking-tight tabular-nums">{money(v)}</div><div className="text-sm text-white/80">บาท · {sub}</div></Link>))}
+          </div>
+          {noCat.length > 0 && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">มีฎีกา {noCat.length} ฉบับ ({money(noCat.reduce((a, it) => a + (num(it.amount) || 0), 0))} บาท) ที่ยังไม่ระบุหมวดงบประมาณ — ยังไม่ถูกตัดยอด · <Link to="/reg-budget" className="font-semibold underline">ไประบุหมวด</Link></p>}
+        </div>
+      )}
       {open && (
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full min-w-[700px] text-base">
