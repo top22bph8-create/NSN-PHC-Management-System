@@ -738,16 +738,7 @@ exports.thaiBook = onCall({ cors: true }, async (request) => {
     tx.set(ref, { code, date, time, timeEnd: slot.end, slotKey, service, name, phone, note, status: 'ยืนยันแล้ว', confirmedBy: 'ระบบ (จองอัตโนมัติ)', source: 'online', createdAt: FieldValue.serverTimestamp() });
   });
 
-  // ส่งการ์ดเข้าไลน์กลุ่มแพทย์แผนไทยทันที และเก็บผลการส่งไว้ที่ใบจอง (notifyResult) เพื่อให้เจ้าหน้าที่เห็นสาเหตุถ้าไม่ถึงกลุ่ม
-  let notifyResult = 'ส่งเข้าไลน์กลุ่มแล้ว';
-  try {
-    const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
-    if (!enabled) notifyResult = 'ไม่ได้ส่ง: ปิดการแจ้งเตือนไลน์หลักอยู่';
-    else if (!channelAccessToken) notifyResult = 'ไม่ได้ส่ง: ยังไม่ได้ตั้ง Channel Access Token';
-    else if (!thaiTargetId) notifyResult = 'ไม่ได้ส่ง: ยังไม่ได้ตั้ง Target ID กลุ่มแพทย์แผนไทย';
-    else await pushLineOrThrow(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 มีผู้จองคิวแพทย์แผนไทย (แจ้งเพื่อทราบ)\nรหัส: ${code}\nวันที่: ${thaiDateShort(date)} เวลา ${time}-${slot.end} น.\nชื่อ: ${name}\nโทร: ${phone}\nบริการ: ${service}\nอาการ: ${note || '-'}` }]);
-  } catch (e) { console.error('thaiBook: ส่งไลน์ไม่สำเร็จ', e.message); notifyResult = `ส่งไม่สำเร็จ: ${String(e.message).slice(0, 160)}`; }
-  try { await ref.update({ notifyResult }); } catch (e) { /* ไม่กระทบการจอง */ }
+  // ไม่ส่งแจ้งเตือนรายคนเข้าไลน์ (ประหยัดโควตาข้อความ) — แพทย์แผนไทยได้รับเฉพาะ "สรุปคิววันนี้" ทุกเช้า 07:00 น. (dailyThaiSummary)
   return { ok: true, code, date, time, timeEnd: slot.end, service, name };
 });
 
@@ -888,22 +879,9 @@ async function handleThaiPatientMessage(ev) {
 }
 
 // แจ้งผู้จองอัตโนมัติเมื่อแพทย์แผนไทยยืนยัน/ปฏิเสธ (เฉพาะผู้ที่ผูกไลน์แล้ว) และอัปเดตการ์ดในกลุ่มไม่ได้ (LINE ไม่รองรับ) จึงตอบสรุปในกลุ่มแทน
-exports.onThaiBookingUpdated = onDocumentUpdated('thaiBookings/{id}', async (event) => {
-  const before = event.data.before.data(); const after = event.data.after.data();
-  if (before.status === after.status || !after.lineUserId) return;
-  if (after.status === 'ยกเลิก' && String(after.cancelledBy || '') === 'ผู้จอง') return; // ผู้จองยกเลิกเอง ไม่ต้องแจ้งซ้ำ
-  const { channelAccessToken, enabled } = await getLineSettings();
-  if (!channelAccessToken || !enabled) return;
-  const cfg = await getThaiConfig();
-  const when = `${thaiDateShort(after.date)} เวลา ${after.time}${after.timeEnd ? `-${after.timeEnd}` : ''} น.`;
-  const tel = cfg.bookingPhone || cfg.phone;
-  let text = '';
-  if (after.status === 'ยืนยันแล้ว') {
-    text = `✅ ยืนยันรับจองคิวแล้ว\n${cfg.providerName} ${cfg.providerTitle}\n\nรหัส: ${after.code}\nวันที่: ${when}\nบริการ: ${after.service}\nผู้จอง: ${after.name}\n\nกรุณามาก่อนเวลานัดประมาณ 10 นาที หากมาไม่ได้โปรดแจ้งยกเลิกล่วงหน้า โทร ${tel}`;
-  } else if (after.status === 'ยกเลิก') {
-    text = `❌ ขออภัย คลินิกไม่สะดวกรับคิวนี้\nรหัส: ${after.code}\nวันที่: ${when}\n\nกรุณาจองคิวใหม่ในวัน/เวลาอื่น หรือโทร ${tel}`;
-  } else return;
-  await pushLine(channelAccessToken, after.lineUserId, [{ type: 'text', text }]);
+exports.onThaiBookingUpdated = onDocumentUpdated('thaiBookings/{id}', async () => {
+  // ยกเลิกการแจ้งผู้จองรายคนทางไลน์เพื่อประหยัดโควตา — ไม่ส่งข้อความใดๆ (คงฟังก์ชันไว้เพื่อไม่ต้องลบตอน deploy)
+  return null;
 });
 
 // สรุปคิววันนี้เข้าไลน์กลุ่มงานแพทย์แผนไทย เวลา 07:00 น. ทุกวัน (ส่งเฉพาะวันที่มีคิว — ใช้โควตาข้อความไลน์ 1 ข้อความ/วัน)
