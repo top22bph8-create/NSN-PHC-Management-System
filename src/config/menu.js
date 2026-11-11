@@ -1,7 +1,7 @@
 import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
-  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, Ambulance, Droplets, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck, Biohazard,
+  Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, Ambulance, Droplets, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck, Biohazard, FolderOpen,
   Star,
 } from 'lucide-react';
 
@@ -121,6 +121,7 @@ export const GROUPS = [
     key: 'disease', title: 'งานส่งเสริมป้องกันโรค', emoji: '🦠', icon: Activity, tone: 'from-teal-500 to-green-600', soft: 'bg-teal-50 text-teal-700',
     items: [
       { key: 'outbreak', label: 'สอบสวนโรค & แผนที่การระบาด', path: '/outbreak', icon: Biohazard, ready: true, module: 'outbreak', tone: 'from-rose-600 to-orange-500', desc: 'เปิดเคสสอบสวนโรค บันทึกผู้ป่วย/ผู้สัมผัส วิเคราะห์ Person-Time-Place และ Epidemic Curve' },
+      { key: 'outbreak-forms', label: 'ตัวอย่างแบบฟอร์มรายงาน', path: '/outbreak/forms', icon: FolderOpen, ready: true, module: 'outbreak', tone: 'from-sky-500 to-indigo-500', desc: 'คลังไฟล์ Word/PDF แบบฟอร์มรายงานต่างๆ อัปโหลด ตั้งชื่อ เปิดดู และลบได้' },
       { key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', path: '/soon/disease', icon: Activity, ready: false },
     ],
   },
