@@ -9,6 +9,7 @@ import { exportXlsx } from '../lib/exportFile';
 import { fmtDateTime } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
+import { VILLAGES, VILLAGES_ASOF } from '../config/villages';
 
 const nf = (n) => Number(n || 0).toLocaleString('th-TH');
 const TL = { 1: '1 อยู่จริงและมีชื่อในทะเบียนบ้าน', 2: '2 อยู่จริงแต่ไม่มีชื่อในทะเบียนบ้าน', 3: '3 มีชื่อในทะเบียนบ้านแต่ไม่ได้อยู่', 4: '4 ไม่มีชื่อในทะเบียนบ้านและไม่ได้อยู่' };
@@ -34,12 +35,23 @@ export default function RightsRegistry() {
     const k = kw.trim();
     return rowsOf(open).filter((r) => (!k || r.slice(0, 4).join(' ').includes(k)) && (!hos || r[6] === hos));
   }, [docs, open, kw, hos]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vilRows = useMemo(() => {
+    const keys = ['A', 'C', ...REG.map((x) => x[0])];
+    const m = {};
+    for (const k of keys) for (const r of rowsOf(k)) { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); const no = g ? Number(g[1]) : -1; ((m[no] ||= {})[k] = (m[no][k] || 0) + 1); }
+    const reg = (v) => REG.reduce((a, x) => a + (v?.[x[0]] || 0), 0);
+    const list = VILLAGES.map((v) => ({ ...v, ...(m[v.no] || {}), pop: reg(m[v.no]) }));
+    if (m[-1]) list.push({ no: -1, name: 'ไม่ระบุหมู่/ไม่มีที่อยู่', houses: 0, households: 0, ...m[-1], pop: reg(m[-1]) });
+    return list;
+  }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!docs) return <Spinner />;
   const c = sum?.counts || {};
+  const VCOLS = [['pop', 'ประชากร (ทะเบียนราษฎร์)'], ['RUC', 'UC/Wel'], ['ROFC', 'ข้าราชการ'], ['RSSS', 'ประกันสังคม'], ['RLGO', 'อปท.'], ['RNRD', 'ต่างด้าว'], ['ROTH', 'อื่นๆ'], ['RNON', 'ไม่มีสิทธิ'], ['A', 'UC/Wel ตรง'], ['C', 'UC/Wel ไม่ตรง']];
+  const vilXlsx = () => exportXlsx(vilRows.map((v) => ({ 'หมู่ที่': v.no > 0 ? v.no : '-', 'รหัสหมู่บ้าน': v.code || '', 'ชื่อหมู่บ้าน': v.name, 'บ้าน(หลัง)': v.houses, 'ครอบครัว': v.households, ...Object.fromEntries(VCOLS.map(([k, t]) => [t, v[k] || 0])) })), 'หมู่บ้าน', 'รายงานหมู่บ้านและสิทธิ์การรักษา');
   const toXlsx = () => exportXlsx(list.map((r) => Object.fromEntries(COLS.map((h, i) => [h, r[i]]))), 'รายชื่อ', `ทะเบียนสิทธิ_${open}`);
   return (
     <div className="space-y-4">
-      <PageHeader title="ทะเบียนสิทธิ UC/Wel ตรง–ไม่ตรง" subtitle={sum ? `ข้อมูล ณ ${sum.asOf || ''} · ส่งล่าสุด ${sum.updatedAt?.toDate ? fmtDateTime(sum.updatedAt.toDate()) : ''}` : 'ยังไม่มีข้อมูล'} />
+      <PageHeader title="รายงานหมู่บ้านและสิทธิ์การรักษา (UC/Wel ตรง–ไม่ตรง)" subtitle={sum ? `ข้อมูล ณ ${sum.asOf || ''} · ส่งล่าสุด ${sum.updatedAt?.toDate ? fmtDateTime(sum.updatedAt.toDate()) : ''}` : 'ยังไม่มีข้อมูล'} />
       <SyncNowButton kinds={['rights']} className="print:hidden" />
       {sum?.reg && (
         <section className="card p-5 print:shadow-none">
@@ -57,6 +69,22 @@ export default function RightsRegistry() {
           </ul>
           <p className="mt-2 text-sm text-slate-600">รวม {nf(Object.values(sum.reg).reduce((a, b) => a + b, 0))} คน · UC = {nf(sum.regUcWel?.[0])} + WEL = {nf(sum.regUcWel?.[1])} · <span className="print:hidden">กดที่รายการเพื่อดูรายชื่อตามประเภทสิทธิ</span></p>
           <p className="text-xs text-slate-400">ประชากรตามทะเบียนราษฎร์ = ประเภทการอยู่อาศัย 1 และ 3 · ตัดผู้เสียชีวิต · สิทธิที่หมดอายุนับเป็นไร้สิทธิ</p>
+        </section>
+      )}
+      {sum && (
+        <section className="card overflow-x-auto p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold text-slate-700">หมู่บ้านในเขตรับผิดชอบ และสิทธิ์การรักษาแยกหมู่บ้าน</h3>
+            <button className="btn-outline print:hidden" onClick={vilXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+          </div>
+          <table className="w-full whitespace-nowrap text-sm">
+            <thead><tr className="border-b bg-slate-50 text-slate-500"><th className="px-2 py-1 text-left">หมู่</th><th className="px-2 py-1 text-left">หมู่บ้าน</th><th className="px-2 py-1 text-right">บ้าน(หลัง)</th><th className="px-2 py-1 text-right">ครอบครัว</th>{VCOLS.map(([k, t]) => <th key={k} className={`px-2 py-1 text-right ${k === 'A' ? 'text-emerald-700' : k === 'C' ? 'text-rose-700' : ''}`}>{t}</th>)}</tr></thead>
+            <tbody>{vilRows.map((v) => (
+              <tr key={v.no} className="border-b last:border-0 hover:bg-slate-50"><td className="px-2 py-1">{v.no > 0 ? v.no : '-'}</td><td className="px-2 py-1 font-medium">{v.name}</td><td className="px-2 py-1 text-right tabular-nums">{nf(v.houses)}</td><td className="px-2 py-1 text-right tabular-nums">{nf(v.households)}</td>{VCOLS.map(([k]) => <td key={k} className={`px-2 py-1 text-right tabular-nums ${k === 'A' ? 'text-emerald-700' : k === 'C' ? 'text-rose-700' : ''}`}>{nf(v[k])}</td>)}</tr>))}
+              <tr className="border-t-2 bg-slate-50 font-bold"><td className="px-2 py-1" colSpan={2}>รวม</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.houses, 0))}</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.households, 0))}</td>{VCOLS.map(([k]) => <td key={k} className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + (v[k] || 0), 0))}</td>)}</tr>
+            </tbody>
+          </table>
+          <p className="mt-1 text-xs text-slate-400">จำนวนบ้าน/ครอบครัวตามข้อมูลหมู่บ้านใน JHCIS ณ {VILLAGES_ASOF} · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
         </section>
       )}
       {!sum ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --rights</code></p> : (
