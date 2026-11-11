@@ -2,7 +2,7 @@ import SyncNowButton from '../components/SyncNowButton';
 // ทะเบียนสิทธิ UC/Wel ตรง-ไม่ตรง — แดชบอร์ด + รายชื่อ
 // ข้อมูลมาจากสคริปต์ที่เครื่อง JHCIS (node sync.mjs --rights) เก็บใน Firestore rightsRegistry (ชื่อ/อายุ/ที่อยู่/สถานพยาบาล ไม่มีเลขบัตร อ่านได้เฉพาะผู้ล็อกอิน)
 import { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { FileSpreadsheet, Search } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
@@ -28,6 +28,9 @@ export default function RightsRegistry() {
   const [kw, setKw] = useState('');
   const [hos, setHos] = useState('');
   useEffect(() => onSnapshot(collection(db, 'rightsRegistry'), (s) => setDocs(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setDocs([])), []);
+  const [ov, setOv] = useState({}); // กำหนดหมู่บ้านเอง: pid -> หมู่ที่ (เก็บแยกใน rightsVillageOverrides เพราะข้อมูลหลักถูกซิงก์ทับจาก JHCIS)
+  const [fix, setFix] = useState(null); // {kw, tab, busy}
+  useEffect(() => onSnapshot(collection(db, 'rightsVillageOverrides'), (s) => setOv(Object.fromEntries(s.docs.map((d) => [d.id, Number(d.data().no)]))), () => setOv({})), []);
   const sum = docs?.find((d) => d.id === 'summary');
   const rowsOf = (cat) => (docs || []).filter((d) => d.cat === cat).sort((a, b) => a.idx - b.idx).flatMap((d) => d.rows || []);
   const list = useMemo(() => {
@@ -35,16 +38,23 @@ export default function RightsRegistry() {
     const k = kw.trim();
     return rowsOf(open).filter((r) => (!k || r.slice(0, 4).join(' ').includes(k)) && (!hos || r[6] === hos));
   }, [docs, open, kw, hos]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vnoOf = (r) => { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); return g ? Number(g[1]) : (ov[r[0]] ?? -1); };
+  // คนที่ที่อยู่ไม่มีหมู่ (หรือที่เรากำหนดหมู่ให้เอง) รวมทุกประเภท ไม่ซ้ำ PID
+  const fixList = useMemo(() => {
+    const seen = new Map();
+    for (const k of ['A', 'C', ...REG.map((x) => x[0])]) for (const r of rowsOf(k)) { if (!/ม\.\d+\s*$/.test(String(r[3] || '')) && !seen.has(r[0])) seen.set(r[0], r); }
+    return [...seen.values()];
+  }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
   const vilRows = useMemo(() => {
     const keys = ['A', 'C', ...REG.map((x) => x[0])];
     const m = {};
-    for (const k of keys) for (const r of rowsOf(k)) { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); const no = g ? Number(g[1]) : -1; ((m[no] ||= {})[k] = (m[no][k] || 0) + 1); }
+    for (const k of keys) for (const r of rowsOf(k)) { const no = vnoOf(r); ((m[no] ||= {})[k] = (m[no][k] || 0) + 1); }
     const reg = (v) => REG.reduce((a, x) => a + (v?.[x[0]] || 0), 0);
     // ชื่อหมู่บ้าน/หลังคาเรือนมาจาก JHCIS ที่ซิงก์ล่าสุด (sum.villages); ถ้ายังไม่มีใช้ค่าสำรองใน config
     const live = (sum?.villages || []).map((v) => ({ ...v, households: VILLAGES.find((x) => x.no === v.no)?.households ?? 0 }));
     const base = live.length ? live : VILLAGES;
     const list = base.map((v) => ({ ...v, name: v.no === 0 ? 'นอกเขต (ใช้บันทึกคนนอกเขตฯ)' : v.name, ...(m[v.no] || {}), pop: reg(m[v.no]) }));
-    if (m[-1]) list.push({ no: -1, name: 'ไม่ระบุหมู่/ไม่มีที่อยู่', houses: 0, households: 0, ...m[-1], pop: reg(m[-1]) });
+    list.push({ no: -1, name: 'ไม่ระบุหมู่/ไม่มีที่อยู่', houses: 0, households: 0, ...(m[-1] || {}), pop: reg(m[-1]) });
     return list;
   }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!docs) return <Spinner />;
@@ -83,7 +93,7 @@ export default function RightsRegistry() {
           <table className="w-full whitespace-nowrap text-sm">
             <thead><tr className="border-b bg-slate-50 text-slate-500"><th className="px-2 py-1 text-left">หมู่</th><th className="px-2 py-1 text-left">หมู่บ้าน</th><th className="px-2 py-1 text-right">บ้าน(หลัง)</th><th className="px-2 py-1 text-right">ครอบครัว</th>{VCOLS.map(([k, t]) => <th key={k} className={`px-2 py-1 text-right ${k === 'A' ? 'text-emerald-700' : k === 'C' ? 'text-rose-700' : ''}`}>{t}</th>)}</tr></thead>
             <tbody>{vilRows.map((v) => (
-              <tr key={v.no} className="border-b last:border-0 hover:bg-slate-50"><td className="px-2 py-1">{v.no > 0 ? v.no : '-'}</td><td className="px-2 py-1 font-medium">{v.name}</td><td className="px-2 py-1 text-right tabular-nums">{nf(v.houses)}</td><td className="px-2 py-1 text-right tabular-nums">{nf(v.households)}</td>{VCOLS.map(([k]) => <td key={k} className={`px-2 py-1 text-right tabular-nums ${k === 'A' ? 'text-emerald-700' : k === 'C' ? 'text-rose-700' : ''}`}>{nf(v[k])}</td>)}</tr>))}
+              <tr key={v.no} className="border-b last:border-0 hover:bg-slate-50"><td className="px-2 py-1">{v.no > 0 ? v.no : '-'}</td><td className="px-2 py-1 font-medium">{v.no === -1 ? <button className="text-left font-medium text-sky-700 underline decoration-dotted hover:text-sky-900 print:no-underline" onClick={() => setFix({ kw: '', tab: 'todo' })}>{v.name} ✎ กำหนดหมู่บ้าน</button> : v.name}</td><td className="px-2 py-1 text-right tabular-nums">{nf(v.houses)}</td><td className="px-2 py-1 text-right tabular-nums">{nf(v.households)}</td>{VCOLS.map(([k]) => <td key={k} className={`px-2 py-1 text-right tabular-nums ${k === 'A' ? 'text-emerald-700' : k === 'C' ? 'text-rose-700' : ''}`}>{nf(v[k])}</td>)}</tr>))}
               <tr className="border-t-2 bg-slate-50 font-bold"><td className="px-2 py-1" colSpan={2}>รวม</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.houses, 0))}</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.households, 0))}</td>{VCOLS.map(([k]) => <td key={k} className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + (v[k] || 0), 0))}</td>)}</tr>
             </tbody>
           </table>
@@ -120,6 +130,31 @@ export default function RightsRegistry() {
           </section>
         </>
       )}
+      {fix && (() => {
+        const vOpts = vilRows.filter((v) => v.no >= 0);
+        const k = fix.kw.trim();
+        const rows = fixList.filter((r) => (fix.tab === 'done' ? ov[r[0]] != null : ov[r[0]] == null) && (!k || r.slice(0, 4).join(' ').includes(k)));
+        return (
+          <Modal title="กำหนดหมู่บ้านให้ผู้ที่ไม่ระบุหมู่/ไม่มีที่อยู่" onClose={() => setFix(null)} wide>
+            <p className="mb-2 text-xs text-slate-500">เลือกหมู่บ้านให้แต่ละคน ระบบจะนับเข้าหมู่นั้นในตารางทันที (เก็บแยกไว้ในเว็บ ไม่ได้แก้ในโปรแกรม JHCIS จึงไม่ถูกซิงก์ทับ — ถ้าแก้ที่อยู่ใน JHCIS ภายหลัง ระบบจะใช้ที่อยู่จาก JHCIS แทน)</p>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button className={fix.tab === 'todo' ? 'btn btn-primary' : 'btn-outline'} onClick={() => setFix({ ...fix, tab: 'todo' })}>ยังไม่กำหนด ({nf(fixList.filter((r) => ov[r[0]] == null).length)})</button>
+              <button className={fix.tab === 'done' ? 'btn btn-primary' : 'btn-outline'} onClick={() => setFix({ ...fix, tab: 'done' })}>กำหนดแล้ว ({nf(fixList.filter((r) => ov[r[0]] != null).length)})</button>
+              <div className="relative min-w-48 flex-1"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><input className="input pl-8" placeholder="ค้นหาชื่อ / PID" value={fix.kw} onChange={(e) => setFix({ ...fix, kw: e.target.value })} /></div>
+            </div>
+            <div className="max-h-[60vh] overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50"><tr><th className="px-2 py-1 text-left">เลข PID</th><th className="px-2 py-1 text-left">ชื่อ-สกุล</th><th className="px-2 py-1 text-left">อายุ</th><th className="px-2 py-1 text-left">ที่อยู่เดิม</th><th className="px-2 py-1 text-left">หมู่บ้านที่กำหนด</th></tr></thead>
+                <tbody>{rows.slice(0, 300).map((r) => (
+                  <tr key={r[0]} className="border-b"><td className="px-2 py-1">{r[0]}</td><td className="px-2 py-1">{r[1]}</td><td className="px-2 py-1">{r[2]}</td><td className="px-2 py-1 text-slate-500">{r[3] || '-'}</td>
+                    <td className="px-2 py-1"><select className="input !py-1" value={ov[r[0]] ?? ''} onChange={(e) => setVil(r[0], e.target.value)}><option value="">— เลือกหมู่บ้าน —</option>{vOpts.map((v) => <option key={v.no} value={v.no}>{v.no > 0 ? `หมู่ ${v.no} ` : ''}{v.name}</option>)}</select></td></tr>))}
+                  {!rows.length && <tr><td colSpan={5} className="p-4 text-center text-slate-500">{fix.tab === 'todo' ? 'ไม่มีรายการที่ต้องกำหนด 🎉' : 'ยังไม่มีรายการที่กำหนด'}</td></tr>}</tbody>
+              </table>
+              {rows.length > 300 && <p className="p-2 text-xs text-slate-500">แสดง 300 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง</p>}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">ในช่อง “กำหนดแล้ว” เลือก “— เลือกหมู่บ้าน —” เพื่อยกเลิกการกำหนด</p>
+          </Modal>);
+      })()}
       {open && (
         <Modal title={`${CATS[open].title}${hos ? ` — ${hos}` : ''}`} onClose={() => setOpen(null)} wide>
           <div className="mb-3 flex flex-wrap items-center gap-2">

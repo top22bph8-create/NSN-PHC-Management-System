@@ -125,6 +125,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isActive();
     }
+    // กำหนดหมู่บ้านให้ผู้ที่ไม่มีหมู่ในที่อยู่ (หน้ารายงานหมู่บ้านและสิทธิ์การรักษา) doc id = PID
+    match /rightsVillageOverrides/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /rightsRegistry/{id} {
       allow read: if isActive();
       allow write: if false;
