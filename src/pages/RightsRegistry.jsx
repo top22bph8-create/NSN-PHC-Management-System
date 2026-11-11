@@ -1,3 +1,4 @@
+import SyncNowButton from '../components/SyncNowButton';
 // ทะเบียนสิทธิ UC/Wel ตรง-ไม่ตรง — แดชบอร์ด + รายชื่อ
 // ข้อมูลมาจากสคริปต์ที่เครื่อง JHCIS (node sync.mjs --rights) เก็บใน Firestore rightsRegistry (ชื่อ/อายุ/ที่อยู่/สถานพยาบาล ไม่มีเลขบัตร อ่านได้เฉพาะผู้ล็อกอิน)
 import { useEffect, useMemo, useState } from 'react';
@@ -39,6 +40,7 @@ export default function RightsRegistry() {
   return (
     <div className="space-y-4">
       <PageHeader title="ทะเบียนสิทธิ UC/Wel ตรง–ไม่ตรง" subtitle={sum ? `ข้อมูล ณ ${sum.asOf || ''} · ส่งล่าสุด ${sum.updatedAt?.toDate ? fmtDateTime(sum.updatedAt.toDate()) : ''}` : 'ยังไม่มีข้อมูล'} />
+      <SyncNowButton kinds={['rights']} className="print:hidden" />
       {sum?.reg && (
         <section className="card p-5 print:shadow-none">
           <div className="mb-3 text-center font-bold leading-relaxed">

@@ -1,3 +1,4 @@
+import SyncNowButton from '../components/SyncNowButton';
 // รายงานผลงาน P&P Fee Schedule ปีงบประมาณ 2570 + ประมาณการเงินที่พึงได้รับจาก สปสช. + กลุ่มเป้าหมาย (ทำแล้ว/ยังไม่ทำ แยกหมู่บ้าน)
 // ตัวเลขรายเดือนมาจากสคริปต์ node sync.mjs --pp (ppFee/fy{ปี}); รายชื่อกลุ่มเป้าหมายมาจาก node sync.mjs --targets (ppTargets/*)
 // เงิน = จำนวนครั้งที่เบิกได้ (หลังจำกัดครั้งต่อคนต่อปี) × อัตราจ่ายในตาราง — เป็นการประมาณการ ไม่ใช่ยอดเบิกจ่ายจริง
@@ -111,6 +112,7 @@ export default function PPFee() {
   return (
     <div className="space-y-4">
       <PageHeader title="รายงานผลงาน P&P Fee Schedule" subtitle={cur ? `ปีงบประมาณ ${cur.fy} · ข้อมูล ณ ${cur.asOf || ''}${cur.updatedAt?.toDate ? ` · ส่งล่าสุด ${fmtDateTime(cur.updatedAt.toDate())}` : ''}` : 'ยังไม่มีข้อมูล'} actions={<button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>} />
+      <SyncNowButton kinds={['pp', 'targets']} className="print:hidden" />
       {!cur ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --pp</code></p> : (<>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex overflow-hidden rounded-lg border bg-white">{[['year', 'รายปีงบ'], ['quarter', 'รายไตรมาส'], ['month', 'รายเดือน'], ['day', 'รายวัน']].map(([k, t]) => <button key={k} className={`px-3 py-1.5 text-sm ${mode === k ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setMode(k)}>{t}</button>)}</div>

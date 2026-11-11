@@ -248,6 +248,12 @@ service cloud.firestore {
       allow create, update, delete: if isActive();
     }
     // งบประมาณตามหมวดแผนการใช้จ่ายเงินบำรุง (ตั้งต้นปี/เพิ่ม/ปรับปรุง/โอนย้ายระหว่างหมวด) — เจ้าหน้าที่ที่ล็อกอินอ่าน/เขียนได้ เช่นเดียวกับทะเบียนฎีกา
+    // คำขอ "ประมวลผลทันที" จากหน้ารายงาน (service/rights/pp/targets) และสถานะตัวรอรับคำสั่งบนเครื่อง JHCIS
+    match /syncRequests/{id} {
+      allow read: if isActive();
+      allow create, update: if isActive() && id in ['service', 'rights', 'pp', 'targets'];
+      allow delete: if false;
+    }
     match /budgetEntries/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

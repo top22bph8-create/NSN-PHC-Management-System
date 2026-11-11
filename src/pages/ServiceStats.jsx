@@ -1,3 +1,4 @@
+import SyncNowButton from '../components/SyncNowButton';
 // รายงานสถานะการให้บริการของ รพ.สต. — แดชบอร์ดรายวัน/รายเดือน/รายปี
 // ข้อมูลมาจากสคริปต์บนเครื่องที่ติดตั้ง JHCIS (tools/jhcis-sync) ส่งเฉพาะ "ตัวเลขสรุปรายวัน" เข้า Firestore คอลเล็กชัน serviceStats (ไม่มีชื่อ/เลขบัตรผู้ป่วย)
 import { useEffect, useMemo, useState } from 'react';
@@ -135,6 +136,7 @@ export default function ServiceStats() {
     <div className="mx-auto max-w-6xl p-4 lg:p-6">
       <PageHeader icon={Activity} emoji="📈" title="รายงานสถานะการให้บริการของ รพ.สต." subtitle="สรุปจำนวนผู้รับบริการจากโปรแกรม JHCIS — รายวัน รายเดือน รายปี (ตัวเลขสรุป ไม่แสดงข้อมูลผู้ป่วยรายบุคคล)"
         actions={<button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doExport}><FileSpreadsheet className="h-4 w-4" /> Excel</button>} />
+      <SyncNowButton kinds={['service']} className="print:hidden" />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {[['day', 'รายวัน'], ['range', 'ช่วงวันที่'], ['month', 'รายเดือน'], ['year', 'รายปี']].map(([k, l]) => (
           <button key={k} onClick={() => setMode(k)} className={`rounded-full px-4 py-2 text-sm font-semibold ${mode === k ? 'bg-brand-700 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50'}`}>{l}</button>

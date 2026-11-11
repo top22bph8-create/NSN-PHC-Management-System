@@ -1,3 +1,4 @@
+import SyncNowButton from '../components/SyncNowButton';
 // รายงานส่งออกกลุ่มเป้าหมายประชากร — กรองตามกลุ่มอายุ/หมู่บ้าน/เพศ/สิทธิ/สถานบริการ แล้วส่งออก Excel
 // ข้อมูลมาจาก rightsRegistry (หมวด R*: ประชากรตามทะเบียนราษฎร์ ประเภทอาศัย 1,3) ที่สคริปต์ node sync.mjs --rights ส่งมา
 // ไม่มีเลขบัตรประชาชน · เฉพาะเจ้าหน้าที่ที่ล็อกอินอ่านได้
@@ -98,6 +99,7 @@ export default function PopExport() {
     <div className="space-y-4">
       <PageHeader icon={Users} emoji="👥" title="รายงานประชากรตามเงื่อนไข" subtitle={sum ? `ประชากรตามทะเบียนราษฎร์ (ประเภทอาศัย 1,3) · ข้อมูล ณ ${sum.asOf || ''}${sum.updatedAt?.toDate ? ` · ส่งล่าสุด ${fmtDateTime(sum.updatedAt)}` : ''}` : ''}
         actions={<button className="btn bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25" onClick={doExport}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>} />
+      <SyncNowButton kinds={['rights']} className="print:hidden" />
       {!sum || people.length === 0 ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --rights</code></p> : (
         <>
           {!hasSex && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">ข้อมูลชุดนี้ยังไม่มีเพศ — ให้รัน <code>node sync.mjs --rights</code> อีกครั้งด้วยสคริปต์เวอร์ชันใหม่ ตัวกรองเพศจึงจะใช้ได้</p>}
