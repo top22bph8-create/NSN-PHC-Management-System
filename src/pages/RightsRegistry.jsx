@@ -29,6 +29,7 @@ export default function RightsRegistry() {
   const [hos, setHos] = useState('');
   useEffect(() => onSnapshot(collection(db, 'rightsRegistry'), (s) => setDocs(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setDocs([])), []);
   const [ov, setOv] = useState({}); // กำหนดหมู่บ้านเอง: pid -> หมู่ที่ (เก็บแยกใน rightsVillageOverrides เพราะข้อมูลหลักถูกซิงก์ทับจาก JHCIS)
+  const [deadOpen, setDeadOpen] = useState(false);
   const [fix, setFix] = useState(null); // {kw, tab, busy}
   useEffect(() => onSnapshot(collection(db, 'rightsVillageOverrides'), (s) => setOv(Object.fromEntries(s.docs.map((d) => [d.id, Number(d.data().no)]))), () => setOv({})), []);
   const sum = docs?.find((d) => d.id === 'summary');
@@ -100,6 +101,15 @@ export default function RightsRegistry() {
           <p className="mt-1 text-xs text-slate-400">ชื่อหมู่บ้านและจำนวนบ้านดึงจาก JHCIS ทุกครั้งที่ซิงก์ (ครอบครัวเป็นค่าที่บันทึกไว้ ณ {VILLAGES_ASOF}) · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
         </section>
       )}
+      {sum?.deadReport && (
+        <section className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <h3 className="font-bold text-slate-700">⚠️ ตายตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่ตัดตาย</h3>
+            <p className="text-xs text-slate-500">จากไฟล์ {sum.deadReport.fileName} (นำเข้า {sum.deadReport.asOf}) · คนที่บันทึกตายใน JHCIS แล้วจะหายจากรายการเองในรอบซิงก์ถัดไป</p>
+          </div>
+          <button className={`btn ${(sum.deadReport.list || []).length ? 'bg-rose-600 text-white hover:bg-rose-700' : 'btn-outline'}`} onClick={() => setDeadOpen(true)}>{nf((sum.deadReport.list || []).length)} คน — ดูรายชื่อ</button>
+        </section>
+      )}
       {!sum ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --rights</code></p> : (
         <>
           <div className="grid gap-3 md:grid-cols-3">
@@ -155,6 +165,21 @@ export default function RightsRegistry() {
             <p className="mt-2 text-xs text-slate-400">ในช่อง “กำหนดแล้ว” เลือก “— เลือกหมู่บ้าน —” เพื่อยกเลิกการกำหนด</p>
           </Modal>);
       })()}
+      {deadOpen && sum?.deadReport && (
+        <Modal title="ตายตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่ตัดตาย" onClose={() => setDeadOpen(false)} wide>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">กรุณาตรวจสอบแล้วบันทึกการตายในโปรแกรม JHCIS (ระบบนี้ไม่ได้ตัดตายให้เอง)</p>
+            <button className="btn-outline" onClick={() => exportXlsx((sum.deadReport.list || []).map((d) => ({ 'เลข PID': d.pid, 'ชื่อ-สกุล': d.name, 'อายุ': d.age, 'ที่อยู่': d.addr, 'รหัสสิทธิใน JHCIS': d.right, 'สิทธิตามไฟล์': d.newRight })), 'ยังไม่ตัดตาย', 'ตายตามไฟล์สิทธิ_JHCISยังไม่ตัดตาย')}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+          </div>
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50"><tr>{['เลข PID', 'ชื่อ-สกุล', 'อายุ', 'ที่อยู่', 'สิทธิใน JHCIS'].map((h) => <th key={h} className="px-2 py-1 text-left">{h}</th>)}</tr></thead>
+              <tbody>{(sum.deadReport.list || []).map((d) => <tr key={d.pid} className="border-b"><td className="px-2 py-1">{d.pid}</td><td className="px-2 py-1">{d.name}</td><td className="px-2 py-1">{d.age}</td><td className="px-2 py-1">{d.addr || '-'}</td><td className="px-2 py-1">{d.right || '-'}</td></tr>)}
+                {!(sum.deadReport.list || []).length && <tr><td colSpan={5} className="p-4 text-center text-slate-500">ไม่มีรายการค้างแล้ว 🎉</td></tr>}</tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
       {open && (
         <Modal title={`${CATS[open].title}${hos ? ` — ${hos}` : ''}`} onClose={() => setOpen(null)} wide>
           <div className="mb-3 flex flex-wrap items-center gap-2">

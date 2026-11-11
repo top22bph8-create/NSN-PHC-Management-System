@@ -1144,6 +1144,10 @@ npm run build
 - เส้นตาราง/สลับสีแถวใช้เฉพาะทะเบียนคุมฎีกาเบิกจ่าย ทะเบียนอื่นกลับเป็นแบบเดิม
 - ตัวเลือกปีงบประมาณและตัวกรองปี พ.ศ. มีล่วงหน้าไปถึง 2579 (นับจาก 2569 อีก 10 ปี)
 
+### v168
+- รายงานผู้ตายตามไฟล์สิทธิ์ที่ JHCIS ยังไม่ตัดตาย: `import-rights.mjs` เขียน `dead-report.json` (ไม่มีเลขบัตร) → `sync.mjs --rights` ส่งเป็น `rightsRegistry/summary.deadReport` (ตัดคนที่ตัดตายแล้วออกทุกรอบ) → การ์ดเตือน + รายชื่อ + ส่งออก Excel ในหน้า “รายงานหมู่บ้านและสิทธิ์การรักษา” (ไม่ต้อง deploy functions)
+- เครื่องมือนำเข้าไฟล์ตรวจสอบสิทธิ์ (`tools/jhcis-sync/import-rights.bat` / `import-rights.mjs` / `rights-plan.mjs`): เทียบเลขบัตรประชาชนในไฟล์ Excel กับ person ใน JHCIS → รายงาน Excel (จะเปลี่ยนสิทธิ, ตายในไฟล์แต่ JHCIS ยังไม่ตัดตาย, ไม่พบ, รหัสสิทธิไม่มีใน cright ฯลฯ) → ยืนยันแล้วอัปเดต `person.rightcode` พร้อมสำรอง CSV และ `--rollback` (ไม่บันทึกการตายใน JHCIS ให้ แค่แจ้ง)
+
 ### v167
 - แถว “ไม่ระบุหมู่/ไม่มีที่อยู่” คลิกชื่อเพื่อกำหนดหมู่บ้านให้รายคนได้ (เก็บที่ `rightsVillageOverrides/{PID}` — ต้องวาง firestore.rules ใหม่) ระบบนับเข้าหมู่นั้นในตารางทันที
 - ชื่อหมู่บ้าน + จำนวนบ้านในตารางหมู่บ้านดึงสดจาก JHCIS (ตาราง village/house) ผ่าน `sync.mjs --rights` → `rightsRegistry/summary.villages` (ต้องแทนที่ `sync.mjs` ที่ C:\\nsn-sync; ไม่ต้อง deploy functions) — ถ้ายังไม่ซิงก์ใช้ค่าสำรองใน `src/config/villages.js`
