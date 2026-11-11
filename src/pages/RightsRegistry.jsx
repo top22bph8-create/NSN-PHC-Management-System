@@ -40,7 +40,10 @@ export default function RightsRegistry() {
     const m = {};
     for (const k of keys) for (const r of rowsOf(k)) { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); const no = g ? Number(g[1]) : -1; ((m[no] ||= {})[k] = (m[no][k] || 0) + 1); }
     const reg = (v) => REG.reduce((a, x) => a + (v?.[x[0]] || 0), 0);
-    const list = VILLAGES.map((v) => ({ ...v, ...(m[v.no] || {}), pop: reg(m[v.no]) }));
+    // ชื่อหมู่บ้าน/หลังคาเรือนมาจาก JHCIS ที่ซิงก์ล่าสุด (sum.villages); ถ้ายังไม่มีใช้ค่าสำรองใน config
+    const live = (sum?.villages || []).map((v) => ({ ...v, households: VILLAGES.find((x) => x.no === v.no)?.households ?? 0 }));
+    const base = live.length ? live : VILLAGES;
+    const list = base.map((v) => ({ ...v, name: v.no === 0 ? 'นอกเขต (ใช้บันทึกคนนอกเขตฯ)' : v.name, ...(m[v.no] || {}), pop: reg(m[v.no]) }));
     if (m[-1]) list.push({ no: -1, name: 'ไม่ระบุหมู่/ไม่มีที่อยู่', houses: 0, households: 0, ...m[-1], pop: reg(m[-1]) });
     return list;
   }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -84,7 +87,7 @@ export default function RightsRegistry() {
               <tr className="border-t-2 bg-slate-50 font-bold"><td className="px-2 py-1" colSpan={2}>รวม</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.houses, 0))}</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.households, 0))}</td>{VCOLS.map(([k]) => <td key={k} className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + (v[k] || 0), 0))}</td>)}</tr>
             </tbody>
           </table>
-          <p className="mt-1 text-xs text-slate-400">จำนวนบ้าน/ครอบครัวตามข้อมูลหมู่บ้านใน JHCIS ณ {VILLAGES_ASOF} · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
+          <p className="mt-1 text-xs text-slate-400">ชื่อหมู่บ้านและจำนวนบ้านดึงจาก JHCIS ทุกครั้งที่ซิงก์ (ครอบครัวเป็นค่าที่บันทึกไว้ ณ {VILLAGES_ASOF}) · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
         </section>
       )}
       {!sum ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --rights</code></p> : (

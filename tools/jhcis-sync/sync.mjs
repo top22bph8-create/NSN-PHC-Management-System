@@ -2,6 +2,7 @@
 // ใช้งาน:  node sync.mjs --check 2026-11-04   (ดูตัวเลขของวันนั้นบนหน้าจอ ไม่ส่งขึ้นระบบ)
 //          node sync.mjs                      (ส่งย้อนหลัง N วัน ตาม config.json ค่าเริ่มต้น 7)
 //          node sync.mjs --from 2025-10-01    (ส่งย้อนหลังตั้งแต่วันที่กำหนด ถึงวันนี้)
+//          node sync.mjs --watch              (เปิดค้างไว้ รอรับคำสั่ง "ประมวลผลทันที" จากหน้ารายงานบนเว็บ)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,35 @@ const args = process.argv.slice(2);
 const argv = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// โหมดรอรับคำสั่ง:  node sync.mjs --watch   (เปิดค้างไว้บนเครื่อง JHCIS — ดับเบิลคลิก run-watch.bat)
+// ทุก 15 วินาทีถามระบบว่ามีคนกดปุ่ม "ประมวลผลทันที" บนหน้ารายงานหรือไม่ ถ้ามีจะรันซิงก์ชนิดนั้นทันทีแล้วรายงานผลกลับ
+if (args.includes('--watch')) {
+  const { spawn } = await import('node:child_process');
+  const pollUrl = cfg.pollEndpoint || String(cfg.endpoint).replace(/\/\/ingestservicestats/i, '//syncrequestpoll');
+  const FLAGS = { service: [], rights: ['--rights'], pp: ['--pp'], targets: ['--targets'] };
+  const call = async (body) => { const r = await fetch(pollUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error || ''}`); return j; };
+  const runKind = (kind) => new Promise((resolve) => {
+    let tail = ''; const p = spawn(process.execPath, [path.join(here, 'sync.mjs'), ...FLAGS[kind]], { cwd: here });
+    const keep = (b) => { tail = (tail + b.toString()).slice(-600); }; p.stdout.on('data', keep); p.stderr.on('data', keep);
+    p.on('close', (code) => resolve({ ok: code === 0, message: tail.split(/\r?\n/).filter((l) => l.trim() && !/^Node\.js v/.test(l.trim())).slice(-2).join(' | ').slice(0, 280) }));
+    p.on('error', (e) => resolve({ ok: false, message: e.message }));
+  });
+  console.log(`รอรับคำสั่ง "ประมวลผลทันที" จากระบบ… (ปิดหน้าต่างนี้เพื่อหยุด) — ${pollUrl}`);
+  for (;;) {
+    try {
+      const { pending = [] } = await call({ action: 'poll' });
+      for (const kind of pending) {
+        if (!FLAGS[kind]) continue;
+        console.log(`${new Date().toLocaleTimeString()} ได้รับคำสั่ง: ${kind} — กำลังประมวลผล`);
+        const r = await runKind(kind);
+        console.log(`  ${r.ok ? 'สำเร็จ' : 'ไม่สำเร็จ'}: ${r.message}`);
+        await call({ action: 'done', kind, ok: r.ok, message: r.ok ? '' : r.message });
+      }
+    } catch (e) { console.log(`${new Date().toLocaleTimeString()} ติดต่อระบบไม่ได้: ${e.message}`); }
+    await new Promise((r) => setTimeout(r, 15000));
+  }
+}
 
 // อ่านค่าเชื่อมต่อฐานข้อมูลจาก database.properties ของ JHCIS (อ่านในเครื่องนี้เท่านั้น ไม่ส่งออกไปไหน)
 function dbConfig() {
@@ -317,6 +347,12 @@ if (args.includes('--rights')) {
     left join chospital h on h.hoscode = p.hossub
     left join house hs on hs.pcucode = p.pcucodeperson and hs.hcode = p.hcode
     where not exists (select 1 from persondeath d where d.pid = p.pid and d.pcucodeperson = p.pcucodeperson) ${alive}`).then((r) => r[0]);
+  // รายชื่อหมู่บ้านในเขตรับผิดชอบ (ชื่อ + จำนวนหลังคาเรือน) ดึงสดจาก JHCIS ทุกครั้งที่ซิงก์
+  let villages = [];
+  try {
+    villages = (await conn.query(`select v.villcode, v.villname, count(h.hcode) houses from village v left join house h on h.villcode = v.villcode group by v.villcode, v.villname order by v.villcode`).then((r) => r[0]))
+      .map((v) => ({ no: parseInt(String(v.villcode).slice(6, 8), 10) || 0, code: String(v.villcode), name: String(v.villname || ''), houses: Number(v.houses) || 0 }));
+  } catch (e) { console.log('อ่านรายชื่อหมู่บ้านไม่สำเร็จ (ข้ามไป):', e.message); }
   await conn.end();
   const today = new Date(); const age = (b) => { if (!b) return ''; const d = new Date(b); return isNaN(d) ? '' : Math.floor((today - d) / 31557600000); };
   const nm = (r) => `${r.titlename || ''}${r.fname || ''} ${r.lname || ''}`.trim();
@@ -341,7 +377,7 @@ if (args.includes('--rights')) {
   }
   sum.counts = { A: cats.A.length, B: cats.B.length, C: cats.C.length };
   sum.hosC = Object.fromEntries(Object.entries(sum.hosC).sort((a, b) => b[1] - a[1]).slice(0, 20));
-  sum.asOf = iso(today);
+  sum.asOf = iso(today); sum.villages = villages;
   console.log(`ตรง(A)=${sum.counts.A}  นอกเขตมาขึ้นกับเรา(B)=${sum.counts.B}  ไม่ตรง(C)=${sum.counts.C}  ในเขตไม่มี UC/Wel=${sum.inAreaNoUcWel}  หมดอายุ=${sum.expired}`);
   console.log('ประชากรตามทะเบียนราษฎร์ แยกสิทธิ:', JSON.stringify(sum.reg), ' UC/Wel =', sum.regUcWel.join('/'));
   if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); process.exit(0); }
