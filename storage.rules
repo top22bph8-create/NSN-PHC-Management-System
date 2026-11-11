@@ -19,6 +19,11 @@ service firebase.storage {
       allow read, delete: if isActive();
       allow create, update: if isActive() && request.resource.size < 20 * 1024 * 1024;
     }
+    // คลังตัวอย่างแบบฟอร์มรายงาน (งานควบคุมโรค) — ไฟล์ละไม่เกิน 20 MB
+    match /outbreak-forms/{id}/{file} {
+      allow read, delete: if isActive();
+      allow create, update: if isActive() && request.resource.size < 20 * 1024 * 1024;
+    }
     match /docs/{module}/{id}/{file} {
       allow read: if isActive() && module in ['incoming', 'outgoing', 'vehicle', 'duty', 'homevisit',
                   'reg-orders', 'reg-announce', 'reg-procurement', 'reg-contract-no', 'reg-loan', 'reg-cheque', 'reg-receipt', 'reg-deeka', 'reg-certificate'];

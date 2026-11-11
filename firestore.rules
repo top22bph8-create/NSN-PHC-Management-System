@@ -82,6 +82,11 @@ service cloud.firestore {
       allow write: if false;
     }
     // โมดูลสอบสวนโรคและเฝ้าระวังทางระบาดวิทยา (เฉพาะผู้ใช้ที่ล็อกอินและเปิดใช้งานแล้ว; ไม่มีเลขบัตรประชาชน)
+    // คลังตัวอย่างแบบฟอร์มรายงาน (งานควบคุมโรค) — ข้อมูลไฟล์ที่อัปโหลด (ตัวไฟล์อยู่ใน Storage: outbreak-forms/)
+    match /reportFormSamples/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /outbreakCases/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

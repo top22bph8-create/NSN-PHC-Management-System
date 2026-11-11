@@ -45,6 +45,7 @@ import SurveyPublic from './modules/survey/SurveyPublic';
 import OutbreakHome from './modules/outbreak/OutbreakHome';
 import OutbreakMapPage from './modules/outbreak/OutbreakMapPage';
 import OutbreakCase from './modules/outbreak/OutbreakCase';
+import FormSamples from './modules/outbreak/FormSamples';
 
 function Blocked({ problem, error }) {
   const { logout, user, profile } = useAuth();
@@ -212,6 +213,7 @@ function Shell() {
           <Route path="survey" element={<Guard module="survey"><SurveyHome /></Guard>} />
           <Route path="outbreak" element={<Guard module="outbreak"><OutbreakHome /></Guard>} />
           <Route path="outbreak/map" element={<Guard module="outbreak"><OutbreakMapPage /></Guard>} />
+          <Route path="outbreak/forms" element={<Guard module="outbreak"><FormSamples /></Guard>} />
           <Route path="outbreak/:id" element={<Guard module="outbreak"><OutbreakCase /></Guard>} />
           <Route path="pop-export" element={<Guard module="pop-export"><PopExport /></Guard>} />
           <Route path="pp-fee" element={<Guard module="pp-fee"><PPFee /></Guard>} />
