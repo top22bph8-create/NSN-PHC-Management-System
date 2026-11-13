@@ -200,11 +200,12 @@ if (args.includes('--pp')) {
     { id: '12', like: '%ยาเม็ดคุมกำเนิดชนิดฮอร์โมนรวม%', cap: 5 },
     { id: '13', like: '%ยาฉีดคุมกำเนิด%', cap: 5 },
     { id: '8', like: '%Hct%', cap: 1, ageMonths: [6, 12] },
+    { id: '8', like: '%Hct%', cap: 1, ageMonths: [36, 71] }, // 3–5 ปี (PPFS69: 1 ครั้งต่อช่วงอายุ) — ต่างช่วงอายุนับแยกคนละครั้ง
     { id: '2', like: '%ขัดทำความสะอาดฟัน%', cap: 1 },
   ];
   const drugCap = {};
   for (const dr of DRUG_RULES) {
-    events[dr.id] = []; drugCap[dr.id] = dr.cap;
+    events[dr.id] ||= []; drugCap[dr.id] = dr.cap;
     const rows2 = await T(`select v.pid, date_format(v.visitdate,'%Y-%m-%d') d, max(c.rightgroup) rg from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno
       join cdrug dg on dg.drugcode = vd.drugcode left join cright c on c.rightcode = v.rightcode
       ${dr.ageMonths ? 'join person pe on pe.pcucodeperson = v.pcucodeperson and pe.pid = v.pid' : ''}
@@ -240,6 +241,14 @@ if (args.includes('--pp')) {
       and exists (select 1 from visitdiag dz where dz.pcucode = v.pcucode and dz.visitno = v.visitno and replace(dz.diagcode,'.','') like 'Z115%')
       ${sc.women ? "and pe.sex = '2' and timestampdiff(year, pe.birth, v.visitdate) between 30 and 59" : ''} group by v.pid, v.visitdate`, [PCU, from2, to2, ...sc.codes]);
     for (const r of rr) if (String(r.rg) !== '5') events[sc.id].push({ k: String(r.pid), d: r.d });
+  }
+  // เงื่อนไขความถี่ตาม สปสช.: 6 FIT ทุก 2 ปี · 15 HPV ทุก 5 ปี · 16 HBsAg / 17 HCV ครั้งเดียวตลอดชีวิต (เกิดก่อน พ.ศ. 2535) — ตัดคนที่ทำแล้วก่อนหน้านั้นออกจากยอดที่เบิกได้
+  {
+    const priorLab = async (codes, days) => new Set((await T(`select distinct v.pid from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno where v.pcucode = ? and v.visitdate < ? and v.visitdate >= date_sub(?, interval ${days} day) and l.labcode in (${codes.map(() => '?').join(',')})`, [PCU, from2, from2, ...codes])).map((r) => String(r.pid)));
+    const priorDiag = async (codes, days) => new Set((await T(`select distinct v.pid from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno where v.pcucode = ? and v.visitdate < ? and v.visitdate >= date_sub(?, interval ${days} day) and upper(replace(g.diagcode,'.','')) in (${codes.map(() => '?').join(',')})`, [PCU, from2, from2, ...codes])).map((r) => String(r.pid)));
+    const born = new Map((await T('select pid, birth from person where pcucodeperson = ?', [PCU])).map((r) => [String(r.pid), r.birth]));
+    const drop = { '6': await priorDiag(['Z121'], 730), '15': await priorLab(['CY1000HPV1'], 1825), '16': await priorLab(['SE1100', 'SE_HBsAg'], 36500), '17': await priorLab(['SE1400', 'SE_HCV'], 36500) };
+    for (const id of Object.keys(drop)) events[id] = (events[id] || []).filter((ev) => !drop[id].has(String(ev.k)) && (!['16', '17'].includes(id) || (born.get(String(ev.k)) && iso(new Date(born.get(String(ev.k)))) < '1992-01-01')));
   }
   const capFor = (id) => (id === '1' ? 8 : id === '18' ? Infinity : drugCap[id] || RULES.find((r) => r.id === id).cap);
   const months = {}; const days = {}; const tot = {};
@@ -324,6 +333,67 @@ if (args.includes('--targets')) {
     for (const g of preg) { const r = P.get(String(g.pid)); if (!r) continue; const c = cnt[`${g.pid}_${g.pregno}`]; const n = c ? Number(c.n) : 0;
       rows.push(mk(r, n >= 8 ? 'done' : n > 0 ? 'partial' : 'todo', n ? `ฝากครรภ์ ${n}/8 ครั้ง (ล่าสุด ${c.d}) · กำหนดคลอด ${g.edc}` : `ยังไม่เคยฝากครรภ์ · กำหนดคลอด ${g.edc}`, ageY(r.birth))); }
     add('1', 'TANC', 'ฝากครรภ์ ANC 1–8 ครั้ง', 'หญิงตั้งครรภ์ปัจจุบัน (กำหนดคลอดยังไม่เกิน 45 วัน) — ทำแล้ว = ฝากครรภ์ครบ 8 ครั้ง', rows); }
+  // ===== เป้าหมายเพิ่ม (หลักเกณฑ์ สปสช. PPFS69) =====
+  const lastLab = async (codes, since) => { const m = new Map(); for (const r of await T(`select v.pid, date_format(max(v.visitdate),'%Y-%m-%d') d from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno
+      where v.pcucode = ? and v.visitdate >= ? and l.labcode in (${codes.map(() => '?').join(',')}) group by v.pid`, [PCU, since, ...codes])) m.set(String(r.pid), r.d); return m; };
+  const cntDiag = async (codes, since) => { const m = new Map(); for (const r of await T(`select v.pid, count(distinct v.visitdate) n from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno
+      where v.pcucode = ? and v.visitdate >= ? and ${SVC} and upper(replace(g.diagcode,'.','')) in (${codes.map(() => '?').join(',')}) group by v.pid`, [PCU, since, ...codes])) m.set(String(r.pid), Number(r.n)); return m; };
+  const cntLab = async (codes, since) => { const m = new Map(); for (const r of await T(`select v.pid, count(distinct v.visitdate) n from visitlabchcyhembmsse l join visit v on v.pcucode = l.pcucode and v.visitno = l.visitno
+      where v.pcucode = ? and v.visitdate >= ? and l.labcode in (${codes.map(() => '?').join(',')}) group by v.pid`, [PCU, since, ...codes])) m.set(String(r.pid), Number(r.n)); return m; };
+  const addM = (b, n) => { const d = new Date(b); d.setMonth(d.getMonth() + n); return iso(d); };
+  const pregNow = await T(`select pid, pregno, date_format(edc,'%Y-%m-%d') edc, date_format(lmp,'%Y-%m-%d') lmp from visitancpregnancy where lmp >= date_sub(curdate(), interval 300 day) and edc >= date_sub(curdate(), interval 45 day)`);
+  const pregPost = await T(`select pid, pregno, date_format(edc,'%Y-%m-%d') edc from visitancpregnancy where edc between date_sub(curdate(), interval 98 day) and curdate()`);
+  const pregSet = new Set([...pregNow, ...pregPost].map((g) => String(g.pid)));
+  // 2) ขัดฟันหญิงตั้งครรภ์ (ชื่อรายการ "ขัดทำความสะอาดฟัน") — 1 ครั้ง/การตั้งครรภ์
+  { const teeth = new Map(); for (const r of await T(`select v.pid, date_format(max(v.visitdate),'%Y-%m-%d') d from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno join cdrug dg on dg.drugcode = vd.drugcode
+      where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 300 day) and dg.drugname like '%ขัดทำความสะอาดฟัน%' group by v.pid`, [PCU])) teeth.set(String(r.pid), r.d);
+    const rows = []; for (const g of pregNow) { const r = P.get(String(g.pid)); if (!r) continue; const d = teeth.get(String(g.pid)); rows.push(d ? mk(r, 'done', `ขัดฟันแล้ว ${d}`, ageY(r.birth)) : mk(r, 'todo', `ยังไม่ได้ขัดฟัน · กำหนดคลอด ${g.edc}`, ageY(r.birth))); }
+    add('2', 'TTEETH', 'ขัดฟันหญิงตั้งครรภ์', 'หญิงตั้งครรภ์ปัจจุบัน — ทำแล้ว = มีรายการขัดทำความสะอาดฟันในครรภ์นี้', rows); }
+  // 4) PNC และ 5) Triferdine: หญิงหลังคลอด (ประมาณจากกำหนดคลอด EDC ย้อนหลัง 14 สัปดาห์)
+  { const pnc = await cntDiag(['Z390', 'Z391', 'Z392'], dAgo(130)); const tri = await cntDiag(['Z392'], dAgo(130)); const r4 = []; const r5 = [];
+    for (const g of pregPost) { const r = P.get(String(g.pid)); if (!r) continue; const n = pnc.get(String(g.pid)) || 0; const t = tri.get(String(g.pid)) || 0;
+      r4.push(mk(r, n >= 3 ? 'done' : n > 0 ? 'partial' : 'todo', `ตรวจหลังคลอด ${n}/3 ครั้ง · กำหนดคลอด ${g.edc}`, ageY(r.birth)));
+      r5.push(mk(r, t >= 1 ? 'done' : 'todo', t ? `ได้รับ Triferdine ${t} ครั้ง · กำหนดคลอด ${g.edc}` : `ยังไม่ได้รับ · กำหนดคลอด ${g.edc}`, ageY(r.birth))); }
+    add('4', 'TPNC', 'ตรวจหลังคลอด PNC', 'หญิงหลังคลอด (ประมาณจากกำหนดคลอด ย้อนหลัง 14 สัปดาห์) — ครบเมื่อมีรหัส Z39.0–Z39.2 ครบ 3 ครั้ง', r4);
+    add('5', 'TTRI', 'Triferdine หลังคลอด', 'หญิงหลังคลอดกลุ่มเดียวกับข้อ 4 — ทำแล้ว = มีรหัส Z39.2 อย่างน้อย 1 ครั้ง', r5); }
+  // 7) Ferrofolic หญิง 13–45 ปี (ไม่รวมตั้งครรภ์/หลังคลอด) ปีละ 1 ครั้ง
+  { const served = await lastDiag(['Z130'], fyStart); const rows = [];
+    for (const r of P.values()) { if (String(r.sex) !== '2' || pregSet.has(String(r.pid))) continue; const a = ageY(r.birth); if (a >= 13 && a <= 45) rows.push(served.has(String(r.pid)) ? mk(r, 'done', `ได้รับ ${served.get(String(r.pid))}`, a) : mk(r, 'todo', 'ยังไม่ได้รับในปีงบนี้', a)); }
+    add('7', 'TFE', 'ยาเม็ดเสริมธาตุเหล็ก Ferrofolic หญิง 13–45 ปี', 'หญิงอายุ 13–45 ปี (ไม่รวมตั้งครรภ์/หลังคลอด) ปีละ 1 ครั้ง — ทำแล้ว = มีรหัส Z13.0 ในปีงบนี้', rows); }
+  // 8) Hct เด็ก 6–12 เดือน และ 3–5 ปี (1 ครั้งต่อช่วงอายุ)
+  { const hct = new Map(); for (const r of await T(`select v.pid, date_format(max(v.visitdate),'%Y-%m-%d') d from visitdrug vd join visit v on v.pcucode = vd.pcucode and v.visitno = vd.visitno join cdrug dg on dg.drugcode = vd.drugcode
+      where v.pcucode = ? and v.visitdate >= date_sub(curdate(), interval 6 year) and dg.drugname like '%Hct%' group by v.pid`, [PCU])) hct.set(String(r.pid), r.d);
+    const rows = [];
+    for (const r of P.values()) { const m = ageM(r.birth); if (m == null) continue; const band = m >= 6 && m <= 12 ? 6 : m >= 36 && m <= 71 ? 36 : 0; if (!band) continue;
+      const d = hct.get(String(r.pid)); const ok = d && d >= addM(r.birth, band); const age = m < 36 ? `${m} เดือน` : `${Math.floor(m / 12)} ปี`;
+      rows.push(ok ? mk(r, 'done', `ตรวจ Hct ${d}`, age) : mk(r, 'todo', 'ยังไม่ได้ตรวจ Hct ในช่วงอายุนี้', age)); }
+    add('8', 'THCT', 'คัดกรองโลหิตจาง (Hct) เด็ก', 'เด็ก 6–12 เดือน และ 3–5 ปี — 1 ครั้งต่อช่วงอายุ (นับจากรายการ Hct)', rows); }
+  // 15) HPV หญิง 30–59 ปี ทุก 5 ปี
+  { const served = await lastLab(['CY1000HPV1'], dAgo(1825)); const rows = [];
+    for (const r of P.values()) { if (String(r.sex) !== '2') continue; const a = ageY(r.birth); if (a >= 30 && a <= 59) rows.push(served.has(String(r.pid)) ? mk(r, 'done', `ตรวจ HPV ${served.get(String(r.pid))}`, a) : mk(r, 'todo', 'ยังไม่มีผลตรวจ HPV ใน 5 ปี', a)); }
+    add('15', 'THPV', 'คัดกรอง HPV', 'หญิงอายุ 30–59 ปี ทุก 5 ปี — ทำแล้ว = มีผลแล็บ HPV (CY1000HPV1) ใน 5 ปีล่าสุด', rows); }
+  // 16–17) ตับอักเสบบี/ซี: เกิดก่อน พ.ศ. 2535 (ค.ศ. 1992) ครั้งเดียวตลอดชีวิต
+  for (const sc of [{ id: '16', cat: 'THBS', nm: 'คัดกรองไวรัสตับอักเสบบี (HBsAg)', codes: ['SE1100', 'SE_HBsAg'], rule: 'เกิดก่อน พ.ศ. 2535 — ครั้งเดียวตลอดชีวิต (ทำแล้ว = เคยมีผล HBsAg ใน JHCIS)' },
+    { id: '17', cat: 'THCV', nm: 'คัดกรองไวรัสตับอักเสบซี (Anti-HCV)', codes: ['SE1400', 'SE_HCV'], rule: 'เกิดก่อน พ.ศ. 2535 (และกลุ่มเสี่ยง) — ทำแล้ว = เคยมีผล Anti-HCV ใน JHCIS' }]) {
+    const served = await lastLab(sc.codes, '1990-01-01'); const rows = [];
+    for (const r of P.values()) { if (!r.birth || iso(new Date(r.birth)) >= '1992-01-01') continue; const a = ageY(r.birth); rows.push(served.has(String(r.pid)) ? mk(r, 'done', `ตรวจแล้ว ${served.get(String(r.pid))}`, a) : mk(r, 'todo', 'ยังไม่เคยตรวจ', a)); }
+    add(sc.id, sc.cat, sc.nm, sc.rule, rows); }
+  // 19) dT อายุ 25 ปีขึ้นไป — ภายใน 10 ปี
+  { const served = await lastDiag(['Z235', 'Z236'], dAgo(3650)); const rows = [];
+    for (const r of P.values()) { const a = ageY(r.birth); if (a >= 25) rows.push(served.has(String(r.pid)) ? mk(r, 'done', `ได้รับ ${served.get(String(r.pid))}`, a) : mk(r, 'todo', 'ไม่มีบันทึก dT ใน 10 ปี', a)); }
+    add('19', 'TDT', 'วัคซีน dT', 'อายุ 25 ปีขึ้นไป — ทำแล้ว = มีรหัส Z23.5/Z23.6 ภายใน 10 ปีล่าสุด', rows); }
+  // 20) DM type 2 สิทธิ UC ตรวจ HbA1c (CH99) ปีละ 2 ครั้ง
+  { const dm = new Set((await T(`select distinct v.pid from visitdiag d join visit v on v.pcucode = d.pcucode and v.visitno = d.visitno where v.pcucode = ? and d.diagcode like 'E11%' and v.visitdate >= date_sub(curdate(), interval 3 year)`, [PCU])).map((r) => String(r.pid)));
+    const uc = new Set((await T(`select p.pid from person p join cright c on c.rightcode = p.rightcode where p.pcucodeperson = ? and c.rightgroup = '3'`, [PCU])).map((r) => String(r.pid)));
+    const n = await cntLab(['CH99'], fyStart); const rows = [];
+    for (const pid of dm) { const r = P.get(pid); if (!r || !uc.has(pid)) continue; const c = n.get(pid) || 0; rows.push(mk(r, c >= 2 ? 'done' : c === 1 ? 'partial' : 'todo', `ตรวจ HbA1c ${c}/2 ครั้งในปีงบนี้`, ageY(r.birth))); }
+    add('20', 'THBA', 'ผู้ป่วย DM type 2 ตรวจ HbA1c', 'ผู้ป่วย DM (E11) สิทธิ UC — ครบเมื่อตรวจ HbA1c 2 ครั้งในปีงบ', rows); }
+  // 21) HT รายใหม่ในปีงบ ตรวจ Creatinine (CH09) + Potassium (CH19)
+  { const newHt = await T(`select v.pid from visitdiag d join visit v on v.pcucode = d.pcucode and v.visitno = d.visitno where v.pcucode = ? and d.diagcode like 'I10%' group by v.pid having min(v.visitdate) >= ?`, [PCU, fyStart]);
+    const cr = await cntLab(['CH09'], fyStart); const k = await cntLab(['CH19'], fyStart); const rows = [];
+    for (const x of newHt) { const pid = String(x.pid); const r = P.get(pid); if (!r) continue; const a = cr.get(pid) ? 1 : 0; const b = k.get(pid) ? 1 : 0;
+      rows.push(mk(r, a && b ? 'done' : a || b ? 'partial' : 'todo', `Creatinine ${a ? '✓' : '✗'} · Potassium ${b ? '✓' : '✗'}`, ageY(r.birth))); }
+    add('21', 'THTN', 'HT รายใหม่ ตรวจ Cr + K', 'ผู้ป่วย HT รายใหม่ในปีงบ — ครบเมื่อตรวจ Creatinine และ Potassium ทั้งคู่', rows); }
   for (const [id, a] of Object.entries(acts)) console.log(`ข้อ ${id} ${a.name}: เป้าหมาย ${a.total} · ทำแล้ว ${a.done} · ทำบางส่วน ${a.partial} · ยังไม่ทำ ${a.todo}`);
   if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); await conn.end(); process.exit(0); }
   await conn.end();
@@ -353,6 +423,14 @@ if (args.includes('--rights')) {
     villages = (await conn.query(`select v.villcode, v.villname, count(h.hcode) houses from village v left join house h on h.villcode = v.villcode group by v.villcode, v.villname order by v.villcode`).then((r) => r[0]))
       .map((v) => ({ no: parseInt(String(v.villcode).slice(6, 8), 10) || 0, code: String(v.villcode), name: String(v.villname || ''), houses: Number(v.houses) || 0 }));
   } catch (e) { console.log('อ่านรายชื่อหมู่บ้านไม่สำเร็จ (ข้ามไป):', e.message); }
+  // รายงานผู้ตายตามไฟล์ตรวจสอบสิทธิ์ที่ JHCIS ยังไม่ตัดตาย (จาก import-rights.mjs) — ตัดคนที่ถูกบันทึกตายแล้วออกทุกครั้ง
+  let deadReport = null;
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(here, 'dead-report.json'), 'utf8'));
+    const pids = (j.list || []).map((x) => x.pid);
+    if (pids.length) { const [d] = await conn.query('select pid from persondeath where pcucodeperson = ? and pid in (?)', [PCU, pids]); const dead = new Set(d.map((r) => String(r.pid))); j.list = j.list.filter((x) => !dead.has(String(x.pid))); }
+    deadReport = j;
+  } catch { /* ยังไม่มีไฟล์ dead-report.json */ }
   await conn.end();
   const today = new Date(); const age = (b) => { if (!b) return ''; const d = new Date(b); return isNaN(d) ? '' : Math.floor((today - d) / 31557600000); };
   const nm = (r) => `${r.titlename || ''}${r.fname || ''} ${r.lname || ''}`.trim();
@@ -377,7 +455,7 @@ if (args.includes('--rights')) {
   }
   sum.counts = { A: cats.A.length, B: cats.B.length, C: cats.C.length };
   sum.hosC = Object.fromEntries(Object.entries(sum.hosC).sort((a, b) => b[1] - a[1]).slice(0, 20));
-  sum.asOf = iso(today); sum.villages = villages;
+  sum.asOf = iso(today); sum.villages = villages; sum.deadReport = deadReport;
   console.log(`ตรง(A)=${sum.counts.A}  นอกเขตมาขึ้นกับเรา(B)=${sum.counts.B}  ไม่ตรง(C)=${sum.counts.C}  ในเขตไม่มี UC/Wel=${sum.inAreaNoUcWel}  หมดอายุ=${sum.expired}`);
   console.log('ประชากรตามทะเบียนราษฎร์ แยกสิทธิ:', JSON.stringify(sum.reg), ' UC/Wel =', sum.regUcWel.join('/'));
   if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); process.exit(0); }

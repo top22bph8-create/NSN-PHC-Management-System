@@ -7,7 +7,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { ChevronDown, ChevronRight, FileSpreadsheet, Search, Users } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
-import { FEE_ACTS, QUARTERS, fyMonths, money } from '../lib/ppFee';
+import { FEE_ACTS, FEE_TARGETS, QUARTERS, fyMonths, money } from '../lib/ppFee';
 import { fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { PageHeader } from '../components/Logo';
@@ -24,7 +24,7 @@ const CATS = [
   { k: 'scr', t: 'คัดกรองและโรคเรื้อรัง', ids: ['6', '15', '16', '17', '20', '21'], head: 'bg-emerald-50 text-emerald-800 border-emerald-300', chip: 'bg-emerald-100 text-emerald-700', bar: 'from-emerald-500 to-emerald-300' },
   { k: 'den', t: 'ทันตกรรม', ids: ['10'], head: 'bg-teal-50 text-teal-800 border-teal-300', chip: 'bg-teal-100 text-teal-700', bar: 'from-teal-500 to-teal-300' },
 ];
-const TARGET_CAT = { 1: 'TANC', 6: 'TFIT', 9: 'TCH', 14: 'TFLU' }; // กิจกรรมที่มีรายชื่อกลุ่มเป้าหมาย
+const TARGET_CAT = Object.fromEntries(Object.entries(FEE_TARGETS).filter(([, v]) => v.cat).map(([k, v]) => [k, v.cat])); // กิจกรรมที่มีรายชื่อกลุ่มเป้าหมาย
 const STT = { done: ['ทำแล้ว', 'bg-emerald-100 text-emerald-700'], partial: ['ทำบางส่วน', 'bg-amber-100 text-amber-800'], todo: ['ยังไม่ทำ', 'bg-rose-100 text-rose-700'] };
 
 function TargetModal({ id, act, tdocs, onClose }) {
@@ -153,11 +153,11 @@ export default function PPFee() {
                       <td className="px-2">{TARGET_CAT[a.id] ? (ti ? (
                         <button onClick={() => setTgt(a.id)} className="w-full text-left"><div className="flex justify-between text-xs"><span className="text-emerald-700">ทำแล้ว {nf(ti.done)}</span><span className="text-rose-600">ยังไม่ทำ {nf(ti.todo)}</span></div>
                           <div className="my-0.5 flex h-2 overflow-hidden rounded-full bg-rose-100"><div className="bg-emerald-500" style={{ width: `${ti.total ? (ti.done / ti.total) * 100 : 0}%` }} /><div className="bg-amber-400" style={{ width: `${ti.total ? (ti.partial / ti.total) * 100 : 0}%` }} /></div>
-                          <div className="flex items-center gap-1 text-xs text-sky-700"><Users className="h-3 w-3" /> ดูรายชื่อ ({nf(ti.total)})</div></button>) : <span className="text-xs text-slate-300">รอข้อมูล</span>) : <span className="text-xs text-slate-300">–</span>}</td>
+                          <div className="flex items-center gap-1 text-xs text-sky-700"><Users className="h-3 w-3" /> ดูรายชื่อ ({nf(ti.total)})</div></button>) : <span className="text-xs text-slate-300">รอข้อมูล</span>) : <span className="text-xs text-slate-500" title={FEE_TARGETS[a.id]?.none}>ตามความต้องการ</span>}</td>
                     </tr>
                     {isOpen && <tr className="border-b bg-slate-50/70"><td /><td colSpan={5} className="px-2 py-2"><div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
                       <span><b className="text-slate-500">สิทธิ:</b> {a.right}</span><span><b className="text-slate-500">รหัส NDP:</b> {a.ndp}</span><span><b className="text-slate-500">ICD-10:</b> {a.icd}</span><span><b className="text-slate-500">สูงสุด/คน:</b> {a.cap}</span>
-                      {auto && <><span><b className="text-slate-500">บันทึกใน JHCIS:</b> {nf(n)} ครั้ง</span><span><b className="text-slate-500">นับจาก:</b> {a.src}</span></>}{a.unit && <span><b className="text-slate-500">หน่วย:</b> {a.unit}</span>}</div></td></tr>}
+                      {auto && <><span><b className="text-slate-500">บันทึกใน JHCIS:</b> {nf(n)} ครั้ง</span><span><b className="text-slate-500">นับจาก:</b> {a.src}</span></>}{a.unit && <span><b className="text-slate-500">หน่วย:</b> {a.unit}</span>}<span className="basis-full"><b className="text-slate-500">เป้าหมาย/เงื่อนไข:</b> {FEE_TARGETS[a.id]?.rule || FEE_TARGETS[a.id]?.none || '-'}</span></div></td></tr>}
                   </Fragment>);
                 })}
               </Fragment>);
