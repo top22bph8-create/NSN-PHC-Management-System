@@ -3,6 +3,7 @@
 export const AGE_GROUPS = [
   { key: '15-34', label: '15–34 ปี', min: 15, max: 34 },
   { key: '35-59', label: '35–59 ปี', min: 35, max: 59 },
+  { key: '60+', label: '60 ปีขึ้นไป', min: 60, max: 130 },
 ];
 
 export const ageFromBirth = (birth, on = new Date()) => {
@@ -75,24 +76,82 @@ export const lifestyleRisks = (r) => {
   if (r.veg === 'low') out.push('กินผักผลไม้น้อย');
   return out;
 };
-export const riskFactors = (r) => [...metabolicRisks(r), ...lifestyleRisks(r)];
+// สุขภาพจิต/สารเสพติด (ตามรายการคัดกรองของ สปสช. ข้อ 20: ความเครียดและซึมเศร้า บุหรี่ สารเสพติด)
+// 2Q: ตอบ "มี" ข้อใดข้อหนึ่ง = ผิดปกติ (ควรประเมินต่อด้วย 9Q) · ST-5 รวม 0–15
+export function classify2Q(a, b) {
+  if (a === '' || a == null || b === '' || b == null) return null;
+  return a || b ? { key: 'positive', label: '2Q ผิดปกติ (ควรประเมิน 9Q)', tone: 'bg-orange-100 text-orange-800', pp: '1B0211' } : { key: 'normal', label: '2Q ปกติ', tone: 'bg-emerald-100 text-emerald-800', pp: '1B0210' };
+}
+export function classifySt5(v) {
+  if (v === '' || v == null || Number.isNaN(Number(v))) return null;
+  const n = Number(v);
+  if (n <= 4) return { key: 'low', label: 'เครียดน้อย', tone: 'bg-emerald-100 text-emerald-800' };
+  if (n <= 7) return { key: 'mid', label: 'เครียดปานกลาง', tone: 'bg-yellow-100 text-yellow-800' };
+  if (n <= 9) return { key: 'high', label: 'เครียดมาก', tone: 'bg-orange-100 text-orange-800' };
+  return { key: 'severe', label: 'เครียดมากที่สุด', tone: 'bg-red-100 text-red-800' };
+}
+// ความเสี่ยงโรคหัวใจและหลอดเลือด (% จากโปรแกรม Thai CV risk — กรอกค่าที่คำนวณได้)
+export function classifyCvd(v) {
+  if (v === '' || v == null || Number.isNaN(Number(v))) return null;
+  const n = Number(v);
+  if (n < 10) return { key: 'low', label: 'เสี่ยงต่ำ', tone: 'bg-emerald-100 text-emerald-800' };
+  if (n < 20) return { key: 'mid', label: 'เสี่ยงปานกลาง', tone: 'bg-yellow-100 text-yellow-800' };
+  if (n < 30) return { key: 'high', label: 'เสี่ยงสูง', tone: 'bg-orange-100 text-orange-800' };
+  return { key: 'vhigh', label: 'เสี่ยงสูงมาก', tone: 'bg-red-100 text-red-800' };
+}
+export const needCvd = (age) => age != null && age >= 35 && age <= 59;
+export const needLipid = (age) => age != null && age >= 45 && age <= 70;
+export const COUNSEL = [['food', 'อาหาร (ลดหวาน มัน เค็ม)'], ['exercise', 'ออกกำลังกาย'], ['smoke', 'เลิกบุหรี่'], ['alcohol', 'ลดเครื่องดื่มแอลกอฮอล์'], ['stress', 'จัดการความเครียด']];
+// รหัส Specialpp ที่ควรบันทึกใน JHCIS (ใช้เป็นรายการช่วยจำ/เตรียมเขียนกลับ — ยังไม่ได้เขียนอัตโนมัติ)
+export function ppCodes(r) {
+  const out = [];
+  const q = classify2Q(r.q2a, r.q2b); if (q) out.push(q.pp);
+  if (r.smokeStatus === 'never') out.push('1B52'); else if (r.smokeStatus === 'former') out.push('1B51'); else if (r.smokeStatus === 'current') out.push('1B509');
+  if (r.alcoholFreq === 'none') out.push('1B600'); else if (r.alcoholFreq === 'sometimes' || r.alcoholFreq === 'regular') out.push('1B609');
+  return out;
+}
+// ครบรายการตามเงื่อนไข สปสช. ข้อ 20 (อายุ 15–59 ปี) → ควรคีย์ค่าบริการ 12001 (100 บาท) ใน JHCIS ด้วยมือ
+export function feeStatus(r) {
+  const age = r.age ?? ageFromBirth(r.birthDate);
+  if (age == null || age < 15 || age > 59) return { eligible: false, missing: [], note: 'อายุนอกช่วงเบิก 15–59 ปี' };
+  const missing = [];
+  if (!(Number(r.sbp1) > 0 && Number(r.dbp1) > 0)) missing.push('BP');
+  if (!(Number(r.weight) > 0 && Number(r.height) > 0)) missing.push('BMI');
+  if (classify2Q(r.q2a, r.q2b) == null) missing.push('2Q');
+  if (classifySt5(r.st5) == null) missing.push('ST-5');
+  if (!r.smokeStatus) missing.push('บุหรี่');
+  if (!r.alcoholFreq) missing.push('สุรา');
+  if (!r.drug) missing.push('สารเสพติด');
+  if (age >= 35 && r.glucose === '' ) missing.push('น้ำตาล');
+  return { eligible: !missing.length, missing, code: age <= 34 ? '12001' : '12001' };
+}
+export const mentalRisks = (r) => {
+  const out = []; const q = classify2Q(r.q2a, r.q2b); const t = classifySt5(r.st5);
+  if (q?.key === 'positive') out.push('2Q ผิดปกติ');
+  if (t && (t.key === 'high' || t.key === 'severe')) out.push(`ST-5 ${r.st5} (${t.label})`);
+  if (r.drug === 'yes') out.push('ใช้สารเสพติด');
+  return out;
+};
+export const riskFactors = (r) => [...metabolicRisks(r), ...lifestyleRisks(r), ...mentalRisks(r)];
 // เจาะน้ำตาลหรือไม่: 35–59 ปีเจาะทุกคน, 15–34 ปีเจาะเมื่อมีปัจจัยเสี่ยงทางร่างกาย/ประวัติ
 export function needGlucose(age, r) {
   const g = ageGroupOf(age);
   if (g === '35-59') return { need: true, why: 'อายุ 35–59 ปี เจาะน้ำตาลทุกคน' };
+  if (g === '60+') return { need: true, why: 'อายุ 60 ปีขึ้นไป เจาะน้ำตาลทุกคน (ใช้เกณฑ์เดียวกับ 35+)' };
   if (g === '15-34') {
     const f = metabolicRisks(r);
     return f.length ? { need: true, why: `มีปัจจัยเสี่ยง: ${f.join(', ')}` } : { need: false, why: 'อายุ 15–34 ปี ไม่มีปัจจัยเสี่ยง ไม่ต้องเจาะน้ำตาล' };
   }
-  return { need: false, why: 'อายุนอกช่วงคัดกรอง (15–59 ปี)' };
+  return { need: false, why: 'อายุต่ำกว่า 15 ปี ไม่อยู่ในกลุ่มคัดกรอง' };
 }
 export const SYMPTOMS = [['polyuria', 'ปัสสาวะบ่อย/กลางคืน'], ['polydipsia', 'กระหายน้ำมาก'], ['weightloss', 'น้ำหนักลดโดยไม่ทราบสาเหตุ'], ['headache', 'ปวดศีรษะ/เวียนศีรษะบ่อย'], ['blurred', 'ตามัว'], ['numb', 'ชาปลายมือปลายเท้า']];
 // คำแนะนำตามผลสรุป (เบื้องต้น — ใช้ดุลยพินิจเจ้าหน้าที่ประกอบ)
 export function adviceFor(ov, r) {
   const base = ['ออกกำลังกายสม่ำเสมอ อย่างน้อย 150 นาที/สัปดาห์', 'ลดหวาน มัน เค็ม กินผักผลไม้ให้มาก', 'งดสูบบุหรี่ ลดเครื่องดื่มแอลกอฮอล์'];
-  if (ov?.key === 'suspect') return ['นัดตรวจยืนยัน/ส่งพบแพทย์ภายใน 1–2 สัปดาห์ (ตามดุลยพินิจเจ้าหน้าที่)', 'งดอาหารมื้อเย็นก่อนวันตรวจยืนยันหากต้องเจาะเลือดอดอาหาร', ...base.slice(0, 2)];
-  if (ov?.key === 'risk') return ['ปรับพฤติกรรมตามหลัก 3อ. 2ส. และติดตามน้ำหนัก/รอบเอว', 'วัดความดัน/ตรวจน้ำตาลซ้ำภายใน 3–6 เดือน', ...base];
-  return ['ผลปกติ คัดกรองซ้ำทุกปี', ...base];
+  const mental = mentalRisks(r || {}).length ? ['พบความเสี่ยงสุขภาพจิต/สารเสพติด: ให้คำปรึกษา ประเมิน 9Q หรือส่งต่อตามแนวทาง'] : [];
+  if (ov?.key === 'suspect') return [...mental, 'นัดตรวจยืนยัน/ส่งพบแพทย์ภายใน 1–2 สัปดาห์ (ตามดุลยพินิจเจ้าหน้าที่)', 'งดอาหารมื้อเย็นก่อนวันตรวจยืนยันหากต้องเจาะเลือดอดอาหาร', ...base.slice(0, 2)];
+  if (ov?.key === 'risk') return [...mental, 'ปรับพฤติกรรมตามหลัก 3อ. 2ส. และติดตามน้ำหนัก/รอบเอว', 'วัดความดัน/ตรวจน้ำตาลซ้ำภายใน 3–6 เดือน', ...base];
+  return [...mental, 'ผลปกติ คัดกรองซ้ำทุกปี', ...base];
 }
 
 // สรุปผลรวมของคนหนึ่ง: 0 ปกติ · 1 เสี่ยง · 2 สงสัย (ส่งต่อ)

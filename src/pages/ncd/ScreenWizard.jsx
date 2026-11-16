@@ -8,10 +8,10 @@ import { writeAudit } from '../../lib/audit';
 import { todayStr } from '../../lib/thai';
 import ThaiDateInput from '../../components/ThaiDateInput';
 import { Badge } from '../../components/ui';
-import { SYMPTOMS, adviceFor, ageFromBirth, ageGroupOf, calcBmi, classifyBp, classifyGlucose, lifestyleRisks, metabolicRisks, needGlucose, overall, riskFactors, validCid, waistOver } from '../../lib/ncdScreen';
+import { COUNSEL, SYMPTOMS, adviceFor, ageFromBirth, ageGroupOf, calcBmi, classify2Q, classifyBp, classifyCvd, classifyGlucose, classifySt5, feeStatus, lifestyleRisks, mentalRisks, metabolicRisks, needCvd, needGlucose, needLipid, overall, ppCodes, riskFactors, validCid, waistOver } from '../../lib/ncdScreen';
 
-export const EMPTY = { cid: '', name: '', sex: '', birthDate: '', villageNo: '', houseNo: '', phone: '', screenDate: todayStr(), screenPlace: 'community', knownDM: false, knownHT: false, familyDM: false, familyHT: false, hxHT: false, smokeStatus: '', alcoholFreq: '', exercise: '', sweet: '', salty: '', veg: '', symptoms: [], weight: '', height: '', waist: '', sbp1: '', dbp1: '', sbp2: '', dbp2: '', fasting: true, glucose: '', note: '' };
-const STEPS = ['ข้อมูลบุคคล', 'พฤติกรรม', 'วัดร่างกาย', 'น้ำตาล', 'สรุปผล'];
+export const EMPTY = { cid: '', name: '', sex: '', birthDate: '', villageNo: '', houseNo: '', phone: '', screenDate: todayStr(), screenPlace: 'community', knownDM: false, knownHT: false, familyDM: false, familyHT: false, hxHT: false, smokeStatus: '', alcoholFreq: '', exercise: '', sweet: '', salty: '', veg: '', symptoms: [], weight: '', height: '', waist: '', sbp1: '', dbp1: '', sbp2: '', dbp2: '', fasting: true, glucose: '', smokePerDay: '', q2a: '', q2b: '', st5: '', drug: '', cvdRisk: '', tc: '', hdl: '', counsel: [], note: '' };
+const STEPS = ['ข้อมูลบุคคล', 'พฤติกรรม', 'สุขภาพจิต', 'วัดร่างกาย', 'น้ำตาล/ไขมัน', 'สรุปผล'];
 
 // ปุ่มเลือกตัวเลือกเดียว (ใหญ่ กดง่ายบนมือถือ)
 function Seg({ label, value, onChange, opts, id }) {
@@ -53,6 +53,8 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
   const bp = classifyBp(f.sbp1, f.dbp1, f.sbp2, f.dbp2);
   const gl = classifyGlucose(f.glucose, f.fasting);
   const ng = age != null ? needGlucose(age, f) : null;
+  const q2 = classify2Q(f.q2a, f.q2b); const st = classifySt5(f.st5); const cvd = classifyCvd(f.cvdRisk); const fee = age != null ? feeStatus({ ...f, age }) : null;
+  const toggleCounsel = (k) => setF((p) => ({ ...p, counsel: p.counsel.includes(k) ? p.counsel.filter((x) => x !== k) : [...p.counsel, k] }));
   const ov = bp || gl ? overall(bp, gl) : null;
   const dup = useMemo(() => f.cid.length === 13 && (existing || []).some((r) => r.cid === f.cid && r.id !== init?.id && String(r.screenDate).slice(0, 4) === String(f.screenDate).slice(0, 4)), [f.cid, f.screenDate, existing, init]);
   const toggleSym = (k) => setF((p) => ({ ...p, symptoms: p.symptoms.includes(k) ? p.symptoms.filter((x) => x !== k) : [...p.symptoms, k] }));
@@ -63,18 +65,18 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
       if (f.cid && !validCid(f.cid)) return 'เลขบัตรประชาชนไม่ถูกต้อง (13 หลัก)';
       if (!f.sex) return 'กรุณาเลือกเพศ';
       if (age == null) return 'กรุณาเลือกวันเกิด';
-      if (!grp) return `อายุ ${age} ปี อยู่นอกช่วงคัดกรอง 15–59 ปี`;
+      if (!grp) return `อายุ ${age} ปี ต่ำกว่า 15 ปี ไม่อยู่ในกลุ่มคัดกรอง`;
     }
-    if (i === 2 && !bp) return 'กรุณากรอกความดันอย่างน้อย 1 ครั้ง (ซิสโตลิกและไดแอสโตลิก)';
-    if (i === 3 && ng?.need && !f.glucose) return `ต้องเจาะน้ำตาล: ${ng.why}`;
+    if (i === 3 && !bp) return 'กรุณากรอกความดันอย่างน้อย 1 ครั้ง (ซิสโตลิกและไดแอสโตลิก)';
+    if (i === 4 && ng?.need && !f.glucose) return `ต้องเจาะน้ำตาล: ${ng.why}`;
     return '';
   };
   const next = () => { const e = check(step); setErr(e); if (!e) setStep((x) => x + 1); };
   const save = async () => {
-    for (let i = 0; i < 4; i++) { const e = check(i); if (e) { setErr(e); setStep(i); return; } }
+    for (let i = 0; i < 5; i++) { const e = check(i); if (e) { setErr(e); setStep(i); return; } }
     setBusy(true); setErr('');
     try {
-      const data = { ...f, cid: f.cid.replace(/\D/g, ''), name: f.name.trim(), age, ageGroup: grp, bmi, waistOver: waistOver(f.sex, f.waist), bpLevel: bp.key, bpSys: bp.sys, bpDia: bp.dia, gluLevel: gl?.key || '', overall: ov.key, risks: riskFactors(f), glucoseNeeded: !!ng?.need, smoke: f.smokeStatus === 'current', alcohol: !!f.alcoholFreq && f.alcoholFreq !== 'none' };
+      const data = { ...f, cid: f.cid.replace(/\D/g, ''), name: f.name.trim(), age, ageGroup: grp, bmi, waistOver: waistOver(f.sex, f.waist), bpLevel: bp.key, bpSys: bp.sys, bpDia: bp.dia, gluLevel: gl?.key || '', overall: ov.key, risks: riskFactors(f), glucoseNeeded: !!ng?.need, pp: ppCodes(f), smoke: f.smokeStatus === 'current', alcohol: !!f.alcoholFreq && f.alcoholFreq !== 'none' };
       if (onSubmit) { await onSubmit(data); onSaved(data.name); return; }
       if (init?.id) { await updateDoc(doc(db, 'ncdScreenings', init.id), { ...data, updatedAt: serverTimestamp() }); await writeAudit({ action: 'update', module: 'ncd-screening', docId: init.id, label: data.name }); }
       else { const r = await addDoc(collection(db, 'ncdScreenings'), { ...data, jhcis: 'pending', screenedBy: profile?.name || profile?.email || '', createdAt: serverTimestamp() }); await writeAudit({ action: 'create', module: 'ncd-screening', docId: r.id, label: data.name }); }
@@ -102,7 +104,7 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
               {dup && <div className="mt-1 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 ring-1 ring-amber-200">คนนี้มีผลคัดกรองในปีนี้แล้ว — ตรวจสอบว่าไม่ได้บันทึกซ้ำ</div>}</div>
             <Seg id="s-sex" label="เพศ" value={f.sex} onChange={s('sex')} opts={[['M', 'ชาย'], ['F', 'หญิง']]} />
             <div><div className="mb-1 text-sm font-medium">วันเกิด</div><ThaiDateInput id="ncd-birth" value={f.birthDate} onChange={s('birthDate')} yearsBack={80} yearsForward={0} />
-              {age != null && <div className={`mt-2 rounded-xl p-3 text-sm ring-1 ${grp ? 'bg-sky-50 text-sky-900 ring-sky-200' : 'bg-red-50 text-red-700 ring-red-200'}`}>อายุ <b>{age}</b> ปี · {grp ? <>กลุ่มคัดกรอง <b>{grp === '15-34' ? '15–34 ปี' : '35–59 ปี'}</b></> : 'นอกช่วงคัดกรอง 15–59 ปี'}</div>}</div>
+              {age != null && <div className={`mt-2 rounded-xl p-3 text-sm ring-1 ${grp ? 'bg-sky-50 text-sky-900 ring-sky-200' : 'bg-red-50 text-red-700 ring-red-200'}`}>อายุ <b>{age}</b> ปี · {grp ? <>กลุ่มคัดกรอง <b>{grp === '15-34' ? '15–34 ปี' : grp === '35-59' ? '35–59 ปี' : '60 ปีขึ้นไป'}</b></> : 'ต่ำกว่า 15 ปี ไม่อยู่ในกลุ่มคัดกรอง'}</div>}</div>
             <div className="grid grid-cols-2 gap-3">
               <div><label htmlFor="ncd-vil" className="mb-1 block text-sm font-medium">หมู่บ้าน</label><select id="ncd-vil" className="input !h-12" value={f.villageNo} onChange={(e) => s('villageNo')(e.target.value)}><option value="">— เลือก —</option>{(villages || []).map((v) => <option key={v.no} value={v.no}>ม.{v.no} {v.name}</option>)}</select></div>
               <div><label htmlFor="ncd-house" className="mb-1 block text-sm font-medium">บ้านเลขที่</label><input id="ncd-house" className="input !h-12" value={f.houseNo} onChange={(e) => s('houseNo')(e.target.value)} /></div>
@@ -122,6 +124,7 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
           {step === 1 && (<>
             <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-200">ถามพฤติกรรมของผู้รับการคัดกรอง แล้วแตะเลือกคำตอบ (ข้ามได้ถ้าไม่ตอบ)</p>
             <Seg id="s-smoke" label="การสูบบุหรี่" value={f.smokeStatus} onChange={s('smokeStatus')} opts={[['never', 'ไม่เคยสูบ'], ['former', 'เลิกแล้ว'], ['current', 'สูบอยู่']]} />
+            {f.smokeStatus === 'current' && <Field id="ncd-cig" label="สูบวันละกี่มวน" unit="มวน" v={f.smokePerDay} set={s('smokePerDay')} />}
             <Seg id="s-alc" label="การดื่มสุรา" value={f.alcoholFreq} onChange={s('alcoholFreq')} opts={[['none', 'ไม่ดื่ม'], ['sometimes', 'ดื่มบางครั้ง'], ['regular', 'ดื่มเป็นประจำ']]} />
             <Seg id="s-ex" label="ออกกำลังกาย (≥ 150 นาที/สัปดาห์)" value={f.exercise} onChange={s('exercise')} opts={[['enough', 'เพียงพอ'], ['low', 'ไม่เพียงพอ']]} />
             <Seg id="s-sweet" label="กินหวาน/ดื่มน้ำหวาน" value={f.sweet} onChange={s('sweet')} opts={[['rare', 'น้อย'], ['often', 'บ่อย']]} />
@@ -131,6 +134,17 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
           </>)}
 
           {step === 2 && (<>
+            <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-200">คัดกรองความเครียด ซึมเศร้า และสารเสพติด (รายการคัดกรองที่ สปสช. กำหนดสำหรับอายุ 15–59 ปี)</p>
+            <div className="space-y-2"><div className="text-sm font-semibold">แบบคัดกรองซึมเศร้า 2Q — ในช่วง 2 สัปดาห์ที่ผ่านมา</div>
+              <Seg id="s-q2a" label="รู้สึกหดหู่ เศร้า หรือท้อแท้สิ้นหวังหรือไม่" value={f.q2a} onChange={s('q2a')} opts={[[false, 'ไม่มี'], [true, 'มี']]} />
+              <Seg id="s-q2b" label="รู้สึกเบื่อ ทำอะไรก็ไม่เพลิดเพลิน หรือไม่" value={f.q2b} onChange={s('q2b')} opts={[[false, 'ไม่มี'], [true, 'มี']]} />
+              {q2 && <Badge className={q2.tone}>{q2.label}</Badge>}</div>
+            <Field id="ncd-st5" label="คะแนนความเครียด ST-5 (รวม 0–15)" unit="คะแนน" v={f.st5} set={(v) => s('st5')(v === '' ? '' : String(Math.min(15, Number(v))))} hint={st ? <Badge className={st.tone}>{st.label}</Badge> : <span className="text-slate-500">0–4 น้อย · 5–7 ปานกลาง · 8–9 มาก · 10–15 มากที่สุด</span>} />
+            <Seg id="s-drug" label="การใช้สารเสพติด" value={f.drug} onChange={s('drug')} opts={[['no', 'ไม่ใช้'], ['yes', 'ใช้/เคยใช้ใน 3 เดือน']]} />
+            <div className="space-y-2"><div className="text-sm font-medium text-slate-700">ให้คำปรึกษา/แนะนำเรื่อง (เลือกได้หลายข้อ)</div>{COUNSEL.map(([k, t]) => <Toggle key={k} id={`cn-${k}`} label={t} v={f.counsel.includes(k)} set={() => toggleCounsel(k)} />)}</div>
+          </>)}
+
+          {step === 3 && (<>
             <div className="grid grid-cols-3 gap-3"><Field id="ncd-w" label="น้ำหนัก" unit="กก." v={f.weight} set={s('weight')} /><Field id="ncd-h" label="ส่วนสูง" unit="ซม." v={f.height} set={s('height')} /><Field id="ncd-waist" label="รอบเอว" unit="ซม." v={f.waist} set={s('waist')} /></div>
             {(bmi != null || f.waist) && <div className="flex flex-wrap gap-2 text-sm">{bmi != null && <Badge className={bmi >= 25 ? 'bg-orange-100 text-orange-800' : bmi >= 23 ? 'bg-yellow-100 text-yellow-800' : 'bg-emerald-100 text-emerald-800'}>BMI {bmi}</Badge>}{f.waist && <Badge className={waistOver(f.sex, f.waist) ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800'}>รอบเอว{waistOver(f.sex, f.waist) ? 'เกินเกณฑ์' : 'ปกติ'} (เกณฑ์ {f.sex === 'M' ? '90' : '80'} ซม.)</Badge>}</div>}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200"><div className="mb-2 text-sm font-semibold">ความดันโลหิต ครั้งที่ 1</div><div className="grid grid-cols-2 gap-3"><Field id="ncd-s1" label="ตัวบน (ซิสโตลิก)" unit="mmHg" v={f.sbp1} set={s('sbp1')} ph="120" /><Field id="ncd-d1" label="ตัวล่าง (ไดแอสโตลิก)" unit="mmHg" v={f.dbp1} set={s('dbp1')} ph="80" /></div></div>
@@ -138,14 +152,16 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
             {bp && <div className={`rounded-2xl p-4 ring-1 ${bp.tone} ring-black/5`}><div className="text-xs opacity-80">ความดันเฉลี่ย</div><div className="text-3xl font-extrabold tabular-nums">{bp.sys}/{bp.dia}</div><div className="font-semibold">{bp.label}</div><div className="text-sm">{bp.action}</div>{bp.index >= 2 && !(f.sbp2 && f.dbp2) && <div className="mt-1 text-xs font-semibold">ค่าสูง — ควรวัดซ้ำครั้งที่ 2</div>}</div>}
           </>)}
 
-          {step === 3 && (<>
+          {step === 4 && (<>
             {ng && <div className={`rounded-2xl p-4 text-sm ring-1 ${ng.need ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-slate-100 text-slate-700 ring-slate-200'}`}><b>{ng.need ? 'ต้องเจาะน้ำตาลปลายนิ้ว' : 'ไม่จำเป็นต้องเจาะน้ำตาล'}</b><div className="mt-0.5">{ng.why}</div></div>}
             <Seg id="s-fast" label="สภาพการเจาะ" value={f.fasting} onChange={(v) => s('fasting')(v === '' ? true : v)} opts={[[true, 'อดอาหาร ≥ 8 ชม.'], [false, 'ไม่อดอาหาร']]} />
             <Field id="ncd-glu" label="น้ำตาลปลายนิ้ว (DTX)" unit="มก./ดล." v={f.glucose} set={s('glucose')} />
             {gl && <div className={`rounded-2xl p-4 ring-1 ring-black/5 ${gl.tone}`}><div className="text-xl font-bold">{gl.label}</div><div className="text-sm">{gl.action}</div><div className="mt-1 text-xs opacity-80">เกณฑ์ {f.fasting ? 'อดอาหาร: ปกติ <100 · เสี่ยง 100–125 · สงสัย ≥126' : 'ไม่อดอาหาร: ปกติ <140 · เสี่ยง 140–199 · สงสัย ≥200'}</div></div>}
+            {needCvd(age) && <Field id="ncd-cvd" label="ความเสี่ยงโรคหัวใจและหลอดเลือด (CVD risk) อายุ 35–59 ปี" unit="%" v={f.cvdRisk} set={s('cvdRisk')} hint={cvd ? <Badge className={cvd.tone}>{cvd.label}</Badge> : <span className="text-slate-500">กรอก % ที่คำนวณจากโปรแกรม Thai CV risk (ถ้ามี)</span>} />}
+            {needLipid(age) && <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200"><div className="mb-2 text-sm font-semibold">ไขมันในเลือด (อายุ 45–70 ปี ตรวจทุก 5 ปี · เว้นผู้ที่รักษาไขมันอยู่)</div><div className="grid grid-cols-2 gap-3"><Field id="ncd-tc" label="Total Cholesterol" unit="มก./ดล." v={f.tc} set={s('tc')} /><Field id="ncd-hdl" label="HDL" unit="มก./ดล." v={f.hdl} set={s('hdl')} /></div></div>}
           </>)}
 
-          {step === 4 && (<>
+          {step === 5 && (<>
             <div className={`rounded-3xl p-5 text-center shadow ring-1 ring-black/5 ${ov?.tone || 'bg-slate-100'}`}><div className="text-sm opacity-80">{f.name} · {age} ปี · {f.sex === 'M' ? 'ชาย' : 'หญิง'}</div><div className="mt-1 text-3xl font-extrabold">{ov?.label || '-'}</div></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"><div className="text-xs text-slate-500">ความดัน</div><div className="text-xl font-bold tabular-nums">{bp ? `${bp.sys}/${bp.dia}` : '-'}</div>{bp && <Badge className={bp.tone}>{bp.label}</Badge>}</div>
@@ -153,7 +169,8 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
               <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"><div className="text-xs text-slate-500">BMI</div><div className="text-xl font-bold tabular-nums">{bmi ?? '-'}</div></div>
               <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"><div className="text-xs text-slate-500">รอบเอว</div><div className="text-xl font-bold tabular-nums">{f.waist || '-'}</div></div>
             </div>
-            {(!!metabolicRisks(f).length || !!lifestyleRisks(f).length) && <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200 text-sm"><div className="mb-1 font-semibold">ปัจจัยเสี่ยงที่พบ</div><div className="flex flex-wrap gap-1.5">{riskFactors(f).map((x) => <Badge key={x} className="bg-amber-100 text-amber-800">{x}</Badge>)}</div></div>}
+            {fee && <div className={`rounded-2xl p-3 text-sm ring-1 ${fee.eligible ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-slate-100 text-slate-700 ring-slate-200'}`}>{fee.eligible ? <><b>ครบรายการเบิก สปสช. ข้อ 20</b> — เจ้าหน้าที่คีย์ค่าบริการ 12001 (100 บาท) และ Specialpp {ppCodes(f).join(', ')} ใน JHCIS เอง (แอปไม่คีย์ให้อัตโนมัติ)</> : <>{fee.note || <>ยังไม่ครบรายการเบิก: ขาด {fee.missing.join(', ')}</>}</>}</div>}
+            {(!!metabolicRisks(f).length || !!lifestyleRisks(f).length || !!mentalRisks(f).length) && <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200 text-sm"><div className="mb-1 font-semibold">ปัจจัยเสี่ยงที่พบ</div><div className="flex flex-wrap gap-1.5">{riskFactors(f).map((x) => <Badge key={x} className="bg-amber-100 text-amber-800">{x}</Badge>)}</div></div>}
             <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-200"><div className="mb-1 font-semibold">คำแนะนำเบื้องต้น</div><ul className="list-disc space-y-1 pl-5">{adv.map((a) => <li key={a}>{a}</li>)}</ul></div>
             <div><label htmlFor="ncd-note" className="mb-1 block text-sm font-medium">หมายเหตุ</label><textarea id="ncd-note" rows={2} className="input" value={f.note} onChange={(e) => s('note')(e.target.value)} /></div>
           </>)}

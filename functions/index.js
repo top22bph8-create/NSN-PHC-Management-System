@@ -1439,6 +1439,9 @@ exports.ncdAsmSubmit = onCall({ cors: true }, async (request) => {
     weight: num(r.weight, 20, 300), height: num(r.height, 100, 230), waist: num(r.waist, 30, 250),
     sbp1: num(r.sbp1, 60, 300), dbp1: num(r.dbp1, 30, 200), sbp2: num(r.sbp2, 60, 300), dbp2: num(r.dbp2, 30, 200),
     fasting: r.fasting !== false, glucose: num(r.glucose, 20, 800), note: cleanText(r.note, 300),
+    smokePerDay: num(r.smokePerDay, 0, 200), q2a: typeof r.q2a === 'boolean' ? r.q2a : '', q2b: typeof r.q2b === 'boolean' ? r.q2b : '', st5: num(r.st5, 0, 15),
+    drug: ['no', 'yes'].includes(r.drug) ? r.drug : '', cvdRisk: num(r.cvdRisk, 0, 100), tc: num(r.tc, 50, 800), hdl: num(r.hdl, 5, 200),
+    counsel: (Array.isArray(r.counsel) ? r.counsel : []).filter((x) => ['food', 'exercise', 'smoke', 'alcohol', 'stress'].includes(x)),
   };
   if (rec.sbp1 === '' || rec.dbp1 === '') throw new HttpsError('invalid-argument', 'กรุณากรอกความดันอย่างน้อย 1 ครั้ง');
   // จำกัดต่อวัน กันสแปม และกันส่งซ้ำ (เลขบัตรเดียวกัน วันเดียวกัน)

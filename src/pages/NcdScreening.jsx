@@ -12,7 +12,7 @@ import { writeAudit } from '../lib/audit';
 import { fmtDate, todayStr } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import ScreenWizard from './ncd/ScreenWizard';
-import { deriveRow } from '../lib/ncdScreen';
+import { deriveRow, feeStatus } from '../lib/ncdScreen';
 import { Badge, ConfirmDialog, EmptyState, Modal, Spinner } from '../components/ui';
 import { useVillages } from '../modules/outbreak/outbreakRefs';
 
@@ -61,7 +61,7 @@ export default function NcdScreening() {
   const remove = async () => { await deleteDoc(doc(db, 'ncdScreenings', del.id)); await writeAudit({ action: 'delete', module: 'ncd-screening', docId: del.id, label: del.name }); setDel(null); };
   const exportXlsx = async () => {
     const XLSX = await import('xlsx');
-    const data = list.map((r) => ({ วันที่คัดกรอง: r.screenDate, ชื่อสกุล: r.name, เลขบัตร: r.cid, เพศ: r.sex === 'M' ? 'ชาย' : 'หญิง', อายุ: r.age, กลุ่มอายุ: r.ageGroup, หมู่: r.villageNo, 'BMI': r.bmi ?? '', รอบเอว: r.waist, ความดันเฉลี่ย: `${r.bpSys}/${r.bpDia}`, น้ำตาล: r.glucose, อดอาหาร: r.fasting ? 'ใช่' : 'ไม่', สรุปผล: OVL[r.overall] || '', ปัจจัยเสี่ยง: (r.risks || []).join(', '), สถานะJHCIS: r.jhcis === 'done' ? 'ส่งแล้ว' : 'รอส่ง' }));
+    const data = list.map((r) => ({ วันที่คัดกรอง: r.screenDate, ชื่อสกุล: r.name, เลขบัตร: r.cid, เพศ: r.sex === 'M' ? 'ชาย' : 'หญิง', อายุ: r.age, กลุ่มอายุ: r.ageGroup, หมู่: r.villageNo, 'BMI': r.bmi ?? '', รอบเอว: r.waist, ความดันเฉลี่ย: `${r.bpSys}/${r.bpDia}`, น้ำตาล: r.glucose, อดอาหาร: r.fasting ? 'ใช่' : 'ไม่', สรุปผล: OVL[r.overall] || '', ปัจจัยเสี่ยง: (r.risks || []).join(', '), สถานะJHCIS: r.jhcis === 'done' ? 'ส่งแล้ว' : 'รอส่ง', '2Q': r.q2a === '' || r.q2a == null ? '' : (r.q2a || r.q2b ? 'ผิดปกติ' : 'ปกติ'), 'ST-5': r.st5 ?? '', สารเสพติด: r.drug === 'yes' ? 'ใช้' : r.drug === 'no' ? 'ไม่ใช้' : '', 'CVD risk %': r.cvdRisk ?? '', TC: r.tc ?? '', HDL: r.hdl ?? '', 'พร้อมคิด 12001': feeStatus(r).eligible ? 'ใช่' : '' }));
     const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'คัดกรอง NCD'); XLSX.writeFile(wb, `ncd-screening-${todayStr()}.xlsx`);
   };
   return (
@@ -75,14 +75,14 @@ export default function NcdScreening() {
         <div className="relative min-w-48 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input aria-label="ค้นหาชื่อหรือเลขบัตร" className="input pl-9" placeholder="ค้นหาชื่อ/เลขบัตร" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select aria-label="กรองผลสรุป" className="input w-auto" value={fOv} onChange={(e) => setFOv(e.target.value)}><option value="">ทุกผล</option>{Object.entries(OVL).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
         <select aria-label="กรองหมู่บ้าน" className="input w-auto" value={fVil} onChange={(e) => setFVil(e.target.value)}><option value="">ทุกหมู่บ้าน</option>{(villages || []).map((v) => <option key={v.no} value={v.no}>ม.{v.no}</option>)}</select>
-        <select aria-label="กรองกลุ่มอายุ" className="input w-auto" value={fAge} onChange={(e) => setFAge(e.target.value)}><option value="">ทุกกลุ่มอายุ</option><option value="15-34">15–34 ปี</option><option value="35-59">35–59 ปี</option></select>
+        <select aria-label="กรองกลุ่มอายุ" className="input w-auto" value={fAge} onChange={(e) => setFAge(e.target.value)}><option value="">ทุกกลุ่มอายุ</option><option value="15-34">15–34 ปี</option><option value="35-59">35–59 ปี</option><option value="60+">60 ปีขึ้นไป</option></select>
       </div>
       {!list.length ? <EmptyState title="ยังไม่มีรายการคัดกรอง" hint="กด “คัดกรองรายใหม่” เพื่อเริ่มบันทึก" /> : (
         <div className="space-y-2">
           {list.map((r) => (
             <div key={r.id} className="card flex flex-wrap items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2"><b>{r.name}</b><Badge className={OV[r.overall]}>{OVL[r.overall]}</Badge>{r.source === 'asm' && <Badge className={r.review === 'approved' ? 'bg-sky-100 text-sky-800' : 'bg-violet-100 text-violet-800'}>อสม. {r.asmName || ''}{r.review === 'approved' ? ' · ตรวจแล้ว' : ' · รอตรวจสอบ'}</Badge>}{r.jhcis !== 'done' && <Badge className="bg-slate-100 text-slate-600">รอส่ง JHCIS</Badge>}</div>
+                <div className="flex flex-wrap items-center gap-2"><b>{r.name}</b><Badge className={OV[r.overall]}>{OVL[r.overall]}</Badge>{r.source === 'asm' && <Badge className={r.review === 'approved' ? 'bg-sky-100 text-sky-800' : 'bg-violet-100 text-violet-800'}>อสม. {r.asmName || ''}{r.review === 'approved' ? ' · ตรวจแล้ว' : ' · รอตรวจสอบ'}</Badge>}{r.jhcis !== 'done' && <Badge className="bg-slate-100 text-slate-600">รอส่ง JHCIS</Badge>}{feeStatus(r).eligible && <Badge className="bg-emerald-100 text-emerald-800">พร้อมคิด 12001</Badge>}</div>
                 <div className="text-xs text-slate-600">{r.sex === 'M' ? 'ชาย' : 'หญิง'} {r.age} ปี · ม.{r.villageNo || '-'} · {fmtDate(r.screenDate)} · ความดัน {r.bpSys}/{r.bpDia}{r.glucose ? ` · น้ำตาล ${r.glucose} (${r.fasting ? 'อด' : 'ไม่อด'})` : ''}{r.bmi ? ` · BMI ${r.bmi}` : ''}</div>
                 {!!r.risks?.length && <div className="text-xs text-slate-500">ปัจจัยเสี่ยง: {r.risks.join(', ')}</div>}
               </div>
