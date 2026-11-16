@@ -43,7 +43,7 @@ function Field({ id, label, unit, v, set, ph, hint }) {
   );
 }
 
-export default function ScreenWizard({ init, villages, existing, onClose, onSaved }) {
+export default function ScreenWizard({ init, villages, existing, onClose, onSaved, onSubmit, title = 'คัดกรองกลุ่มเสี่ยง NCD' }) {
   const { profile } = useAuth();
   const [f, setF] = useState({ ...EMPTY, ...init });
   const [step, setStep] = useState(0); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -75,6 +75,7 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
     setBusy(true); setErr('');
     try {
       const data = { ...f, cid: f.cid.replace(/\D/g, ''), name: f.name.trim(), age, ageGroup: grp, bmi, waistOver: waistOver(f.sex, f.waist), bpLevel: bp.key, bpSys: bp.sys, bpDia: bp.dia, gluLevel: gl?.key || '', overall: ov.key, risks: riskFactors(f), glucoseNeeded: !!ng?.need, smoke: f.smokeStatus === 'current', alcohol: !!f.alcoholFreq && f.alcoholFreq !== 'none' };
+      if (onSubmit) { await onSubmit(data); onSaved(data.name); return; }
       if (init?.id) { await updateDoc(doc(db, 'ncdScreenings', init.id), { ...data, updatedAt: serverTimestamp() }); await writeAudit({ action: 'update', module: 'ncd-screening', docId: init.id, label: data.name }); }
       else { const r = await addDoc(collection(db, 'ncdScreenings'), { ...data, jhcis: 'pending', screenedBy: profile?.name || profile?.email || '', createdAt: serverTimestamp() }); await writeAudit({ action: 'create', module: 'ncd-screening', docId: r.id, label: data.name }); }
       onSaved();
@@ -86,7 +87,7 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-50" role="dialog" aria-modal="true" aria-label="คัดกรอง NCD">
       <header className="bg-gradient-to-r from-rose-600 to-red-500 px-4 pb-3 pt-3 text-white shadow">
         <div className="mx-auto flex max-w-xl items-center gap-2">
-          <div className="min-w-0 flex-1"><div className="text-xs opacity-90">คัดกรองกลุ่มเสี่ยง NCD · ขั้น {step + 1}/{STEPS.length}</div><div className="truncate text-lg font-bold">{STEPS[step]}{f.name && step > 0 ? ` · ${f.name}` : ''}</div></div>
+          <div className="min-w-0 flex-1"><div className="text-xs opacity-90">{title} · ขั้น {step + 1}/{STEPS.length}</div><div className="truncate text-lg font-bold">{STEPS[step]}{f.name && step > 0 ? ` · ${f.name}` : ''}</div></div>
           <button type="button" onClick={onClose} aria-label="ปิด" className="rounded-full p-2 hover:bg-white/20"><X className="h-6 w-6" /></button>
         </div>
         <div className="mx-auto mt-2 flex max-w-xl gap-1.5" aria-hidden="true">{STEPS.map((t, i) => <div key={t} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-white' : 'bg-white/30'}`} />)}</div>

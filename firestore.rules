@@ -69,7 +69,7 @@ service cloud.firestore {
     // ตั้งค่าระบบ
     match /settings/{id} {
       // settings/lineNotify เก็บ TOKEN สำหรับแจ้งเตือนไลน์ — ห้ามอ่านจากฝั่งไคลเอนต์เด็ดขาด (Cloud Function ใช้ Admin SDK อ่านได้อยู่แล้ว ไม่ผ่านกติกานี้)
-      allow read: if isActive() && id != 'lineNotify' && id != 'statsIngest';
+      allow read: if isActive() && id != 'lineNotify' && id != 'statsIngest' && id != 'ncdPublic';
       allow write: if hasRole(['super_admin']);
     }
     // สถิติบริการรายวันจาก JHCIS (ตัวเลขสรุปล้วนๆ ไม่มีข้อมูลผู้ป่วยรายบุคคล) — เขียนได้เฉพาะ Cloud Function (Admin SDK)
@@ -151,6 +151,10 @@ service cloud.firestore {
     match /thaiBookings/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();
+    }
+    // รหัสลับลิงก์ อสม. (คัดกรอง NCD) — อ่าน/เขียนได้เฉพาะ Super Admin; Cloud Function ตรวจด้วย Admin SDK
+    match /settings/ncdPublic {
+      allow read, write: if hasRole(['super_admin']);
     }
     match /settings/lineNotify {
       allow read: if false;

@@ -110,3 +110,11 @@ export const validCid = (s) => {
   let sum = 0; for (let i = 0; i < 12; i++) sum += Number(t[i]) * (13 - i);
   return (11 - (sum % 11)) % 10 === Number(t[12]);
 };
+
+// คำนวณค่าที่แปลผลจากข้อมูลดิบ (ใช้กับรายการที่ อสม. ส่งมา ซึ่งเก็บเฉพาะค่าดิบ และกับรายการเก่าที่ไม่มีค่าที่คำนวณ)
+export function deriveRow(r) {
+  if (r.overall && r.ageGroup) return r;
+  const age = r.age ?? ageFromBirth(r.birthDate);
+  const bp = classifyBp(r.sbp1, r.dbp1, r.sbp2, r.dbp2); const gl = classifyGlucose(r.glucose, r.fasting !== false);
+  return { ...r, age, ageGroup: ageGroupOf(age), bmi: calcBmi(r.weight, r.height), bpSys: bp?.sys, bpDia: bp?.dia, bpLevel: bp?.key, gluLevel: gl?.key || '', overall: bp || gl ? overall(bp, gl).key : 'normal', risks: riskFactors(r) };
+}

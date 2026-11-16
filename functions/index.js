@@ -42,8 +42,13 @@ async function getLineSettings() {
   ]);
   const cred = credSnap.exists ? credSnap.data() : {};
   const meta = metaSnap.exists ? metaSnap.data() : { enabled: false, events: {} };
+  // ไลน์ 2 ช่อง (บอท 2 ตัวอยู่กลุ่มเดียวกัน): ใช้ช่องที่เลือกไว้ (meta.activeChannel) ถ้าช่องนั้นไม่มี token ให้ถอยไปอีกช่อง
+  const t1 = cred.channelAccessToken || ''; const t2 = cred.channelAccessToken2 || '';
+  const active = meta.activeChannel === '2' && t2 ? '2' : (t1 ? '1' : (t2 ? '2' : '1'));
+  const token = active === '2' ? t2 : t1; const altToken = active === '2' ? t1 : t2;
   return {
-    channelAccessToken: cred.channelAccessToken || '',
+    channelAccessToken: token,
+    altToken, activeChannel: active, tokens: { 1: t1, 2: t2 }, autoSwitch: meta.autoSwitch !== false,
     targetId: cred.targetId || '',
     enabled: !!meta.enabled,
     events: { ...DEFAULT_LINE_EVENTS, ...(meta.events || {}) },
@@ -86,6 +91,27 @@ async function fetchLineQuota(channelAccessToken) {
   return { limited, limit, used, remaining: limited ? Math.max(0, limit - used) : null, percent: limited && limit ? Math.round((used / limit) * 100) : null };
 }
 
+// โควตาไลน์ช่องที่ใช้อยู่เต็ม (HTTP 429 / monthly limit) → สลับไปใช้ไลน์อีกช่องแล้วส่งซ้ำอัตโนมัติ (ถ้าเปิด "สลับอัตโนมัติ")
+// ช่องที่ใช้อยู่จะถูกบันทึกใน settings/lineNotifyMeta.activeChannel และตั้งกลับเป็นช่อง 1 ทุกวันที่ 1 ของเดือน (โควตารีเซ็ต)
+const isQuotaFull = (status, bodyText) => status === 429 || /monthly limit|reached your/i.test(bodyText || '');
+async function failoverPush(failedToken, targetId, messages) {
+  try {
+    const st = await getLineSettings();
+    const other = failedToken === st.tokens[1] ? st.tokens[2] : failedToken === st.tokens[2] ? st.tokens[1] : '';
+    if (!st.autoSwitch || !other) return false;
+    const res = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST', headers: { Authorization: `Bearer ${other}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to: targetId, messages }),
+    });
+    if (!res.ok) { console.error('สลับไปไลน์อีกช่องแล้วส่งไม่สำเร็จ:', res.status, await res.text().catch(() => '')); return false; }
+    const ch = other === st.tokens[2] ? '2' : '1';
+    await db.doc('settings/lineNotifyMeta').set({ activeChannel: ch }, { merge: true });
+    await db.doc('settings/lineStatus').set({ lastSwitch: { at: FieldValue.serverTimestamp(), to: ch, reason: 'โควตาเต็ม' } }, { merge: true });
+    await recordLineResult(true);
+    console.log('โควตาไลน์ช่องเดิมเต็ม → สลับไปใช้ไลน์ช่อง', ch);
+    return true;
+  } catch (e) { console.error('failoverPush:', e.message); return false; }
+}
+
 async function pushLine(channelAccessToken, targetId, messages) {
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -95,6 +121,7 @@ async function pushLine(channelAccessToken, targetId, messages) {
   if (!res.ok) {
     const t = await res.text();
     console.error('LINE push ส่งไม่สำเร็จ:', res.status, t);
+    if (isQuotaFull(res.status, t) && await failoverPush(channelAccessToken, targetId, messages)) return;
     await recordLineResult(false, res.status, t);
   } else {
     await recordLineResult(true);
@@ -113,6 +140,7 @@ async function pushLineOrThrow(channelAccessToken, targetId, messages) {
   if (!res.ok) {
     const bodyText = await res.text().catch(() => '');
     console.error('LINE push ส่งไม่สำเร็จ (resend):', res.status, bodyText);
+    if (isQuotaFull(res.status, bodyText) && await failoverPush(channelAccessToken, targetId, messages)) return;
     await recordLineResult(false, res.status, bodyText);
     throw new Error(`LINE ปฏิเสธการส่งข้อความ (HTTP ${res.status}): ${bodyText || 'ไม่มีรายละเอียดเพิ่มเติม'}`);
   }
@@ -127,6 +155,11 @@ async function replyLine(channelAccessToken, replyToken, text) {
   });
   if (!res.ok) {
     console.error('LINE reply ส่งไม่สำเร็จ:', res.status, await res.text());
+    // ปุ่มอนุมัติ/ข้อความอาจมาจากบอทอีกตัว (replyToken ผูกกับช่องที่ส่งเหตุการณ์มา) → ลองตอบกลับด้วย token ของอีกช่อง
+    try {
+      const st = await getLineSettings(); const other = channelAccessToken === st.tokens[1] ? st.tokens[2] : channelAccessToken === st.tokens[2] ? st.tokens[1] : '';
+      if (other) await fetch('https://api.line.me/v2/bot/message/reply', { method: 'POST', headers: { Authorization: `Bearer ${other}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ replyToken, messages: [{ type: 'text', text }] }) });
+    } catch (e) { console.error('reply สำรอง:', e.message); }
   }
 }
 
@@ -884,15 +917,16 @@ exports.onThaiBookingUpdated = onDocumentUpdated('thaiBookings/{id}', async () =
   return null;
 });
 
-// สรุปคิววันนี้เข้าไลน์กลุ่มงานแพทย์แผนไทย เวลา 07:00 น. ทุกวัน (ส่งเฉพาะวันที่มีคิว — ใช้โควตาข้อความไลน์ 1 ข้อความ/วัน)
+// สรุปคิววันนี้เข้าไลน์กลุ่มหลัก เวลา 07:00 น. ทุกวัน (ส่งเฉพาะวันที่มีคิว — ใช้โควตาข้อความไลน์ 1 ข้อความ/วัน)
 exports.dailyThaiSummary = onSchedule({ schedule: '0 7 * * *', timeZone: 'Asia/Bangkok' }, async () => {
-  const { channelAccessToken, thaiTargetId, enabled } = await getLineSettings();
-  if (!channelAccessToken || !thaiTargetId || !enabled) return;
+  // ส่งเข้า "ไลน์กลุ่มหลัก" (targetId) เหมือนแจ้งเตือนมอบหมายงาน ไม่ใช้กลุ่มแพทย์แผนไทย (thaiTargetId)
+  const { channelAccessToken, targetId, enabled } = await getLineSettings();
+  if (!channelAccessToken || !targetId || !enabled) return;
   const today = bkkParts().date;
   const snap = await db.collection('thaiBookings').where('date', '==', today).get();
   const list = snap.docs.map((x) => x.data()).filter((b) => THAI_ACTIVE.includes(b.status)).sort((a, b) => a.time.localeCompare(b.time));
   if (!list.length) return;
-  await pushLine(channelAccessToken, thaiTargetId, [{ type: 'text', text: `🌿 สรุปคิวแพทย์แผนไทยวันนี้ ${thaiDateShort(today)} (${list.length} คิว)\n` + list.map((b, i) => `${i + 1}. ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} ${b.name} โทร ${b.phone} — ${b.service}`).join('\n') }]);
+  await pushLine(channelAccessToken, targetId, [{ type: 'text', text: `🌿 สรุปคิวแพทย์แผนไทยวันนี้ ${thaiDateShort(today)} (${list.length} คิว)\n` + list.map((b, i) => `${i + 1}. ${b.time}${b.timeEnd ? `-${b.timeEnd}` : ''} ${b.name} โทร ${b.phone} — ${b.service}`).join('\n') }]);
 });
 
 // ===== เวรออกหน่วยปฐมพยาบาล / รับบริจาคโลหิต (unitDuty) — แจ้งไลน์กลุ่มหลัก =====
@@ -1053,14 +1087,46 @@ exports.monthEndTaxReminder = onSchedule({ schedule: '30 8 * * *', timeZone: 'As
   for (const text of parts) await sendLine(channelAccessToken, targetId, text);
 });
 
-// คำอวยพรวันเกิดหลายๆ แบบ (สุ่มเลือกไม่ให้ซ้ำแบบเดิมทุกครั้ง) — ใช้กับ dailyBirthdayReminder ด้านล่าง
-const BIRTHDAY_GREETINGS = [
-  'ขอให้มีความสุขมากๆ สุขภาพแข็งแรง สมหวังในทุกสิ่งที่ตั้งใจไว้นะคะ/ครับ 🥳',
-  'ขอให้วันนี้เป็นวันพิเศษ เต็มไปด้วยความสุขและเสียงหัวเราะตลอดทั้งปีเลยนะคะ/ครับ 🎉',
-  'ขอให้สุขภาพแข็งแรง ร่ำรวยเงินทอง โชคดีตลอดปีนะคะ/ครับ 🌸✨',
-  'สุขสันต์วันเกิดนะคะ/ครับ ขอให้ทุกวันเป็นวันดีๆ เหมือนวันนี้ 💐',
-  'ขอให้เติบโตก้าวหน้าในหน้าที่การงาน และมีคนที่รักอยู่รอบตัวเสมอนะคะ/ครับ 🎁',
+// คำอวยพรวันเกิดแบบเป็นทางการ ประกอบจากท่อน เปิด/สุขภาพ/ครอบครัว/สมปรารถนา/ความสุข (ไม่มีท่อนขอบคุณ/ร่วมพัฒนาหน่วยงานแล้วตามที่แจ้ง) ท่อนละหลายแบบ
+// ขึ้นต้นด้วย "สุขสันต์วันเกิดครับ ขออวยพรให้" เสมอ แล้วเลือกท่อนที่เหลือด้วยค่าแฮชของ "ชื่อ + วันที่" จึงแต่ละคน/แต่ละปีได้ข้อความไม่ซ้ำกัน (รวมหลายพันแบบ) และคนที่วันเกิดตรงกันก็ไม่ได้ข้อความเดียวกัน
+const BD_OPEN = ['สุขสันต์วันเกิดครับ ขออวยพรให้'];
+const BD_HEALTH = [
+  'มีสุขภาพกายและสุขภาพใจที่แข็งแรงสมบูรณ์',
+  'ปราศจากโรคภัยไข้เจ็บทั้งปวง มีร่างกายแข็งแรง จิตใจเบิกบาน',
+  'มีพลานามัยสมบูรณ์ ปลอดภัยทุกย่างก้าวของการเดินทางและการปฏิบัติงาน',
+  'มีสุขภาพดีทั้งกายและใจ พร้อมปฏิบัติภารกิจด้วยความสดชื่น',
+  'แข็งแรง สดใส ห่างไกลจากโรคภัยและอุปสรรคทั้งหลาย',
+  'มีกำลังกายกำลังใจเต็มเปี่ยม และสุขภาพดียิ่งๆ ขึ้นไปทุกวัน',
 ];
+const BD_FAMILY = [
+  'ครอบครัวอบอุ่นเปี่ยมสุข สมาชิกทุกคนมีแต่ความสุขความเจริญ',
+  'ครอบครัวมีความรักความสามัคคี และได้รับความสุขจากคนที่รักอยู่รอบกายเสมอ',
+  'บุคคลอันเป็นที่รักมีแต่ความสุขสวัสดี ครอบครัวร่มเย็นเป็นสุขตลอดไป',
+  'ครอบครัวพรั่งพร้อมด้วยความรัก ความเข้าใจ และรอยยิ้มทุกวัน',
+  'ครอบครัวเป็นสุขสงบ มีแต่เรื่องดีๆ เข้ามาในชีวิต',
+  'ทุกคนในครอบครัวมีสุขภาพดี และมีความสุขความเจริญก้าวหน้าร่วมกัน',
+];
+const BD_WISH = [
+  'ขอให้สมปรารถนาในทุกสิ่งอย่างดั่งที่ตั้งใจไว้ทุกประการ',
+  'ขอให้สมความปรารถนาทุกประการ ประสบความสำเร็จในทุกภารกิจและทุกเป้าหมาย',
+  'ขอให้สมหวังดั่งใจปรารถนา ก้าวหน้ามั่นคงในหน้าที่การงานและชีวิตส่วนตัว',
+  'ขอให้สิ่งที่ปรารถนาสัมฤทธิ์ผลทุกประการ และมีโชคลาภเกื้อหนุนตลอดปี',
+  'ขอให้ทุกความตั้งใจดี เป็นจริงดั่งปรารถนา และประสบแต่ความสำเร็จตลอดไป',
+  'ขอให้สมปรารถนาในทุกประการ มีความเจริญรุ่งเรืองในทุกด้านของชีวิต',
+];
+const BD_HAPPY = [
+  'ขอให้ทุกๆ วันของคุณมีแต่ความสุข ยิ้มได้อย่างสดใสทุกวัน',
+  'ขอให้ทุกวันเป็นวันที่ดี เต็มไปด้วยความสุขและรอยยิ้ม',
+  'ขอให้มีความสุขกายสบายใจในทุกๆ วัน',
+  'ขอให้ชีวิตของคุณเต็มไปด้วยความสุข ความอบอุ่น และกำลังใจที่ดีตลอดไป',
+  'ขอให้ทุกเช้าตื่นขึ้นมาพบแต่สิ่งดีๆ และทุกค่ำคืนได้พักผ่อนอย่างเป็นสุข',
+  'ขอให้ความสุขอยู่เคียงข้างคุณในทุกวัน ไม่ว่าจะเป็นเวลาใดก็ตาม',
+];
+function bdHash(str) { let h = 2166136261; for (const c of String(str)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function buildBirthdayGreeting(name, today) {
+  const h = bdHash(`${name}|${today}`); const pick = (arr, k) => arr[Math.floor(h / (6 ** k)) % arr.length];
+  return `${pick(BD_OPEN, 0)} ${pick(BD_HEALTH, 1)} ${pick(BD_FAMILY, 2)}\n${pick(BD_WISH, 3)} ${pick(BD_HAPPY, 4)}`;
+}
 
 // แจ้งเตือนวันคล้ายวันเกิดบุคลากรทุกวัน เวลา 06:00 น. (เวลาไทย) — อ่านจากช่อง "birthday" (YYYY-MM-DD) ในทะเบียนบุคลากร
 // เทียบเฉพาะเดือน/วัน (ไม่สนปี) กับวันนี้ ส่งเฉพาะวันที่มีคนครบรอบวันเกิดจริงเท่านั้น พร้อมคำอวยพรและอิโมจิน่ารักๆ
@@ -1076,10 +1142,9 @@ exports.dailyBirthdayReminder = onSchedule({ schedule: '0 6 * * *', timeZone: 'A
     .filter((u) => u.birthday && String(u.birthday).slice(5) === mmdd && u.role !== 'pending');
   if (!celebrants.length) return;
 
-  const daySeed = Number(today.replace(/-/g, ''));
   for (let i = 0; i < celebrants.length; i++) {
     const u = celebrants[i];
-    const greeting = BIRTHDAY_GREETINGS[(daySeed + i) % BIRTHDAY_GREETINGS.length];
+    const greeting = buildBirthdayGreeting(u.name, today);
     const text = `🎉🎂 วันนี้เป็นวันคล้ายวันเกิดของ "${u.name}"${u.position ? ` (${u.position})` : ''} 🎂🎉\n\n${greeting} 🌟🎈`;
     await sendLine(channelAccessToken, targetId, text);
   }
@@ -1156,22 +1221,32 @@ exports.getLineQuota = onCall(async (request) => {
   if (!callerEmail) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
   const callerSnap = await db.doc(`users/${callerEmail}`).get();
   if (!callerSnap.exists || callerSnap.data().role !== 'super_admin') throw new HttpsError('permission-denied', 'เฉพาะ Super Admin เท่านั้น');
-  const { channelAccessToken } = await getLineSettings();
+  const { channelAccessToken, tokens, activeChannel } = await getLineSettings();
   if (!channelAccessToken) throw new HttpsError('failed-precondition', 'ยังไม่ได้ตั้งค่า Channel access token');
   let info;
   try { info = await fetchLineQuota(channelAccessToken); } catch (e) { throw new HttpsError('internal', e.message); }
-  await db.doc('settings/lineStatus').set({ quota: { ...info, checkedAt: FieldValue.serverTimestamp() } }, { merge: true });
-  return info;
+  const quotas = {}; // โควตาทั้ง 2 ช่อง (ถ้ามีช่องที่ 2)
+  for (const ch of ['1', '2']) { if (!tokens[ch]) continue; try { quotas[ch] = await fetchLineQuota(tokens[ch]); } catch (e) { quotas[ch] = { error: e.message }; } }
+  await db.doc('settings/lineStatus').set({ quota: { ...info, checkedAt: FieldValue.serverTimestamp() }, quotas, activeChannel }, { merge: true });
+  return { ...info, quotas, activeChannel };
+});
+
+// วันที่ 1 ของเดือน 00:05 — โควตาไลน์รีเซ็ต: กลับไปใช้ไลน์ช่อง 1 (หลัก) เป็นค่าตั้งต้น
+exports.monthlyLineChannelReset = onSchedule({ schedule: '5 0 1 * *', timeZone: 'Asia/Bangkok' }, async () => {
+  const st = await getLineSettings();
+  if (st.tokens[1] && st.activeChannel !== '1') await db.doc('settings/lineNotifyMeta').set({ activeChannel: '1' }, { merge: true });
 });
 
 // ทุกวัน 08:00 — เช็กโควตา เก็บไว้ให้แดชบอร์ดแสดง และถ้าใช้ไป >= 80% ส่งเตือนเข้าไลน์กลุ่มหลักครั้งเดียวต่อเดือน
 exports.dailyLineQuotaCheck = onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Bangkok' }, async () => {
-  const { channelAccessToken, targetId, enabled } = await getLineSettings();
+  const { channelAccessToken, targetId, enabled, tokens, activeChannel } = await getLineSettings();
   if (!channelAccessToken) return;
   let info;
   try { info = await fetchLineQuota(channelAccessToken); } catch (e) { console.error('ตรวจโควตาไลน์ไม่สำเร็จ:', e.message); return; }
   const ref = db.doc('settings/lineStatus');
-  await ref.set({ quota: { ...info, checkedAt: FieldValue.serverTimestamp() } }, { merge: true });
+  const quotas = {};
+  for (const ch of ['1', '2']) { if (!tokens[ch]) continue; try { quotas[ch] = await fetchLineQuota(tokens[ch]); } catch (e) { quotas[ch] = { error: e.message }; } }
+  await ref.set({ quota: { ...info, checkedAt: FieldValue.serverTimestamp() }, quotas, activeChannel }, { merge: true });
   if (!enabled || !targetId || !info.limited || info.percent === null || info.percent < 80 || info.remaining <= 0) return;
   const month = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }).slice(0, 7);
   const cur = await ref.get();
@@ -1216,6 +1291,33 @@ exports.ingestServiceStats = onRequest({ cors: false, memory: '256MiB' }, async 
 });
 
 // ===== ทะเบียนสิทธิ UC/Wel ตรง-ไม่ตรง: สคริปต์ที่เครื่อง JHCIS ส่งสรุป + รายชื่อ (เฉพาะชื่อ/อายุ/ที่อยู่/สถานพยาบาล ไม่มีเลขบัตร) -> rightsRegistry/* (อ่านได้เฉพาะผู้ที่ล็อกอิน) =====
+// ===== ปุ่ม "ประมวลผลทันที" บนหน้ารายงาน: เว็บเขียนคำขอที่ syncRequests/{kind} → ตัวรอรับคำสั่งบนเครื่อง JHCIS (node sync.mjs --watch) โพลมาที่นี่
+// แล้วรันซิงก์ตามชนิด (service / rights / pp / targets) จากนั้นรายงานผลกลับ — ยืนยันตัวตนด้วยคีย์เดียวกับ ingest* (x-api-key)
+const SYNC_KINDS = ['service', 'rights', 'pp', 'targets'];
+exports.syncRequestPoll = onRequest({ cors: false }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
+  try {
+    const key = String(req.get('x-api-key') || '');
+    const meta = await db.doc('settings/statsIngest').get();
+    const want = meta.exists ? meta.data().keyHash : '';
+    const got = require('crypto').createHash('sha256').update(key).digest('hex');
+    if (!want || key.length < 20 || got !== want) { res.status(401).json({ ok: false, error: 'คีย์ไม่ถูกต้อง' }); return; }
+    const action = String((req.body && req.body.action) || 'poll');
+    // ตัวรอรับคำสั่งแจ้งว่ายังทำงานอยู่ (เว็บใช้แสดงสถานะ "เครื่อง JHCIS พร้อมรับคำสั่ง")
+    await db.doc('settings/syncWatcher').set({ lastSeenAt: FieldValue.serverTimestamp() }, { merge: true });
+    if (action === 'done') {
+      const kind = String(req.body.kind || '');
+      if (!SYNC_KINDS.includes(kind)) { res.status(400).json({ ok: false, error: 'ชนิดไม่ถูกต้อง' }); return; }
+      await db.doc(`syncRequests/${kind}`).set({ status: req.body.ok ? 'done' : 'failed', message: String(req.body.message || '').slice(0, 300), finishedAt: FieldValue.serverTimestamp() }, { merge: true });
+      res.json({ ok: true }); return;
+    }
+    const snap = await db.collection('syncRequests').where('status', '==', 'pending').get();
+    const pending = snap.docs.map((d) => d.id).filter((id) => SYNC_KINDS.includes(id));
+    await Promise.all(pending.map((id) => db.doc(`syncRequests/${id}`).set({ status: 'running', startedAt: FieldValue.serverTimestamp() }, { merge: true })));
+    res.json({ ok: true, pending });
+  } catch (e) { console.error('syncRequestPoll', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});
+
 exports.ingestRightsRegistry = onRequest({ cors: false, memory: '512MiB', timeoutSeconds: 300 }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
   try {
@@ -1294,4 +1396,55 @@ exports.ingestPpTargets = onRequest({ cors: false, memory: '512MiB', timeoutSeco
     await Promise.all(old.filter((d) => !keep.has(d.id)).map((d) => d.delete()));
     res.json({ ok: true, chunks: chunks.length });
   } catch (e) { console.error('ingestPpTargets', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});
+
+// ===== คัดกรอง NCD โดย อสม. ผ่านลิงก์/QR (ไม่ต้องล็อกอิน) =====
+// ปลอดภัยด้วยรหัสลับในลิงก์ (settings/ncdPublic.token — อ่าน/เขียนได้เฉพาะ Super Admin) + ช่องล่อบอท + จำกัดจำนวนต่อวัน
+// ไม่คืนข้อมูลของคนอื่นเลย (ตอบแค่ ok) ข้อมูลเข้า ncdScreenings ด้วย source='asm', review='pending' ให้เจ้าหน้าที่ตรวจสอบก่อนนับ
+const ncdAsmCheck = async (k) => {
+  const snap = await db.doc('settings/ncdPublic').get();
+  const c = snap.exists ? snap.data() : {};
+  const want = String(c.token || ''); const got = String(k || '');
+  const ok = c.enabled === true && want.length >= 16 && got.length === want.length && require('crypto').timingSafeEqual(Buffer.from(want), Buffer.from(got));
+  if (!ok) throw new HttpsError('permission-denied', 'ลิงก์ไม่ถูกต้องหรือปิดใช้งานแล้ว กรุณาขอลิงก์ใหม่จากเจ้าหน้าที่');
+};
+exports.ncdAsmInfo = onCall({ cors: true }, async (request) => {
+  await ncdAsmCheck((request.data || {}).k);
+  const s = await db.doc('ppTargets/summary').get();
+  const m = s.exists ? s.data().villages || {} : {};
+  const villages = Object.entries(m).filter(([n]) => Number(n) > 0).sort((a, b) => Number(a[0]) - Number(b[0])).map(([no, name]) => ({ no: String(no), name: cleanText(name, 60) }));
+  return { ok: true, villages };
+});
+exports.ncdAsmSubmit = onCall({ cors: true }, async (request) => {
+  const d = request.data || {};
+  if (d.hp) throw new HttpsError('invalid-argument', 'ข้อมูลไม่ถูกต้อง');
+  await ncdAsmCheck(d.k);
+  const r = d.rec || {};
+  const num = (v, lo, hi) => { if (v === '' || v == null) return ''; const n = Number(v); if (!Number.isFinite(n) || n < lo || n > hi) throw new HttpsError('invalid-argument', 'ค่าตัวเลขไม่อยู่ในช่วงที่เป็นไปได้ กรุณาตรวจสอบ'); return n; };
+  const name = cleanText(r.name, 80); const asmName = cleanText(d.asmName, 80);
+  if (name.length < 2) throw new HttpsError('invalid-argument', 'กรุณากรอกชื่อ-สกุล');
+  if (asmName.length < 2) throw new HttpsError('invalid-argument', 'กรุณากรอกชื่อ อสม. ผู้คัดกรอง');
+  if (r.sex !== 'M' && r.sex !== 'F') throw new HttpsError('invalid-argument', 'กรุณาเลือกเพศ');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.birthDate || ''))) throw new HttpsError('invalid-argument', 'กรุณาเลือกวันเกิด');
+  const cid = String(r.cid || '').replace(/\D/g, '');
+  if (cid && cid.length !== 13) throw new HttpsError('invalid-argument', 'เลขบัตรประชาชนต้องมี 13 หลัก');
+  const today = bkkParts().date;
+  const rec = {
+    cid, name, sex: r.sex, birthDate: String(r.birthDate), villageNo: cleanText(r.villageNo, 6), houseNo: cleanText(r.houseNo, 20), phone: cleanText(r.phone, 15),
+    screenDate: /^\d{4}-\d{2}-\d{2}$/.test(String(r.screenDate || '')) ? String(r.screenDate) : today, screenPlace: r.screenPlace === 'unit' ? 'unit' : 'community',
+    knownDM: !!r.knownDM, knownHT: !!r.knownHT, familyDM: !!r.familyDM, familyHT: !!r.familyHT, hxHT: !!r.hxHT,
+    smokeStatus: ['never', 'former', 'current'].includes(r.smokeStatus) ? r.smokeStatus : '', alcoholFreq: ['none', 'sometimes', 'regular'].includes(r.alcoholFreq) ? r.alcoholFreq : '',
+    exercise: ['enough', 'low'].includes(r.exercise) ? r.exercise : '', sweet: ['rare', 'often'].includes(r.sweet) ? r.sweet : '', salty: ['ok', 'often'].includes(r.salty) ? r.salty : '', veg: ['ok', 'low'].includes(r.veg) ? r.veg : '',
+    symptoms: (Array.isArray(r.symptoms) ? r.symptoms : []).filter((x) => ['polyuria', 'polydipsia', 'weightloss', 'headache', 'blurred', 'numb'].includes(x)),
+    weight: num(r.weight, 20, 300), height: num(r.height, 100, 230), waist: num(r.waist, 30, 250),
+    sbp1: num(r.sbp1, 60, 300), dbp1: num(r.dbp1, 30, 200), sbp2: num(r.sbp2, 60, 300), dbp2: num(r.dbp2, 30, 200),
+    fasting: r.fasting !== false, glucose: num(r.glucose, 20, 800), note: cleanText(r.note, 300),
+  };
+  if (rec.sbp1 === '' || rec.dbp1 === '') throw new HttpsError('invalid-argument', 'กรุณากรอกความดันอย่างน้อย 1 ครั้ง');
+  // จำกัดต่อวัน กันสแปม และกันส่งซ้ำ (เลขบัตรเดียวกัน วันเดียวกัน)
+  const dayStart = await db.collection('ncdScreenings').where('source', '==', 'asm').where('screenDate', '==', rec.screenDate).count().get();
+  if (dayStart.data().count >= 500) throw new HttpsError('resource-exhausted', 'วันนี้รับข้อมูลครบจำนวนสูงสุดแล้ว');
+  if (cid) { const dup = await db.collection('ncdScreenings').where('cid', '==', cid).where('screenDate', '==', rec.screenDate).limit(1).get(); if (!dup.empty) throw new HttpsError('already-exists', 'มีผลคัดกรองของบุคคลนี้ในวันเดียวกันแล้ว'); }
+  const ref = await db.collection('ncdScreenings').add({ ...rec, source: 'asm', review: 'pending', jhcis: 'pending', screenedBy: `อสม. ${asmName}`, asmName, createdAt: FieldValue.serverTimestamp() });
+  return { ok: true, id: ref.id };
 });

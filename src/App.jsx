@@ -11,6 +11,7 @@ import RightsRegistry from './pages/RightsRegistry';
 import PopExport from './pages/PopExport';
 import PPFee from './pages/PPFee';
 import NcdScreening from './pages/NcdScreening';
+import NcdAsmPublic from './pages/NcdAsmPublic';
 import ThaiBooking from './pages/ThaiBooking';
 import ThaiBookingPublic from './pages/ThaiBookingPublic';
 import PrintThaiQr from './pages/PrintThaiQr';
@@ -248,6 +249,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           {/* หน้าสาธารณะ (ไม่ต้องล็อกอิน): จองคิวแพทย์แผนไทยผ่าน QR Code + ป้าย QR สำหรับพิมพ์ */}
+          <Route path="/ncd-asm" element={<NcdAsmPublic />} />
           <Route path="/book-thai" element={<ThaiBookingPublic />} />
           <Route path="/satisfaction" element={<SurveyPublic />} />
           <Route path="/print-thai-qr" element={<PrintThaiQr />} />
