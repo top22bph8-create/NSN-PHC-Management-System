@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Car, Loader2, MessageCircle, Plus, Trash2 } from 'lucide-react';
+import { CalendarCheck, CalendarX2, Car, Hash, Loader2, Lock, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
 import { REGISTRIES } from '../config/registries';
 import { DEFAULT_NUMBERING, ORG_DOC_CODE, formatNumber, getNumbering } from '../lib/numbering';
@@ -16,6 +16,80 @@ import {
   getDestinations, getMissionTypes, getVehicleFleet, vehicleLabel,
 } from '../lib/vehicleConfig';
 import { Settings } from 'lucide-react';
+
+// ===== ชิ้นส่วนจัดหน้าตั้งค่า: การ์ดหมวดมีแถบสีหัว / กล่องย่อยมีเลขขั้น / ช่องกรอกคีย์ลับ =====
+const TONES = {
+  blue: { head: 'border-blue-200 bg-blue-50 text-blue-900', chip: 'bg-blue-600', side: 'border-l-blue-500', num: 'bg-blue-600', badge: 'bg-blue-100 text-blue-800', field: 'border-blue-300 bg-blue-50/60' },
+  emerald: { head: 'border-emerald-200 bg-emerald-50 text-emerald-900', chip: 'bg-emerald-600', side: 'border-l-emerald-500', num: 'bg-emerald-600', badge: 'bg-emerald-100 text-emerald-800', field: 'border-emerald-300 bg-emerald-50/60' },
+  amber: { head: 'border-amber-200 bg-amber-50 text-amber-900', chip: 'bg-amber-500', side: 'border-l-amber-500', num: 'bg-amber-500', badge: 'bg-amber-100 text-amber-800', field: 'border-amber-300 bg-amber-50/60' },
+  green: { head: 'border-green-200 bg-green-50 text-green-900', chip: 'bg-green-600', side: 'border-l-green-500', num: 'bg-green-600', badge: 'bg-green-100 text-green-800', field: 'border-green-300 bg-green-50/60' },
+  rose: { head: 'border-rose-200 bg-rose-50 text-rose-900', chip: 'bg-rose-600', side: 'border-l-rose-500', num: 'bg-rose-600', badge: 'bg-rose-100 text-rose-800', field: 'border-rose-300 bg-rose-50/60' },
+  sky: { head: 'border-sky-200 bg-sky-50 text-sky-900', chip: 'bg-sky-600', side: 'border-l-sky-500', num: 'bg-sky-600', badge: 'bg-sky-100 text-sky-800', field: 'border-sky-300 bg-sky-50/60' },
+  violet: { head: 'border-violet-200 bg-violet-50 text-violet-900', chip: 'bg-violet-600', side: 'border-l-violet-500', num: 'bg-violet-600', badge: 'bg-violet-100 text-violet-800', field: 'border-violet-300 bg-violet-50/60' },
+  teal: { head: 'border-teal-200 bg-teal-50 text-teal-900', chip: 'bg-teal-600', side: 'border-l-teal-500', num: 'bg-teal-600', badge: 'bg-teal-100 text-teal-800', field: 'border-teal-300 bg-teal-50/60' },
+  slate: { head: 'border-slate-200 bg-slate-100 text-slate-800', chip: 'bg-slate-600', side: 'border-l-slate-400', num: 'bg-slate-600', badge: 'bg-slate-200 text-slate-700', field: 'border-slate-300 bg-slate-50' },
+};
+
+function Section({ tone = 'blue', icon: Icon, title, desc, children }) {
+  const t = TONES[tone];
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className={`flex items-center gap-3 border-b px-4 py-3 ${t.head}`}>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white ${t.chip}`}>{Icon && <Icon className="h-5 w-5" />}</span>
+        <div className="min-w-0">
+          <h2 className="font-semibold leading-tight">{title}</h2>
+          {desc && <p className="text-xs opacity-80">{desc}</p>}
+        </div>
+      </header>
+      <div className="space-y-4 p-4">{children}</div>
+    </section>
+  );
+}
+
+function Sub({ step, tone = 'slate', title, hint, children }) {
+  const t = TONES[tone];
+  return (
+    <div className={`space-y-3 rounded-xl border border-slate-200 border-l-4 bg-slate-50/70 p-3 ${t.side}`}>
+      <div>
+        <div className="flex items-center gap-2 font-semibold text-slate-800">
+          {step && <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs text-white ${t.num}`}>{step}</span>}
+          {title}
+        </div>
+        {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ช่องกรอกคีย์/รหัสลับ (เขียนได้อย่างเดียว): แถบป้ายสี + ไอคอนกุญแจ + ตัวอักษร monospace + แสดงสถานะ "รอบันทึก" เมื่อกรอกแล้ว
+function SecretInput({ id, tone = 'slate', badge, label, placeholder, value, onChange, hint }) {
+  const t = TONES[tone];
+  const filled = !!value.trim();
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${t.badge}`}>{badge}</span>
+        <label className="text-sm font-medium text-slate-700" htmlFor={id}>{label}</label>
+        <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${filled ? 'bg-amber-100 font-semibold text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
+          <Lock className="h-3 w-3" /> {filled ? 'กรอกแล้ว — กด “บันทึก” เพื่อเก็บ' : 'ค่าเดิมถูกเก็บไว้ (ว่าง = ไม่เปลี่ยน)'}
+        </span>
+      </div>
+      <input id={id} name={`${id}-nofill`} type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false}
+        className={`input border-2 font-mono !text-sm ${filled ? 'border-amber-400 bg-amber-50' : t.field}`} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      {hint && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+// กลุ่มเหตุการณ์แจ้งเตือนไลน์ (คีย์เดิมใน settings/lineNotifyMeta.events ไม่เปลี่ยน)
+const EVENT_GROUPS = [
+  { title: '📝 ใบลา', text: 'text-blue-700', on: 'border-blue-300 bg-blue-50 text-blue-900', items: [['submit', 'เมื่อยื่นใบลาใหม่'], ['decide', 'เมื่ออนุมัติ/ไม่อนุมัติ'], ['cancel', 'เมื่อยกเลิกใบลา']] },
+  { title: '📅 งานมอบหมาย / เวร', text: 'text-violet-700', on: 'border-violet-300 bg-violet-50 text-violet-900', items: [['assignmentReminder', 'ปฏิทินมอบหมายงาน (ทุกวัน 06:00 น.)'], ['unitDuty', 'เวรออกหน่วยปฐมพยาบาล/รับบริจาคโลหิต (แจ้งตอนบันทึก + 06:00 น. วันออกหน่วย)']] },
+  { title: '💰 การเงิน / ภาษี', text: 'text-emerald-700', on: 'border-emerald-300 bg-emerald-50 text-emerald-900', items: [['loanBorrow', 'ยืมเงิน (ทะเบียนสัญญายืมเงิน)'], ['loanRepay', 'ส่งใช้เงินยืม'], ['loanOverdue', 'เงินยืมเกินกำหนดส่งใช้ (ทุกวัน 06:00 น.)'], ['taxOverdueReminder', 'ภาษีหัก ณ ที่จ่ายค้างส่งสรรพากร (แจ้งเวลา 08:30 น. ของวันก่อนสิ้นเดือน 3 วันทำการ)']] },
+  { title: '🚗 ขอใช้รถราชการ', text: 'text-rose-700', on: 'border-rose-300 bg-rose-50 text-rose-900', items: [['vehicleSubmit', 'เมื่อมีคำขอใช้รถใหม่ (กลุ่มงานรถ)'], ['vehicleDecide', 'เมื่ออนุมัติ/ไม่อนุมัติการใช้รถ']] },
+  { title: '🎉 อื่น ๆ', text: 'text-amber-700', on: 'border-amber-300 bg-amber-50 text-amber-900', items: [['birthday', 'วันเกิดบุคลากร (ทุกวัน 06:00 น.)']] },
+];
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState(null);
@@ -102,55 +176,59 @@ export default function SettingsPage() {
   const year = (cfg?.era === 'CE' ? new Date().getFullYear() : new Date().getFullYear() + 543);
 
   return (
-    <div className="mx-auto max-w-2xl p-4 lg:p-6">
+    <div className="mx-auto max-w-3xl p-4 lg:p-6">
       <PageHeader icon={Settings} title="ตั้งค่าระบบ" subtitle="รูปแบบเลขทะเบียนอัตโนมัติ (ขึ้นปีใหม่เริ่มที่ 1 ใหม่) และสิทธิ์วันลาต่อปีงบประมาณ" />
       {error ? <ErrorState message={error} /> : !cfg ? <Spinner /> : (
-        <form onSubmit={save} className="card space-y-4 p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="era">ปีในเลขทะเบียน</label>
-              <select id="era" className="input" value={cfg.era} onChange={(e) => setCfg({ ...cfg, era: e.target.value })}>
-                <option value="BE">พ.ศ.</option><option value="CE">ค.ศ.</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="digits">จำนวนหลักของลำดับ</label>
-              <select id="digits" className="input" value={cfg.digits} onChange={(e) => setCfg({ ...cfg, digits: e.target.value })}>
-                {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800">
-            เลขที่หนังสือส่งใช้รูปแบบตายตัวของหน่วยงาน <b>{ORG_DOC_CODE}/ลำดับ</b> รันต่อเนื่องไปเรื่อย ๆ ตามปีงบประมาณ (ไม่ปรับตามการตั้งค่าด้านล่าง)
-            หากลงวันที่ย้อนหลังและเลขที่เดิมถูกใช้ไปแล้ว ให้ใช้ปุ่ม "แทรกเลขที่ย้อนหลัง" ตอนเพิ่มหนังสือส่ง ระบบจะออกเป็นเลขทศนิยม เช่น /20.1, /20.2
-          </div>
-          {Object.values(REGISTRIES).filter((r) => r.key !== 'outgoing').map((r) => (
-            <div key={r.key} className="grid items-end gap-3 sm:grid-cols-2">
+        <form onSubmit={save} className="space-y-5">
+          <Section tone="blue" icon={Hash} title="รูปแบบเลขทะเบียน" desc="เลขรันอัตโนมัติ ขึ้นปีใหม่เริ่มที่ 1 ใหม่">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor={`p-${r.key}`}>คำนำหน้า{r.numberLabel} (ไม่บังคับ)</label>
-                <input id={`p-${r.key}`} className="input" maxLength={10} value={cfg.prefixes?.[r.key] || ''} onChange={(e) => setCfg({ ...cfg, prefixes: { ...cfg.prefixes, [r.key]: e.target.value } })} />
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="era">ปีในเลขทะเบียน</label>
+                <select id="era" className="input" value={cfg.era} onChange={(e) => setCfg({ ...cfg, era: e.target.value })}>
+                  <option value="BE">พ.ศ.</option><option value="CE">ค.ศ.</option>
+                </select>
               </div>
-              <div className="rounded-lg bg-slate-50 p-2 text-sm">ตัวอย่าง: <b>{formatNumber(1, Number(cfg.digits), year, cfg.prefixes?.[r.key] || '')}</b></div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="digits">จำนวนหลักของลำดับ</label>
+                <select id="digits" className="input" value={cfg.digits} onChange={(e) => setCfg({ ...cfg, digits: e.target.value })}>
+                  {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
             </div>
-          ))}
-          <div className="border-t border-brand-100 pt-4">
-            <h2 className="mb-2 font-semibold">สิทธิ์วันลาต่อปีงบประมาณ (วัน)</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800">
+              เลขที่หนังสือส่งใช้รูปแบบตายตัวของหน่วยงาน <b>{ORG_DOC_CODE}/ลำดับ</b> รันต่อเนื่องไปเรื่อย ๆ ตามปีงบประมาณ (ไม่ปรับตามการตั้งค่าด้านล่าง)
+              หากลงวันที่ย้อนหลังและเลขที่เดิมถูกใช้ไปแล้ว ให้ใช้ปุ่ม "แทรกเลขที่ย้อนหลัง" ตอนเพิ่มหนังสือส่ง ระบบจะออกเป็นเลขทศนิยม เช่น /20.1, /20.2
+            </div>
+            {Object.values(REGISTRIES).filter((r) => r.key !== 'outgoing').map((r) => (
+              <div key={r.key} className="grid items-end gap-3 rounded-lg border border-slate-100 bg-slate-50/60 p-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor={`p-${r.key}`}>คำนำหน้า{r.numberLabel} (ไม่บังคับ)</label>
+                  <input id={`p-${r.key}`} className="input" maxLength={10} value={cfg.prefixes?.[r.key] || ''} onChange={(e) => setCfg({ ...cfg, prefixes: { ...cfg.prefixes, [r.key]: e.target.value } })} />
+                </div>
+                <div className="rounded-lg bg-white p-2 text-sm ring-1 ring-slate-200">ตัวอย่าง: <b>{formatNumber(1, Number(cfg.digits), year, cfg.prefixes?.[r.key] || '')}</b></div>
+              </div>
+            ))}
+            <p className="text-sm text-slate-500">การเปลี่ยนรูปแบบมีผลกับรายการใหม่เท่านั้น เลขที่ออกไปแล้วจะไม่ถูกแก้ไข ค่าเริ่มต้น: {DEFAULT_NUMBERING.digits} หลัก, พ.ศ.</p>
+          </Section>
+
+          <Section tone="emerald" icon={CalendarCheck} title="สิทธิ์วันลาต่อปีงบประมาณ" desc="จำนวนวัน/ปี แยกตามประเภทการลา">
+            <div className="grid gap-2 sm:grid-cols-2">
               {Object.entries(quota || {}).map(([k, v]) => (
-                <label key={k} className="flex items-center justify-between gap-2 text-sm text-slate-600">{k}
-                  <input type="number" min="0" className="input !w-24" value={v} onChange={(e) => setQuota({ ...quota, [k]: e.target.value })} aria-label={`สิทธิ์${k}`} />
+                <label key={k} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-700">{k}
+                  <input type="number" min="0" className="input !w-24 text-center font-semibold" value={v} onChange={(e) => setQuota({ ...quota, [k]: e.target.value })} aria-label={`สิทธิ์${k}`} />
                 </label>
               ))}
             </div>
-          </div>
-          <p className="text-sm text-slate-500">การเปลี่ยนรูปแบบมีผลกับรายการใหม่เท่านั้น เลขที่ออกไปแล้วจะไม่ถูกแก้ไข ค่าเริ่มต้น: {DEFAULT_NUMBERING.digits} หลัก, พ.ศ.</p>
+          </Section>
 
-          <div className="border-t border-brand-100 pt-4">
-            <h2 className="mb-2 font-semibold">วันหยุดราชการ (ไม่นับเป็นวันลาเมื่อลาตรงกับวันนี้)</h2>
-            <p className="mb-3 text-sm text-slate-500">
-              ระบบใช้รายการนี้ตัดวันหยุดราชการออกจากจำนวนวันลาที่คำนวณอัตโนมัติ (เช่น 13 ต.ค. วันนวมินทรมหาราช) บางวัน (มาฆบูชา/วิสาขบูชา/อาสาฬหบูชา และวันชดเชย) เลื่อนไปทุกปีตามปฏิทินจันทรคติ/วันหยุดสุดสัปดาห์
-              ต้องมาเพิ่มปีถัดไปเองที่นี่เมื่อมีประกาศจากทางราชการ (ราชกิจจานุเบกษา/ครม.)
-            </p>
+          <Section tone="amber" icon={CalendarX2} title="วันหยุดราชการ" desc="ไม่นับเป็นวันลาเมื่อลาตรงกับวันนี้">
+            <details className="rounded-lg bg-amber-50/60 p-2 text-sm text-slate-600">
+              <summary className="cursor-pointer font-medium text-amber-800">คำอธิบาย</summary>
+              <p className="mt-1">
+                ระบบใช้รายการนี้ตัดวันหยุดราชการออกจากจำนวนวันลาที่คำนวณอัตโนมัติ (เช่น 13 ต.ค. วันนวมินทรมหาราช) บางวัน (มาฆบูชา/วิสาขบูชา/อาสาฬหบูชา และวันชดเชย) เลื่อนไปทุกปีตามปฏิทินจันทรคติ/วันหยุดสุดสัปดาห์
+                ต้องมาเพิ่มปีถัดไปเองที่นี่เมื่อมีประกาศจากทางราชการ (ราชกิจจานุเบกษา/ครม.)
+              </p>
+            </details>
             {!holidays ? <Spinner /> : (
               <div className="space-y-2">
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
@@ -161,7 +239,7 @@ export default function SettingsPage() {
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/40 p-2">
                   <div><label className="mb-1 block text-xs text-slate-600">วันที่</label><ThaiDateInput value={newHoliday.date} onChange={(v) => setNewHoliday({ ...newHoliday, date: v })} /></div>
                   <div className="flex-1"><label className="mb-1 block text-xs text-slate-600">ชื่อวันหยุด</label><input className="input" placeholder="เช่น วันปิยมหาราช" value={newHoliday.name} onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })} /></div>
                   <button
@@ -176,139 +254,135 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
-          </div>
+          </Section>
 
-          <div className="border-t border-brand-100 pt-4">
-            <h2 className="mb-1 flex items-center gap-2 font-semibold"><MessageCircle className="h-5 w-5 text-brand-600" /> แจ้งเตือนไลน์เมื่อมีการยื่น/พิจารณาวันลา (LINE Messaging API)</h2>
+          <Section tone="green" icon={MessageCircle} title="แจ้งเตือนไลน์ (LINE Messaging API)" desc="ใบลา · งานมอบหมาย · เงินยืม · ขอใช้รถ · คิวแพทย์แผนไทย ฯลฯ">
             <LineQuotaStatus full />
-            <p className="mb-3 text-sm text-slate-500">
-              <b>LINE Notify แบบเดิมปิดให้บริการถาวรแล้วตั้งแต่ 31 มี.ค. 2568</b> ระบบนี้จึงเปลี่ยนมาใช้ LINE Messaging API แทน ต้องมี LINE Official Account ของหน่วยงานเอง (สมัครฟรีได้ที่{' '}
-              <a className="text-brand-700 underline" href="https://developers.line.biz/console/" target="_blank" rel="noreferrer">LINE Developers Console</a>) แล้วนำ <b>Channel access token</b> (แบบ long-lived) กับ <b>Target ID</b> ของกลุ่ม/ผู้ใช้ปลายทางมาวางไว้ที่นี่
-              — ระบบเก็บค่าทั้งสองนี้แบบเขียนได้อย่างเดียว ไม่มีใครดึงกลับมาดูได้อีก แม้แต่ผู้ดูแลระบบ (ป้องกันการรั่วไหล)
-              การส่งข้อความจริงต้องติดตั้ง Cloud Function เสริม 1 ตัว (ดูขั้นตอนเตรียมทั้งหมดใน README หัวข้อ "แจ้งเตือนไลน์") มิฉะนั้นจะบันทึกค่าไว้เฉยๆ ยังไม่ส่งข้อความ
-            </p>
-            <p className="mb-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">
-              ✨ เมื่อมีการยื่นใบลาใหม่ ข้อความที่ส่งเข้ากลุ่มจะมีปุ่ม <b>"อนุมัติ" / "ไม่อนุมัติ"</b> ให้กดตัดสินใจได้ทันทีในไลน์
-              (กดได้เฉพาะ LINE ของ "ผู้อำนวยการ" ที่ตั้งค่าไว้ด้านล่างเท่านั้น) พอกดแล้วระบบจะส่งลิงก์เปิดหน้าใบลาที่พร้อมพิมพ์กลับเข้ากลุ่มให้อัตโนมัติ
-              · หน้า "ปฏิทินมอบหมายงาน" ก็ใช้การตั้งค่าชุดเดียวกันนี้ส่งแจ้งเตือนงานที่มอบหมายไว้ล่วงหน้าเข้ากลุ่มอัตโนมัติทุกวันเวลา 06:00 น. (เฉพาะวันที่มีการมอบหมายงานไว้)
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">Channel access token</label>
-                <input id="lineToken" name="lineToken-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="วาง Channel access token ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไขค่าเดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
-              </div>
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken2">Channel access token — ไลน์ช่องที่ 2 (สำรอง เมื่อโควตาช่องแรกเต็ม)</label>
-                <input id="lineToken2" name="lineToken2-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="วาง Channel access token ของบอทตัวที่ 2 ที่นี่ (ว่างไว้ = ไม่เปลี่ยน)" value={lineToken2} onChange={(e) => setLineToken2(e.target.value)} />
-                <p className="mt-1 text-xs text-slate-500">ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่องแรกทั้งหมด — เชิญบอททั้ง 2 ตัวเข้ากลุ่มเดียวกัน (ต้องอยู่ Provider เดียวกันใน LINE Developers) และตั้ง Webhook URL ของบอทตัวที่ 2 เป็น URL เดียวกับตัวแรก</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-slate-600">ช่องที่ใช้ส่งตอนนี้:</span>
+            <details className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+              <summary className="cursor-pointer font-medium text-slate-700">วิธีเตรียม/คำอธิบายการตั้งค่าไลน์ (กดเพื่อดู)</summary>
+              <p className="mt-2">
+                <b>LINE Notify แบบเดิมปิดให้บริการถาวรแล้วตั้งแต่ 31 มี.ค. 2568</b> ระบบนี้จึงเปลี่ยนมาใช้ LINE Messaging API แทน ต้องมี LINE Official Account ของหน่วยงานเอง (สมัครฟรีได้ที่{' '}
+                <a className="text-brand-700 underline" href="https://developers.line.biz/console/" target="_blank" rel="noreferrer">LINE Developers Console</a>) แล้วนำ <b>Channel access token</b> (แบบ long-lived) กับ <b>Target ID</b> ของกลุ่ม/ผู้ใช้ปลายทางมาวางไว้ที่นี่
+                — ระบบเก็บค่าทั้งสองนี้แบบเขียนได้อย่างเดียว ไม่มีใครดึงกลับมาดูได้อีก แม้แต่ผู้ดูแลระบบ (ป้องกันการรั่วไหล)
+                การส่งข้อความจริงต้องติดตั้ง Cloud Function เสริม 1 ตัว (ดูขั้นตอนเตรียมทั้งหมดใน README หัวข้อ "แจ้งเตือนไลน์") มิฉะนั้นจะบันทึกค่าไว้เฉยๆ ยังไม่ส่งข้อความ
+              </p>
+              <p className="mt-2 rounded-lg bg-amber-50 p-2 text-amber-800">
+                ✨ เมื่อมีการยื่นใบลาใหม่ ข้อความที่ส่งเข้ากลุ่มจะมีปุ่ม <b>"อนุมัติ" / "ไม่อนุมัติ"</b> ให้กดตัดสินใจได้ทันทีในไลน์
+                (กดได้เฉพาะ LINE ของ "ผู้อำนวยการ" ที่ตั้งค่าไว้ด้านล่างเท่านั้น) พอกดแล้วระบบจะส่งลิงก์เปิดหน้าใบลาที่พร้อมพิมพ์กลับเข้ากลุ่มให้อัตโนมัติ
+                · หน้า "ปฏิทินมอบหมายงาน" ก็ใช้การตั้งค่าชุดเดียวกันนี้ส่งแจ้งเตือนงานที่มอบหมายไว้ล่วงหน้าเข้ากลุ่มอัตโนมัติทุกวันเวลา 06:00 น. (เฉพาะวันที่มีการมอบหมายงานไว้)
+              </p>
+            </details>
+
+            <Sub step="1" tone="sky" title="ช่องไลน์ (Channel access token)" hint="กรอกเฉพาะตอนต้องการบันทึก/เปลี่ยน — เว้นว่างไว้ = ไม่แก้ไขค่าเดิม (ค่าที่บันทึกแล้วดึงกลับมาดูไม่ได้)">
+              <SecretInput id="lineToken" tone="sky" badge="ช่อง 1 · หลัก" label="Channel access token — ไลน์ช่องที่ 1 (หลัก)" placeholder="วาง token ของบอทตัวที่ 1 ที่นี่" value={lineToken} onChange={setLineToken} />
+              <SecretInput id="lineToken2" tone="emerald" badge="ช่อง 2 · สำรอง" label="Channel access token — ไลน์ช่องที่ 2 (สำรอง เมื่อโควตาช่องแรกเต็ม)" placeholder="วาง token ของบอทตัวที่ 2 ที่นี่" value={lineToken2} onChange={setLineToken2}
+                hint="ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่องแรกทั้งหมด — เชิญบอททั้ง 2 ตัวเข้ากลุ่มเดียวกัน (ต้องอยู่ Provider เดียวกัน) และตั้ง Webhook URL ของบอทตัวที่ 2 เป็น URL เดียวกับตัวแรก" />
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium text-slate-700">ช่องที่ใช้ส่งตอนนี้:</span>
                   {['1', '2'].map((c) => (
                     <button key={c} type="button" onClick={async () => { await setLineActiveChannel(c); setLineMeta({ ...lineMeta, activeChannel: c }); say({ type: 'ok', text: `สลับไปใช้ไลน์ช่อง ${c} แล้ว` }); }}
                       className={`btn !py-1 text-xs ${(lineMeta.activeChannel || '1') === c ? 'btn-primary' : 'btn-outline'}`}>ไลน์ช่อง {c}{c === '1' ? ' (หลัก)' : ' (สำรอง)'}</button>
                   ))}
+                  <span className="text-xs text-slate-500">สลับแล้วมีผลทันที ไม่ต้องกดบันทึก</span>
                 </div>
-                <label className="mt-2 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.autoSwitch !== false} onChange={(e) => setLineMeta({ ...lineMeta, autoSwitch: e.target.checked })} /> สลับอัตโนมัติเมื่อโควตาเต็ม (และกลับไปช่อง 1 ทุกวันที่ 1 ของเดือน) — กด "บันทึก" ด้านล่างเพื่อเก็บค่านี้</label>
+                <label className="mt-2 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.autoSwitch !== false} onChange={(e) => setLineMeta({ ...lineMeta, autoSwitch: e.target.checked })} /> สลับอัตโนมัติเมื่อโควตาเต็ม (และกลับไปช่อง 1 ทุกวันที่ 1 ของเดือน) <span className="text-xs text-slate-400">— ต้องกด "บันทึก" ด้านล่าง</span></label>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง) — กลุ่มหลัก: ใบลา/งานมอบหมาย/เงินยืม ฯลฯ</label>
-                <input id="lineTargetId" name="lineTargetId-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineTargetId} onChange={(e) => setLineTargetId(e.target.value)} />
-              </div>
-              <p className="text-sm text-slate-600">
-                LINE ผู้อำนวยการ (สำหรับปุ่มอนุมัติ):{' '}
+            </Sub>
+
+            <Sub step="2" tone="violet" title="กลุ่มปลายทาง (Target ID)" hint="รหัสกลุ่ม/ผู้ใช้ที่ขึ้นต้นด้วย C… (กลุ่ม) หรือ U… (รายบุคคล) — เว้นว่างไว้ = ไม่แก้ไขค่าเดิม แต่ละกลุ่มต้องใช้รหัสคนละตัว">
+              <SecretInput id="lineTargetId" tone="violet" badge="กลุ่มหลัก" label="Target ID — กลุ่มหลัก: ใบลา/งานมอบหมาย/เงินยืม/สรุปคิวแพทย์แผนไทย ฯลฯ" placeholder="เช่น Cxxxxxxxx... (กลุ่ม) หรือ Uxxxxxxxx... (รายบุคคล)" value={lineTargetId} onChange={setLineTargetId} />
+              <SecretInput id="lineVehicleTargetId" tone="rose" badge="กลุ่มงานรถ" label='Target ID — ไลน์กลุ่ม "ขออนุญาตใช้รถ"' placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ)" value={lineVehicleTargetId} onChange={setLineVehicleTargetId}
+                hint='คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการ) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง' />
+              <SecretInput id="lineThaiTargetId" tone="teal" badge="กลุ่มแพทย์แผนไทย" label='Target ID — ไลน์กลุ่ม "งานแพทย์แผนไทย" (แจ้งเตือนการจองคิวออนไลน์)' placeholder="เช่น Cxxxxxxxx... (กลุ่มงานแพทย์แผนไทย)" value={lineThaiTargetId} onChange={setLineThaiTargetId}
+                hint='เมื่อมีผู้จองหรือยกเลิกคิวแพทย์แผนไทย ระบบส่งข้อความเข้ากลุ่มนี้ (เชิญบอทเข้ากลุ่มแล้วพิมพ์ข้อความ 1 ครั้ง จะเห็น ID ในรายการด้านล่าง กด "ใช้เป็นกลุ่มแพทย์แผนไทย")' />
+              <div className={`flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm ${lineMeta.directorUserId ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                <b>LINE ผู้อำนวยการ (สำหรับปุ่มอนุมัติ):</b>
                 {lineMeta.directorUserId ? (
-                  <span className="font-medium text-emerald-700">ตั้งค่าแล้ว ({lineMeta.directorUserId})</span>
+                  <span className="font-medium">✅ ตั้งค่าแล้ว <code className="break-all text-xs">({lineMeta.directorUserId})</code></span>
                 ) : (
-                  <span className="font-medium text-amber-700">ยังไม่ได้ตั้งค่า — ให้ผู้อำนวยการพิมพ์ข้อความคุยกับบอทแบบส่วนตัว (1:1) 1 ครั้ง แล้วกด "ตั้งเป็นผู้อำนวยการ" ที่รายการด้านล่าง</span>
+                  <span>⚠️ ยังไม่ได้ตั้งค่า — ให้ผู้อำนวยการพิมพ์ข้อความคุยกับบอทแบบส่วนตัว (1:1) 1 ครั้ง แล้วกด "ตั้งเป็นผู้อำนวยการ" ที่รายการด้านล่าง</span>
                 )}
-              </p>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineVehicleTargetId">Target ID ไลน์กลุ่ม "ขออนุญาตใช้รถ" (แยกจากกลุ่มหลักด้านบน)</label>
-                <input id="lineVehicleTargetId" name="lineVehicleTargetId-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานรถ) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineVehicleTargetId} onChange={(e) => setLineVehicleTargetId(e.target.value)} />
-                <p className="mt-1 text-xs text-slate-500">คำขอใช้รถใหม่จะส่งการ์ดปุ่ม "อนุมัติ/ไม่อนุมัติ" เข้ากลุ่มนี้ (กดได้เฉพาะ LINE ของผู้อำนวยการที่ตั้งไว้ด้านบน) พออนุมัติแล้วส่งลิงก์พิมพ์แบบ 3 กลับเข้ากลุ่ม ต้องเชิญบอทเข้ากลุ่มนี้แล้วพิมพ์ข้อความ 1 ครั้งให้ระบบตรวจพบรหัสกลุ่มในรายการด้านล่าง</p>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineThaiTargetId">Target ID ไลน์กลุ่ม "งานแพทย์แผนไทย" (แจ้งเตือนการจองคิวออนไลน์)</label>
-                <input id="lineThaiTargetId" name="lineThaiTargetId-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="เช่น Cxxxxxxxx... (กลุ่มงานแพทย์แผนไทย) เว้นว่างไว้ = ไม่แก้ไขค่าเดิม" value={lineThaiTargetId} onChange={(e) => setLineThaiTargetId(e.target.value)} />
-                <p className="mt-1 text-xs text-slate-500">เมื่อมีผู้จองหรือยกเลิกคิวแพทย์แผนไทย ระบบส่งข้อความเข้ากลุ่มนี้ (เชิญบอทเข้ากลุ่มแล้วพิมพ์ข้อความ 1 ครั้ง จะเห็น ID ในรายการด้านล่าง กด "ใช้เป็นกลุ่มแพทย์แผนไทย")</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <p className="mb-2 text-sm font-medium text-slate-600">Target ID ที่ตรวจพบล่าสุด (จาก Webhook)</p>
-                {lineTargetsError ? (
-                  <p className="text-sm text-rose-600">
-                    โหลดไม่สำเร็จ: <code className="break-all">{lineTargetsError}</code> (ส่งข้อความนี้ให้ผู้ดูแลระบบช่วยตรวจสอบ)
-                  </p>
-                ) : lineTargets.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    ยังไม่พบ Target ID — ต้อง (1) ติดตั้งฟังก์ชัน <code>lineWebhook</code> ด้วย <code>firebase deploy --only functions</code>
-                    (2) นำ URL ของฟังก์ชันไปวางเป็น Webhook URL ในหน้า Messaging API ของ LINE Developers Console แล้วเปิดสวิตช์ "Use webhook"
-                    (3) พิมพ์ข้อความอะไรก็ได้ 1 ครั้งในแชท/กลุ่มที่มีบอทอยู่ แล้วรีเฟรชหน้านี้ (ดูขั้นตอนละเอียดใน README หัวข้อ "แจ้งเตือนไลน์")
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {lineTargets.map((t) => (
-                      <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2 text-sm">
-                        <div className="min-w-0">
-                          <div>
-                            <span className="rounded bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-800">{t.type}</span>{' '}
-                            <code className="break-all">{t.id}</code>
-                            {lineMeta.directorUserId && t.id === lineMeta.directorUserId && (
-                              <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">ผู้อำนวยการ</span>
-                            )}
-                          </div>
-                          <div className="truncate text-xs text-slate-500">ข้อความล่าสุด: {t.lastMessage}</div>
+            </Sub>
+
+            <Sub step="3" tone="slate" title="Target ID ที่ตรวจพบล่าสุด (จาก Webhook)" hint="กดปุ่มข้างรายการเพื่อนำรหัสไปใส่ในช่องด้านบนอัตโนมัติ แล้วกด “บันทึก”">
+              {lineTargetsError ? (
+                <p className="text-sm text-rose-600">
+                  โหลดไม่สำเร็จ: <code className="break-all">{lineTargetsError}</code> (ส่งข้อความนี้ให้ผู้ดูแลระบบช่วยตรวจสอบ)
+                </p>
+              ) : lineTargets.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  ยังไม่พบ Target ID — ต้อง (1) ติดตั้งฟังก์ชัน <code>lineWebhook</code> ด้วย <code>firebase deploy --only functions</code>
+                  (2) นำ URL ของฟังก์ชันไปวางเป็น Webhook URL ในหน้า Messaging API ของ LINE Developers Console แล้วเปิดสวิตช์ "Use webhook"
+                  (3) พิมพ์ข้อความอะไรก็ได้ 1 ครั้งในแชท/กลุ่มที่มีบอทอยู่ แล้วรีเฟรชหน้านี้ (ดูขั้นตอนละเอียดใน README หัวข้อ "แจ้งเตือนไลน์")
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {lineTargets.map((t) => (
+                    <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 text-sm">
+                      <div className="min-w-0">
+                        <div>
+                          <span className="rounded bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-800">{t.type}</span>{' '}
+                          <code className="break-all">{t.id}</code>
+                          {lineMeta.directorUserId && t.id === lineMeta.directorUserId && (
+                            <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">ผู้อำนวยการ</span>
+                          )}
                         </div>
-                        <div className="flex shrink-0 gap-1.5">
-                          <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้ Target ID นี้</button>
-                          {t.type !== 'รายบุคคล' && (
-                            <>
+                        <div className="truncate text-xs text-slate-500">ข้อความล่าสุด: {t.lastMessage}</div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-1.5">
+                        <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineTargetId(t.id)}>ใช้เป็นกลุ่มหลัก</button>
+                        {t.type !== 'รายบุคคล' && (
+                          <>
                             <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineVehicleTargetId(t.id)}>ใช้เป็นกลุ่มงานรถ</button>
                             <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => setLineThaiTargetId(t.id)}>ใช้เป็นกลุ่มแพทย์แผนไทย</button>
-                            </>
-                          )}
-                          {t.type === 'รายบุคคล' && (
-                            <button
-                              type="button" className="btn btn-outline !py-1 text-xs"
-                              onClick={async () => { await saveLineDirectorId(t.id); setLineMeta({ ...lineMeta, directorUserId: t.id }); say('ตั้งเป็นผู้อำนวยการแล้ว'); }}
-                            >
-                              ตั้งเป็นผู้อำนวยการ
-                            </button>
-
-                          )}
-                        </div>
+                          </>
+                        )}
+                        {t.type === 'รายบุคคล' && (
+                          <button
+                            type="button" className="btn btn-outline !py-1 text-xs"
+                            onClick={async () => { await saveLineDirectorId(t.id); setLineMeta({ ...lineMeta, directorUserId: t.id }); say('ตั้งเป็นผู้อำนวยการแล้ว'); }}
+                          >
+                            ตั้งเป็นผู้อำนวยการ
+                          </button>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input type="checkbox" className="h-5 w-5" checked={lineMeta.enabled} onChange={(e) => setLineMeta({ ...lineMeta, enabled: e.target.checked })} /> เปิดใช้งานแจ้งเตือนไลน์
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Sub>
+
+            <Sub step="4" tone="amber" title="เลือกเหตุการณ์ที่จะแจ้งเตือน">
+              <label className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3 text-sm font-semibold ${lineMeta.enabled ? 'border-emerald-400 bg-emerald-50 text-emerald-900' : 'border-slate-300 bg-white text-slate-700'}`}>
+                <input type="checkbox" className="h-5 w-5" checked={!!lineMeta.enabled} onChange={(e) => setLineMeta({ ...lineMeta, enabled: e.target.checked })} />
+                เปิดใช้งานแจ้งเตือนไลน์ (สวิตช์หลัก)
+                <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${lineMeta.enabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{lineMeta.enabled ? 'เปิดอยู่' : 'ปิดอยู่'}</span>
               </label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.submit} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, submit: e.target.checked } })} /> เมื่อยื่นใบลาใหม่</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.decide} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, decide: e.target.checked } })} /> เมื่ออนุมัติ/ไม่อนุมัติ</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.cancel} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, cancel: e.target.checked } })} /> เมื่อยกเลิกใบลา</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.assignmentReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, assignmentReminder: e.target.checked } })} /> ปฏิทินมอบหมายงาน (ทุกวัน 06:00 น.)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanBorrow} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanBorrow: e.target.checked } })} /> ยืมเงิน (ทะเบียนสัญญายืมเงิน)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanRepay} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanRepay: e.target.checked } })} /> ส่งใช้เงินยืม</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.loanOverdue} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, loanOverdue: e.target.checked } })} /> เงินยืมเกินกำหนดส่งใช้ (ทุกวัน 06:00 น.)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.events.unitDuty !== false} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, unitDuty: e.target.checked } })} /> เวรออกหน่วยปฐมพยาบาล/รับบริจาคโลหิต (แจ้งตอนบันทึก + 06:00 น. วันออกหน่วย)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.birthday} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, birthday: e.target.checked } })} /> 🎉 วันเกิดบุคลากร (ทุกวัน 06:00 น.)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.taxOverdueReminder} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, taxOverdueReminder: e.target.checked } })} /> ภาษีหัก ณ ที่จ่ายค้างส่งสรรพากร (แจ้งเวลา 08:30 น. ของวันก่อนสิ้นเดือน 3 วันทำการ)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.vehicleSubmit} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, vehicleSubmit: e.target.checked } })} /> 🚗 เมื่อมีคำขอใช้รถใหม่ (กลุ่มงานรถ)</label>
-                <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={!!lineMeta.events.vehicleDecide} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, vehicleDecide: e.target.checked } })} /> 🚗 เมื่ออนุมัติ/ไม่อนุมัติการใช้รถ</label>
-              </div>
-            </div>
-          </div>
+              {EVENT_GROUPS.map((g) => (
+                <div key={g.title}>
+                  <div className={`mb-1 text-xs font-semibold ${g.text}`}>{g.title}</div>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {g.items.map(([key, label]) => {
+                      const on = key === 'unitDuty' ? lineMeta.events.unitDuty !== false : !!lineMeta.events[key];
+                      return (
+                        <label key={key} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${on ? g.on : 'border-slate-200 bg-white text-slate-600'}`}>
+                          <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={on} onChange={(e) => setLineMeta({ ...lineMeta, events: { ...lineMeta.events, [key]: e.target.checked } })} />
+                          <span>{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </Sub>
+          </Section>
 
-          <div className="border-t border-brand-100 pt-4">
-            <h2 className="mb-1 flex items-center gap-2 font-semibold"><Car className="h-5 w-5 text-brand-600" /> ระบบขออนุญาตใช้ยานพาหนะราชการ — ทะเบียนรถ/ประเภทภารกิจ/สถานที่</h2>
-            <p className="mb-3 text-sm text-slate-500">
-              จัดการรายชื่อยานพาหนะของหน่วยงาน ประเภทภารกิจ และสถานที่ปลายทางมาตรฐาน ที่จะใช้เป็นช้อยในฟอร์มขอใช้รถ (เฟสถัดไป) — เปลี่ยนที่นี่จุดเดียว มีผลทุกจุดที่ใช้งาน
-            </p>
-
+          <Section tone="rose" icon={Car} title="ระบบขออนุญาตใช้ยานพาหนะราชการ" desc="ทะเบียนรถ · ประเภทภารกิจ · สถานที่ปลายทาง">
+            <p className="text-sm text-slate-500">จัดการรายชื่อยานพาหนะของหน่วยงาน ประเภทภารกิจ และสถานที่ปลายทางมาตรฐาน ที่จะใช้เป็นช้อยในฟอร์มขอใช้รถ — เปลี่ยนที่นี่จุดเดียว มีผลทุกจุดที่ใช้งาน</p>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-700">ทะเบียนยานพาหนะ</h3>
+              <h3 className="border-l-4 border-rose-500 pl-2 text-sm font-semibold text-slate-800">ทะเบียนยานพาหนะ</h3>
               <button type="button" className="btn btn-outline !py-1 text-xs" onClick={() => window.open(`${window.location.origin}${window.location.pathname}#/print-vehicle-qr`, '_blank')}>🖨️ พิมพ์ป้าย QR Code รถ</button>
             </div>
             {!fleet ? <Spinner /> : (
@@ -374,7 +448,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <h3 className="mb-2 text-sm font-semibold text-slate-700">ประเภทภารกิจ</h3>
+            <h3 className="mb-2 mt-2 border-l-4 border-violet-500 pl-2 text-sm font-semibold text-slate-800">ประเภทภารกิจ</h3>
             {!missionTypes ? <Spinner /> : (
               <div className="mb-4 space-y-2">
                 <div className="max-h-96 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
@@ -414,7 +488,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <h3 className="mb-2 text-sm font-semibold text-slate-700">สถานที่ปลายทาง</h3>
+            <h3 className="mb-2 mt-2 border-l-4 border-teal-500 pl-2 text-sm font-semibold text-slate-800">สถานที่ปลายทาง</h3>
             {!destinations ? <Spinner /> : (
               <div className="space-y-2">
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
@@ -439,9 +513,11 @@ export default function SettingsPage() {
                 <p className="text-xs text-slate-400">ผู้ใช้ทั่วไปยังเลือก "อื่น ๆ (ระบุ)" แล้วพิมพ์เองได้เสมอในฟอร์มขอใช้รถ (เฟสถัดไป)</p>
               </div>
             )}
-          </div>
+          </Section>
 
-          <button className="btn btn-primary" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
+          <div className="sticky bottom-0 z-10 -mx-4 border-t border-brand-100 bg-white/90 px-4 py-3 backdrop-blur lg:-mx-6 lg:px-6">
+            <button className="btn btn-primary w-full sm:w-auto" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} บันทึกการตั้งค่าทั้งหมด</button>
+          </div>
         </form>
       )}
       <Toast toast={toast} onClose={() => setToast(null)} />
