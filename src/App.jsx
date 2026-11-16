@@ -10,6 +10,7 @@ import ServiceStats from './pages/ServiceStats';
 import RightsRegistry from './pages/RightsRegistry';
 import PopExport from './pages/PopExport';
 import PPFee from './pages/PPFee';
+import NcdScreening from './pages/NcdScreening';
 import ThaiBooking from './pages/ThaiBooking';
 import ThaiBookingPublic from './pages/ThaiBookingPublic';
 import PrintThaiQr from './pages/PrintThaiQr';
@@ -216,6 +217,7 @@ function Shell() {
           <Route path="outbreak/forms" element={<Guard module="outbreak"><FormSamples /></Guard>} />
           <Route path="outbreak/:id" element={<Guard module="outbreak"><OutbreakCase /></Guard>} />
           <Route path="pop-export" element={<Guard module="pop-export"><PopExport /></Guard>} />
+          <Route path="ncd-screening" element={<Guard module="ncd-screening"><NcdScreening /></Guard>} />
           <Route path="pp-fee" element={<Guard module="pp-fee"><PPFee /></Guard>} />
           <Route path="service-stats" element={<Guard module="service-stats"><ServiceStats /></Guard>} />
           <Route path="unit-blood" element={<Guard module="unit-duty"><UnitDuty kind="blood" /></Guard>} />

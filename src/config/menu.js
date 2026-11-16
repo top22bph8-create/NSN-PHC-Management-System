@@ -122,7 +122,7 @@ export const GROUPS = [
     items: [
       { key: 'outbreak', label: 'สอบสวนโรค & แผนที่การระบาด', path: '/outbreak', icon: Biohazard, ready: true, module: 'outbreak', tone: 'from-rose-600 to-orange-500', desc: 'เปิดเคสสอบสวนโรค บันทึกผู้ป่วย/ผู้สัมผัส วิเคราะห์ Person-Time-Place และ Epidemic Curve' },
       { key: 'outbreak-forms', label: 'ตัวอย่างแบบฟอร์มรายงาน', path: '/outbreak/forms', icon: FolderOpen, ready: true, module: 'outbreak', tone: 'from-sky-500 to-indigo-500', desc: 'คลังไฟล์ Word/PDF แบบฟอร์มรายงานต่างๆ อัปโหลด ตั้งชื่อ เปิดดู และลบได้' },
-      { key: 'ncd-screening', label: 'ระบบคัดกรองกลุ่มเสี่ยง NCD', path: '/soon/ncd-screening', icon: HeartPulse, emoji: '🩺', ready: false, tone: 'from-rose-500 to-red-600', desc: 'คัดกรองเบาหวาน/ความดันโลหิตสูงผ่านมือถือ อสม. · เร็วๆ นี้' },
+      { key: 'ncd-screening', label: 'ระบบคัดกรองกลุ่มเสี่ยง NCD', path: '/ncd-screening', icon: HeartPulse, emoji: '🩺', ready: true, module: 'ncd-screening', tone: 'from-rose-500 to-red-600', desc: 'คัดกรองเบาหวาน/ความดันโลหิตสูง แยกเกณฑ์ 15–34 และ 35–59 ปี แปลผลอัตโนมัติ บันทึกบนมือถือได้' },
       { key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', path: '/soon/disease', icon: Activity, ready: false },
     ],
   },

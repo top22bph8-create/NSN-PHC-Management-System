@@ -87,6 +87,11 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isActive();
     }
+    // ผลคัดกรองกลุ่มเสี่ยง NCD (เบาหวาน/ความดัน) — ผู้ใช้งานที่เปิดใช้งานอ่าน/เขียนได้ ต้องตรงกับ roles.js 'ncd-screening'
+    match /ncdScreenings/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /outbreakCases/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

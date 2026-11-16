@@ -60,6 +60,7 @@ export const ACCESS = {
   'pop-export': { read: ALL, write: [] },
   outbreak: { read: ALL, write: ALL },
   survey: { read: ALL, write: ALL },
+  'ncd-screening': { read: ALL, write: ALL },
   settings: { read: ['super_admin'], write: ['super_admin'] },
   backup: { read: ['super_admin'], write: ['super_admin'] },
   audit: { read: ['super_admin'], write: [] },
