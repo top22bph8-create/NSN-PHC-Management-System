@@ -122,6 +122,7 @@ export const GROUPS = [
     items: [
       { key: 'outbreak', label: 'สอบสวนโรค & แผนที่การระบาด', path: '/outbreak', icon: Biohazard, ready: true, module: 'outbreak', tone: 'from-rose-600 to-orange-500', desc: 'เปิดเคสสอบสวนโรค บันทึกผู้ป่วย/ผู้สัมผัส วิเคราะห์ Person-Time-Place และ Epidemic Curve' },
       { key: 'outbreak-forms', label: 'ตัวอย่างแบบฟอร์มรายงาน', path: '/outbreak/forms', icon: FolderOpen, ready: true, module: 'outbreak', tone: 'from-sky-500 to-indigo-500', desc: 'คลังไฟล์ Word/PDF แบบฟอร์มรายงานต่างๆ อัปโหลด ตั้งชื่อ เปิดดู และลบได้' },
+      { key: 'ncd-screening', label: 'ระบบคัดกรองกลุ่มเสี่ยง NCD', path: '/soon/ncd-screening', icon: HeartPulse, emoji: '🩺', ready: false, tone: 'from-rose-500 to-red-600', desc: 'คัดกรองเบาหวาน/ความดันโลหิตสูงผ่านมือถือ อสม. · เร็วๆ นี้' },
       { key: 'disease', label: 'ส่งเสริมป้องกันควบคุมโรค', path: '/soon/disease', icon: Activity, ready: false },
     ],
   },
@@ -156,6 +157,7 @@ export const SOON = {
   equipment: { label: 'งานครุภัณฑ์', features: ['ทะเบียนครุภัณฑ์ (เลขครุภัณฑ์เป็นรหัสหลัก)', 'โอนย้าย / จำหน่าย / ซ่อมบำรุง', 'ตรวจสอบครุภัณฑ์ประจำปี', 'รองรับ QR Code/Barcode ในอนาคต'] },
   supplies: { label: 'งานพัสดุ', features: ['ทะเบียนพัสดุ', 'รับพัสดุ / เบิกจ่าย', 'คงเหลือและจุดสั่งซื้อ', 'แจ้งเตือนพัสดุใกล้หมด'] },
   disease: { label: 'งานส่งเสริมป้องกันควบคุมโรค', features: ['บันทึกกิจกรรม/โครงการ ตามหมู่บ้านและกลุ่มเป้าหมาย', 'รายงานตามเดือน ไตรมาส ปีงบประมาณ', 'งานเฝ้าระวังโรค วัคซีน คัดกรอง ไข้เลือดออก ฯลฯ'] },
+  'ncd-screening': { label: 'ระบบคัดกรองกลุ่มเสี่ยง NCD', features: ['หน้าจอมือถือสำหรับ อสม. คัดกรองเบาหวาน/ความดันโลหิตสูงประจำปี', 'แยกเกณฑ์ตามช่วงอายุ 15–34 ปี และ 35–59 ปี (ชาย/หญิง)', 'บันทึกพฤติกรรมเสี่ยง (SPECIALPP) และผลวัดร่างกาย/น้ำตาล/ความดัน (NCDSCREEN)', 'แปลผลอัตโนมัติ ปกติ/เสี่ยง/สงสัย', 'ส่งเข้า JHCIS หลังเจ้าหน้าที่อนุมัติ พร้อม ICD-10 และค่าบริการ'] },
   nursing: { label: 'งานการพยาบาล', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
   academic: { label: 'งานวิชาการ', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
 };
