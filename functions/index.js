@@ -1401,25 +1401,75 @@ exports.ingestPpTargets = onRequest({ cors: false, memory: '512MiB', timeoutSeco
 // ===== คัดกรอง NCD โดย อสม. ผ่านลิงก์/QR (ไม่ต้องล็อกอิน) =====
 // ปลอดภัยด้วยรหัสลับในลิงก์ (settings/ncdPublic.token — อ่าน/เขียนได้เฉพาะ Super Admin) + ช่องล่อบอท + จำกัดจำนวนต่อวัน
 // ไม่คืนข้อมูลของคนอื่นเลย (ตอบแค่ ok) ข้อมูลเข้า ncdScreenings ด้วย source='asm', review='pending' ให้เจ้าหน้าที่ตรวจสอบก่อนนับ
-const ncdAsmCheck = async (k) => {
+// รหัสลับรายหมู่บ้าน = HMAC(รหัสหลัก, หมู่) — Super Admin คำนวณฝั่งเบราว์เซอร์ได้เองจากรหัสหลัก ไม่ต้องเก็บเพิ่ม; เปลี่ยนรหัสหลักแล้วทุก QR ใช้ไม่ได้
+const ncdVillageKey = (master, no) => require('crypto').createHmac('sha256', String(master)).update(`ncd-v${String(no)}`).digest('hex').slice(0, 24);
+const ncdAsmCheck = async (k, v) => {
   const snap = await db.doc('settings/ncdPublic').get();
   const c = snap.exists ? snap.data() : {};
-  const want = String(c.token || ''); const got = String(k || '');
-  const ok = c.enabled === true && want.length >= 16 && got.length === want.length && require('crypto').timingSafeEqual(Buffer.from(want), Buffer.from(got));
+  const master = String(c.token || '');
+  const want = v ? ncdVillageKey(master, v) : master; const got = String(k || '');
+  const ok = c.enabled === true && master.length >= 16 && got.length === want.length && require('crypto').timingSafeEqual(Buffer.from(want), Buffer.from(got));
   if (!ok) throw new HttpsError('permission-denied', 'ลิงก์ไม่ถูกต้องหรือปิดใช้งานแล้ว กรุณาขอลิงก์ใหม่จากเจ้าหน้าที่');
 };
+const ncdFyStart = () => { const t = bkkParts().date; const y = Number(t.slice(0, 4)); return Number(t.slice(5, 7)) >= 10 ? `${y}-10-01` : `${y - 1}-10-01`; };
 exports.ncdAsmInfo = onCall({ cors: true }, async (request) => {
-  await ncdAsmCheck((request.data || {}).k);
+  await ncdAsmCheck((request.data || {}).k, (request.data || {}).v);
   const s = await db.doc('ppTargets/summary').get();
   const m = s.exists ? s.data().villages || {} : {};
   const villages = Object.entries(m).filter(([n]) => Number(n) > 0).sort((a, b) => Number(a[0]) - Number(b[0])).map(([no, name]) => ({ no: String(no), name: cleanText(name, 60) }));
   return { ok: true, villages };
 });
+// รายชื่อกลุ่มเป้าหมาย 15–59 ปี ของหมู่บ้านนั้น เฉพาะคนที่ยังไม่ได้คัดกรองในปีงบนี้ (ทั้งใน JHCIS และในแอป) — เลขบัตรส่งแบบปิดบังเท่านั้น
+exports.ncdAsmRoster = onCall({ cors: true, memory: '512MiB' }, async (request) => {
+  const d = request.data || {}; const v = String(d.v || '').replace(/\D/g, '').slice(0, 3);
+  if (!v) throw new HttpsError('invalid-argument', 'ไม่พบหมู่บ้านในลิงก์');
+  await ncdAsmCheck(d.k, v);
+  const snap = await db.doc(`ncdTargets/v${v}`).get();
+  if (!snap.exists) return { ok: true, people: [], asOf: '', empty: true };
+  const t = snap.data(); const fy = ncdFyStart();
+  const got = await db.collection('ncdScreenings').where('villageNo', '==', v).get();
+  const done = new Set(); got.forEach((x) => { const r = x.data(); if (r.cid && String(r.screenDate || '') >= fy) done.add(r.cid); });
+  const people = [];
+  for (const r of t.rows || []) {
+    const [pid, name, cid, sex, birth, hno, jh] = r;
+    if (String(jh) === '1' || (cid && done.has(cid))) continue;
+    people.push({ id: String(pid), name, mask: cid ? `x-xxxx-xxxxx-${cid.slice(10, 12)}-${cid.slice(12)}` : '', sex, birth, hno });
+  }
+  return { ok: true, people, asOf: t.asOf || '' };
+});
+// เครื่อง JHCIS ส่งรายชื่อกลุ่มเป้าหมาย NCD (มีเลขบัตร) แยกรายหมู่บ้าน -> ncdTargets/v{หมู่} (client อ่านตรงไม่ได้ ผ่านฟังก์ชันด้านบนเท่านั้น)
+exports.ingestNcdTargets = onRequest({ cors: false, memory: '512MiB', timeoutSeconds: 300 }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
+  try {
+    const key = String(req.get('x-api-key') || '');
+    const meta = await db.doc('settings/statsIngest').get();
+    const want = meta.exists ? meta.data().keyHash : '';
+    if (!want || key.length < 20 || require('crypto').createHash('sha256').update(key).digest('hex') !== want) { res.status(401).json({ ok: false, error: 'คีย์ไม่ถูกต้อง' }); return; }
+    const vs = (req.body || {}).villages; const asOf = String((req.body || {}).asOf || '').slice(0, 10);
+    if (!vs || typeof vs !== 'object') { res.status(400).json({ ok: false, error: 'ข้อมูลไม่ถูกต้อง' }); return; }
+    const keep = new Set(); let n = 0;
+    for (const [no, rows] of Object.entries(vs)) {
+      const m = String(no).replace(/\D/g, '').slice(0, 3); if (!m || !Array.isArray(rows) || rows.length > 4000) continue;
+      keep.add(`v${m}`); n += rows.length;
+      await db.doc(`ncdTargets/v${m}`).set({ no: m, asOf, rows: rows.map((r) => (Array.isArray(r) ? r.slice(0, 7).map((x) => String(x == null ? '' : x).slice(0, 120)) : [])), updatedAt: FieldValue.serverTimestamp() });
+    }
+    const old = await db.collection('ncdTargets').listDocuments();
+    await Promise.all(old.filter((x) => !keep.has(x.id)).map((x) => x.delete()));
+    res.json({ ok: true, villages: keep.size, people: n });
+  } catch (e) { console.error('ingestNcdTargets', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});
 exports.ncdAsmSubmit = onCall({ cors: true }, async (request) => {
   const d = request.data || {};
   if (d.hp) throw new HttpsError('invalid-argument', 'ข้อมูลไม่ถูกต้อง');
-  await ncdAsmCheck(d.k);
+  const vNo = String(d.v || '').replace(/\D/g, '').slice(0, 3);
+  await ncdAsmCheck(d.k, vNo);
   const r = d.rec || {};
+  // ลิงก์รายหมู่บ้าน: เลือกจากรายชื่อ → ดึงเลขบัตร/เพศ/วันเกิด/บ้านเลขที่จากรายชื่อต้นฉบับ ไม่เชื่อค่าจากเครื่อง อสม.
+  if (vNo && d.tid) {
+    const t = await db.doc(`ncdTargets/v${vNo}`).get(); const row = t.exists ? (t.data().rows || []).find((x) => String(x[0]) === String(d.tid)) : null;
+    if (!row) throw new HttpsError('not-found', 'ไม่พบรายชื่อนี้ในหมู่บ้าน กรุณารีเฟรชหน้า');
+    r.cid = row[2]; r.sex = row[3]; r.birthDate = row[4]; r.houseNo = row[5]; r.villageNo = vNo; r.name = row[1];
+  }
   const num = (v, lo, hi) => { if (v === '' || v == null) return ''; const n = Number(v); if (!Number.isFinite(n) || n < lo || n > hi) throw new HttpsError('invalid-argument', 'ค่าตัวเลขไม่อยู่ในช่วงที่เป็นไปได้ กรุณาตรวจสอบ'); return n; };
   const name = cleanText(r.name, 80); const asmName = cleanText(d.asmName, 80);
   if (name.length < 2) throw new HttpsError('invalid-argument', 'กรุณากรอกชื่อ-สกุล');

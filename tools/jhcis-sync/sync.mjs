@@ -295,6 +295,39 @@ if (args.includes('--pp')) {
   if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
   console.log('ส่งสำเร็จ'); process.exit(0);
 }
+if (args.includes('--ncd-targets')) {
+  // รายชื่อกลุ่มเป้าหมายคัดกรอง NCD อายุ 15–59 ปี รายหมู่บ้าน (มีเลขบัตร — เก็บในคลาวด์แบบปิด อ่านได้ผ่านลิงก์ QR รายหมู่เท่านั้น และแสดงเลขบัตรแบบปิดบัง) -> ncdTargets
+  // done = มีการคัดกรอง (Z131/Z133/Z136) ในปีงบประมาณนี้ใน JHCIS แล้ว  ·  ใช้ --check เพื่อดูจำนวนโดยไม่ส่ง
+  const PCU = String(cfg.pcucode || '05449'); const today = new Date(); const todayS = iso(today);
+  const [pc] = await conn.query('show columns from person'); const alive = pc.some((x) => x.Field === 'dischar') ? "and (p.dischar is null or p.dischar in ('9','','0'))" : '';
+  const ageY = (b) => { const x = new Date(b); if (!b || isNaN(x)) return null; let a = today.getFullYear() - x.getFullYear(); if (today.getMonth() < x.getMonth() || (today.getMonth() === x.getMonth() && today.getDate() < x.getDate())) a--; return a; };
+  const fyStart = `${today.getMonth() + 1 >= 10 ? today.getFullYear() : today.getFullYear() - 1}-10-01`;
+  const [people] = await conn.query(`select p.pid, t.titlename, p.fname, p.lname, p.sex, p.birth, p.idcard, hs.hno, hs.villcode
+    from person p left join ctitle t on t.titlecode = p.prename join house hs on hs.pcucode = p.pcucodeperson and hs.hcode = p.hcode
+    where p.pcucodeperson = ? and p.typelive in ('1','3') and hs.villcode is not null and hs.villcode not like '%00' and p.birth is not null
+      and not exists (select 1 from persondeath d where d.pid = p.pid and d.pcucodeperson = p.pcucodeperson) ${alive}`, [PCU]);
+  const [dn] = await conn.query(`select distinct v.pid from visitdiag g join visit v on v.pcucode = g.pcucode and v.visitno = g.visitno
+      where v.pcucode = ? and v.visitdate >= ? and ${SVC} and upper(replace(g.diagcode,'.','')) in ('Z131','Z133','Z136')`, [PCU, fyStart]);
+  const done = new Set(dn.map((r) => String(r.pid)));
+  const villages = {}; let total = 0; let noCid = 0;
+  for (const r of people) {
+    const a = ageY(r.birth); if (a == null || a < 15 || a > 59) continue;
+    const sx = String(r.sex) === '1' ? 'M' : String(r.sex) === '2' ? 'F' : ''; if (!sx) continue;
+    const cid = String(r.idcard || '').replace(/\D/g, ''); if (cid.length !== 13) noCid++;
+    const m = String(parseInt(String(r.villcode).slice(6, 8), 10));
+    (villages[m] ||= []).push([r.pid, `${r.titlename || ''}${r.fname || ''} ${r.lname || ''}`.trim(), cid.length === 13 ? cid : '', sx, iso(new Date(r.birth)), r.hno || '', done.has(String(r.pid)) ? '1' : '0']);
+    total++;
+  }
+  for (const [m, l] of Object.entries(villages)) console.log(`หมู่ ${m}: ${l.length} คน · คัดกรองแล้วในปีงบนี้ ${l.filter((x) => x[6] === '1').length} · ไม่มีเลขบัตร ${l.filter((x) => !x[2]).length}`);
+  console.log(`รวม ${total} คน (ไม่มีเลขบัตร 13 หลัก ${noCid})`);
+  if (args.includes('--check')) { console.log('นี่คือการตรวจสอบเท่านั้น ยังไม่ได้ส่งข้อมูล'); await conn.end(); process.exit(0); }
+  await conn.end();
+  const url = cfg.ncdTargetsEndpoint || 'https://us-central1-nsn-phc-web.cloudfunctions.net/ingestNcdTargets';
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify({ villages, asOf: todayS }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { console.log(`ส่งไม่สำเร็จ: HTTP ${res.status} ${body.error || ''}`); process.exit(1); }
+  console.log(`ส่งสำเร็จ ${body.villages} หมู่ ${body.people} คน`); process.exit(0);
+}
 if (args.includes('--targets')) {
   // กลุ่มเป้าหมายรายกิจกรรม: ใครทำแล้ว/ยังไม่ได้ทำ แยกรายหมู่บ้าน (ส่งชื่อ อายุ บ้านเลขที่ หมู่ สถานะ — ไม่มีเลขบัตร) -> ppTargets
   const PCU = String(cfg.pcucode || '05449');

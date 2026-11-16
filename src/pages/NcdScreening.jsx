@@ -7,7 +7,7 @@ import { BadgeCheck, Copy, Download, HeartPulse, Link2, Pencil, Plus, Search, Tr
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { normalizeRole } from '../lib/roles';
-import { getNcdPublic, ncdPublicUrl, newToken, saveNcdPublic } from '../lib/ncdPublic';
+import { getNcdPublic, ncdPublicUrl, ncdVillageUrl, newToken, saveNcdPublic, villageKey } from '../lib/ncdPublic';
 import { writeAudit } from '../lib/audit';
 import { fmtDate, todayStr } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
@@ -18,11 +18,19 @@ import { useVillages } from '../modules/outbreak/outbreakRefs';
 
 
 // ลิงก์/QR สำหรับ อสม. (Super Admin เท่านั้น): เปิด-ปิด สร้างรหัสใหม่ คัดลอกลิงก์ ดาวน์โหลด QR
-function AsmLinkModal({ onClose }) {
+function AsmLinkModal({ onClose, villages }) {
   const [cfg, setCfg] = useState(null); const [qr, setQr] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [sure, setSure] = useState(false);
   useEffect(() => { getNcdPublic().then(setCfg).catch(() => setCfg({ enabled: false, token: '' })); }, []);
   const url = cfg?.token ? ncdPublicUrl(cfg.token) : '';
   useEffect(() => { if (url) QRCode.toDataURL(url, { width: 720, margin: 1, errorCorrectionLevel: 'M' }).then(setQr); else setQr(''); }, [url]);
+  const [vq, setVq] = useState({});
+  useEffect(() => {
+    if (!cfg?.token || !villages?.length) { setVq({}); return undefined; }
+    let live = true;
+    (async () => { const out = {}; for (const v of villages) { const k = await villageKey(cfg.token, v.no); const link = ncdVillageUrl(k, v.no); out[v.no] = { link, img: await QRCode.toDataURL(link, { width: 640, margin: 1, errorCorrectionLevel: 'M' }) }; } if (live) setVq(out); })().catch(() => {});
+    return () => { live = false; };
+  }, [cfg?.token, villages]);
+  const copyV = async (link) => { try { await navigator.clipboard.writeText(link); setMsg('คัดลอกลิงก์หมู่บ้านแล้ว'); } catch { setMsg('คัดลอกไม่ได้ — กดค้างที่ลิงก์'); } };
   const apply = async (v) => { setBusy(true); try { await saveNcdPublic(v); setCfg((p) => ({ ...p, ...v })); } catch (e) { setMsg(e.message || 'บันทึกไม่สำเร็จ'); } finally { setBusy(false); } };
   const copy = async () => { try { await navigator.clipboard.writeText(url); setMsg('คัดลอกลิงก์แล้ว'); } catch { setMsg('คัดลอกไม่ได้ — กดค้างที่ลิงก์เพื่อคัดลอก'); } };
   if (!cfg) return <Modal title="ลิงก์/QR สำหรับ อสม." onClose={onClose}><Spinner /></Modal>;
@@ -34,6 +42,18 @@ function AsmLinkModal({ onClose }) {
           <label className="flex items-center gap-2"><input type="checkbox" className="h-5 w-5" checked={!!cfg.enabled} disabled={busy} onChange={(e) => apply({ enabled: e.target.checked })} /> เปิดรับข้อมูลจาก อสม.</label>
           {qr && <img src={qr} alt="QR Code คัดกรอง NCD" className={`mx-auto h-60 w-60 rounded-xl border p-2 ${cfg.enabled ? '' : 'opacity-40'}`} />}
           <input readOnly aria-label="ลิงก์สำหรับ อสม." className="input text-xs" value={url} onFocus={(e) => e.target.select()} />
+          <div className="border-t pt-3"><div className="font-semibold">QR แยกรายหมู่บ้าน (แสดงรายชื่อกลุ่มเป้าหมายของหมู่นั้นให้เลือก)</div>
+            <p className="mb-2 text-xs text-slate-500">รายชื่อมาจากการซิงก์ JHCIS (รันตัวส่งรายชื่อ NCD ที่เครื่อง JHCIS ก่อน) QR ของหมู่ไหนเห็นเฉพาะคนในหมู่นั้น</p>
+            <div className="grid grid-cols-2 gap-3">
+              {(villages || []).map((v) => (
+                <div key={v.no} className={`rounded-xl border p-2 text-center ${cfg.enabled ? '' : 'opacity-40'}`}>
+                  <div className="mb-1 text-sm font-semibold">ม.{v.no} {v.name}</div>
+                  {vq[v.no] ? <img src={vq[v.no].img} alt={`QR หมู่ ${v.no}`} className="mx-auto h-36 w-36" /> : <div className="mx-auto h-36 w-36 animate-pulse rounded bg-slate-100" />}
+                  {vq[v.no] && <div className="mt-1 flex justify-center gap-1"><button className="btn btn-outline !px-2 !py-1 text-xs" onClick={() => copyV(vq[v.no].link)}><Copy className="h-3 w-3" /> ลิงก์</button><a className="btn btn-outline !px-2 !py-1 text-xs" href={vq[v.no].img} download={`qr-ncd-moo${v.no}.png`}><Download className="h-3 w-3" /> QR</a></div>}
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-outline" onClick={copy}><Copy className="h-4 w-4" /> คัดลอกลิงก์</button>
             <a className="btn btn-outline" href={qr} download="qr-ncd-asm.png"><Download className="h-4 w-4" /> ดาวน์โหลด QR</a>
@@ -94,7 +114,7 @@ export default function NcdScreening() {
         </div>
       )}
       {form && <ScreenWizard init={form.id ? form : null} villages={villages} existing={rows} onClose={() => setForm(null)} onSaved={() => setForm(null)} />}
-      {linkOpen && <AsmLinkModal onClose={() => setLinkOpen(false)} />}
+      {linkOpen && <AsmLinkModal villages={villages} onClose={() => setLinkOpen(false)} />}
       {del && <ConfirmDialog message={`ลบผลคัดกรองของ ${del.name}?`} onConfirm={remove} onCancel={() => setDel(null)} />}
     </div>
   );

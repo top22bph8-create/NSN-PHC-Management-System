@@ -43,7 +43,7 @@ function Field({ id, label, unit, v, set, ph, hint }) {
   );
 }
 
-export default function ScreenWizard({ init, villages, existing, onClose, onSaved, onSubmit, title = 'คัดกรองกลุ่มเสี่ยง NCD' }) {
+export default function ScreenWizard({ init, villages, existing, onClose, onSaved, onSubmit, lockedMask = '', title = 'คัดกรองกลุ่มเสี่ยง NCD' }) {
   const { profile } = useAuth();
   const [f, setF] = useState({ ...EMPTY, ...init });
   const [step, setStep] = useState(0); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -99,9 +99,9 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
         <div className="mx-auto max-w-xl space-y-4">
           {step === 0 && (<>
             <div><label htmlFor="ncd-name" className="mb-1 block text-sm font-medium">ชื่อ-สกุล</label><input id="ncd-name" className="input !h-14 !text-lg" value={f.name} onChange={(e) => s('name')(e.target.value)} autoComplete="off" /></div>
-            <div><label htmlFor="ncd-cid" className="mb-1 block text-sm font-medium">เลขบัตรประชาชน 13 หลัก</label><input id="ncd-cid" inputMode="numeric" maxLength={13} className="input !h-14 !text-lg tabular-nums" value={f.cid} onChange={(e) => s('cid')(e.target.value.replace(/\D/g, ''))} />
+            {lockedMask ? <div><div className="mb-1 text-sm font-medium">เลขบัตรประชาชน</div><div className="rounded-xl bg-slate-100 p-3 font-mono text-sm text-slate-600">{lockedMask} <span className="text-xs">(ดึงจากทะเบียน ไม่ต้องกรอก)</span></div></div> : <div><label htmlFor="ncd-cid" className="mb-1 block text-sm font-medium">เลขบัตรประชาชน 13 หลัก</label><input id="ncd-cid" inputMode="numeric" maxLength={13} className="input !h-14 !text-lg tabular-nums" value={f.cid} onChange={(e) => s('cid')(e.target.value.replace(/\D/g, ''))} />
               {f.cid.length === 13 && <div className={`mt-1 text-xs ${validCid(f.cid) ? 'text-emerald-600' : 'text-red-600'}`}>{validCid(f.cid) ? 'เลขบัตรถูกต้อง' : 'เลขบัตรไม่ถูกต้อง'}</div>}
-              {dup && <div className="mt-1 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 ring-1 ring-amber-200">คนนี้มีผลคัดกรองในปีนี้แล้ว — ตรวจสอบว่าไม่ได้บันทึกซ้ำ</div>}</div>
+              {dup && <div className="mt-1 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 ring-1 ring-amber-200">คนนี้มีผลคัดกรองในปีนี้แล้ว — ตรวจสอบว่าไม่ได้บันทึกซ้ำ</div>}</div>}
             <Seg id="s-sex" label="เพศ" value={f.sex} onChange={s('sex')} opts={[['M', 'ชาย'], ['F', 'หญิง']]} />
             <div><div className="mb-1 text-sm font-medium">วันเกิด</div><ThaiDateInput id="ncd-birth" value={f.birthDate} onChange={s('birthDate')} yearsBack={80} yearsForward={0} />
               {age != null && <div className={`mt-2 rounded-xl p-3 text-sm ring-1 ${grp ? 'bg-sky-50 text-sky-900 ring-sky-200' : 'bg-red-50 text-red-700 ring-red-200'}`}>อายุ <b>{age}</b> ปี · {grp ? <>กลุ่มคัดกรอง <b>{grp === '15-34' ? '15–34 ปี' : grp === '35-59' ? '35–59 ปี' : '60 ปีขึ้นไป'}</b></> : 'ต่ำกว่า 15 ปี ไม่อยู่ในกลุ่มคัดกรอง'}</div>}</div>
