@@ -39,6 +39,13 @@ export default function RightsRegistry() {
     const k = kw.trim();
     return rowsOf(open).filter((r) => (!k || r.slice(0, 4).join(' ').includes(k)) && (!hos || r[6] === hos));
   }, [docs, open, kw, hos]); // eslint-disable-line react-hooks/exhaustive-deps
+  // กำหนด/ล้างหมู่บ้านของคนที่ไม่ระบุหมู่ (เก็บแยกใน rightsVillageOverrides — ไม่ถูกซิงก์ JHCIS ทับ)
+  const setVil = async (pid, v) => {
+    try {
+      if (v === '' || v == null) await deleteDoc(doc(db, 'rightsVillageOverrides', String(pid)));
+      else await setDoc(doc(db, 'rightsVillageOverrides', String(pid)), { no: Number(v), updatedAt: serverTimestamp() });
+    } catch (e) { window.alert('บันทึกหมู่บ้านไม่สำเร็จ: ' + (e.code || e.message)); }
+  };
   const vnoOf = (r) => { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); return g ? Number(g[1]) : (ov[r[0]] ?? -1); };
   // คนที่ที่อยู่ไม่มีหมู่ (หรือที่เรากำหนดหมู่ให้เอง) รวมทุกประเภท ไม่ซ้ำ PID
   const fixList = useMemo(() => {

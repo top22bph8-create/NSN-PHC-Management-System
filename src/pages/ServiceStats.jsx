@@ -59,6 +59,7 @@ function ConnectPanel({ say }) {
       const key = 'nsn_' + Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))), (b) => b.toString(16).padStart(2, '0')).join('');
       await setDoc(doc(db, 'settings', 'statsIngest'), { keyHash: hash, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'settings', 'syncWatcher'), { keyCreatedAt: serverTimestamp() }, { merge: true }); // ให้หน้ารายงานรู้ว่าคีย์ถูกสร้างใหม่ (ใช้วินิจฉัยสาเหตุที่เครื่อง JHCIS หลุด)
       await writeAudit({ action: 'settings', module: 'service-stats', label: 'สร้างคีย์เชื่อมข้อมูล JHCIS' });
       setNewKey(key);
       try { await navigator.clipboard.writeText(key); say({ type: 'ok', text: 'สร้างคีย์แล้ว และคัดลอกไว้ในคลิปบอร์ดแล้ว (วางในไฟล์ตั้งค่าของสคริปต์ได้เลย)' }); } catch { say({ type: 'ok', text: 'สร้างคีย์แล้ว กดปุ่มคัดลอก' }); }

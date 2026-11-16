@@ -21,7 +21,9 @@ if (args.includes('--watch')) {
   const { spawn } = await import('node:child_process');
   const pollUrl = cfg.pollEndpoint || String(cfg.endpoint).replace(/\/\/ingestservicestats/i, '//syncrequestpoll');
   const FLAGS = { service: [], rights: ['--rights'], pp: ['--pp'], targets: ['--targets'] };
-  const call = async (body) => { const r = await fetch(pollUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error || ''}`); return j; };
+  // อ่านคีย์สดจาก config.json ทุกครั้งที่เรียก — แก้/วางคีย์ใหม่แล้วมีผลทันที ไม่ต้องรีสตาร์ตตัวรอรับคำสั่ง
+  const liveKey = () => { try { return JSON.parse(fs.readFileSync(path.join(here, 'config.json'), 'utf8')).apiKey || cfg.apiKey; } catch { return cfg.apiKey; } };
+  const call = async (body) => { const r = await fetch(pollUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': liveKey() }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error || ''}`); return j; };
   const runKind = (kind) => new Promise((resolve) => {
     let tail = ''; const p = spawn(process.execPath, [path.join(here, 'sync.mjs'), ...FLAGS[kind]], { cwd: here });
     const keep = (b) => { tail = (tail + b.toString()).slice(-600); }; p.stdout.on('data', keep); p.stderr.on('data', keep);
@@ -29,6 +31,7 @@ if (args.includes('--watch')) {
     p.on('error', (e) => resolve({ ok: false, message: e.message }));
   });
   console.log(`รอรับคำสั่ง "ประมวลผลทันที" จากระบบ… (ปิดหน้าต่างนี้เพื่อหยุด) — ${pollUrl}`);
+  let lastErr = ''; let lastErrAt = 0;
   for (;;) {
     try {
       const { pending = [] } = await call({ action: 'poll' });
@@ -39,7 +42,12 @@ if (args.includes('--watch')) {
         console.log(`  ${r.ok ? 'สำเร็จ' : 'ไม่สำเร็จ'}: ${r.message}`);
         await call({ action: 'done', kind, ok: r.ok, message: r.ok ? '' : r.message });
       }
-    } catch (e) { console.log(`${new Date().toLocaleTimeString()} ติดต่อระบบไม่ได้: ${e.message}`); }
+      if (lastErr) console.log(`${new Date().toLocaleTimeString()} กลับมาเชื่อมต่อระบบได้แล้ว`);
+      lastErr = '';
+    } catch (e) {
+      // กันล็อกบวม: แจ้งซ้ำเฉพาะเมื่อข้อความเปลี่ยน หรือทุก 20 นาที
+      if (e.message !== lastErr || Date.now() - lastErrAt > 20 * 60 * 1000) { console.log(`${new Date().toLocaleTimeString()} ติดต่อระบบไม่ได้: ${e.message}`); lastErr = e.message; lastErrAt = Date.now(); }
+    }
     await new Promise((r) => setTimeout(r, 15000));
   }
 }
