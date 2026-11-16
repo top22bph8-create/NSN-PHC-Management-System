@@ -102,12 +102,12 @@ export function classifyCvd(v) {
 export const needCvd = (age) => age != null && age >= 35 && age <= 59;
 export const needLipid = (age) => age != null && age >= 45 && age <= 70;
 export const COUNSEL = [['food', 'อาหาร (ลดหวาน มัน เค็ม)'], ['exercise', 'ออกกำลังกาย'], ['smoke', 'เลิกบุหรี่'], ['alcohol', 'ลดเครื่องดื่มแอลกอฮอล์'], ['stress', 'จัดการความเครียด']];
-// รหัส Specialpp ที่ควรบันทึกใน JHCIS (ใช้เป็นรายการช่วยจำ/เตรียมเขียนกลับ — ยังไม่ได้เขียนอัตโนมัติ)
+// รหัส Specialpp ที่ควรบันทึกใน JHCIS (ผู้ที่สูบ/ดื่มอยู่ รพ.สต. ไม่บันทึกรหัส 1B5x/1B6x ในวิสิตคัดกรอง ตามข้อมูลจริงที่ตรวจพบ — จึงไม่สร้างรหัสให้) (ใช้เป็นรายการช่วยจำ/เตรียมเขียนกลับ — ยังไม่ได้เขียนอัตโนมัติ)
 export function ppCodes(r) {
   const out = [];
   const q = classify2Q(r.q2a, r.q2b); if (q) out.push(q.pp);
-  if (r.smokeStatus === 'never') out.push('1B52'); else if (r.smokeStatus === 'former') out.push('1B51'); else if (r.smokeStatus === 'current') out.push('1B509');
-  if (r.alcoholFreq === 'none') out.push('1B600'); else if (r.alcoholFreq === 'former') out.push('1B601'); else if (r.alcoholFreq === 'sometimes' || r.alcoholFreq === 'regular') out.push('1B609');
+  if (r.smokeStatus === 'never') out.push('1B52'); else if (r.smokeStatus === 'former') out.push('1B51'); 
+  if (r.alcoholFreq === 'none') out.push('1B600'); else if (r.alcoholFreq === 'former') out.push('1B601');;
   if ((r.counsel || []).length) out.push('1F38');
   return out;
 }

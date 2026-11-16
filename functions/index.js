@@ -1437,6 +1437,32 @@ exports.ncdAsmRoster = onCall({ cors: true, memory: '512MiB' }, async (request) 
   }
   return { ok: true, people, asOf: t.asOf || '' };
 });
+// คิวนำเข้า JHCIS: เครื่อง JHCIS ดึงรายการที่เจ้าหน้าที่ "จัดคิว" (jhcis='queued', อสม. ต้องตรวจแล้ว) แล้วรายงานผลกลับ — ใช้คีย์เดียวกับตัวซิงก์
+exports.ncdQueue = onRequest({ cors: false, memory: '512MiB', timeoutSeconds: 120 }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
+  try {
+    const key = String(req.get('x-api-key') || '');
+    const meta = await db.doc('settings/statsIngest').get();
+    const want = meta.exists ? meta.data().keyHash : '';
+    if (!want || key.length < 20 || require('crypto').createHash('sha256').update(key).digest('hex') !== want) { res.status(401).json({ ok: false, error: 'คีย์ไม่ถูกต้อง' }); return; }
+    const b = req.body || {};
+    if (b.action === 'mark') {
+      const list = Array.isArray(b.results) ? b.results.slice(0, 300) : [];
+      let n = 0;
+      for (const r of list) {
+        const id = String(r.id || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(id)) continue;
+        const ref = db.doc(`ncdScreenings/${id}`); const snap = await ref.get(); if (!snap.exists || snap.data().jhcis === 'done') continue;
+        if (r.status === 'done') await ref.update({ jhcis: 'done', jhcisVisitno: Number(r.visitno) || null, jhcisAt: FieldValue.serverTimestamp(), jhcisError: FieldValue.delete() });
+        else await ref.update({ jhcis: 'error', jhcisError: cleanText(r.error, 200) });
+        n++;
+      }
+      res.json({ ok: true, updated: n }); return;
+    }
+    const snap = await db.collection('ncdScreenings').where('jhcis', '==', 'queued').limit(300).get();
+    const rows = []; snap.forEach((d) => { const r = d.data(); if (r.source === 'asm' && r.review !== 'approved') return; rows.push({ id: d.id, ...r, createdAt: undefined, queuedAt: undefined, updatedAt: undefined }); });
+    res.json({ ok: true, rows });
+  } catch (e) { console.error('ncdQueue', e); res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' }); }
+});
 // เครื่อง JHCIS ส่งรายชื่อกลุ่มเป้าหมาย NCD (มีเลขบัตร) แยกรายหมู่บ้าน -> ncdTargets/v{หมู่} (client อ่านตรงไม่ได้ ผ่านฟังก์ชันด้านบนเท่านั้น)
 exports.ingestNcdTargets = onRequest({ cors: false, memory: '512MiB', timeoutSeconds: 300 }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'ใช้ได้เฉพาะ POST' }); return; }
