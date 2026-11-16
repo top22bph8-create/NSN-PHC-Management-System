@@ -54,8 +54,8 @@ export function classifyGlucose(value, fasting) {
   return { ...GLU_LEVELS[i], index: i };
 }
 
-// ข้อมูลที่ต้องเจาะน้ำตาลหรือไม่: 35–59 ปีเจาะทุกคน, 15–34 ปีเจาะเมื่อมีปัจจัยเสี่ยง
-export const riskFactors = (r) => {
+// ปัจจัยเสี่ยงทางร่างกาย/ประวัติ (ใช้ตัดสินว่าต้องเจาะน้ำตาลในกลุ่ม 15–34 ปี) และพฤติกรรมเสี่ยง (แสดงประกอบ/ให้คำแนะนำ)
+export const metabolicRisks = (r) => {
   const out = [];
   const bmi = calcBmi(r.weight, r.height);
   if (bmi != null && bmi >= 23) out.push(`BMI ${bmi}`);
@@ -63,18 +63,36 @@ export const riskFactors = (r) => {
   if (r.familyDM) out.push('ญาติสายตรงเป็นเบาหวาน');
   if (r.familyHT) out.push('ญาติสายตรงเป็นความดันสูง');
   if (r.hxHT) out.push('เคยมีความดันสูง');
-  if (r.smoke) out.push('สูบบุหรี่');
-  if (r.alcohol) out.push('ดื่มสุรา');
   return out;
 };
+export const lifestyleRisks = (r) => {
+  const out = [];
+  if (r.smokeStatus === 'current' || r.smoke) out.push('สูบบุหรี่');
+  if ((r.alcoholFreq && r.alcoholFreq !== 'none') || r.alcohol) out.push(r.alcoholFreq === 'regular' ? 'ดื่มสุราเป็นประจำ' : 'ดื่มสุรา');
+  if (r.exercise === 'low') out.push('ออกกำลังกายไม่พอ');
+  if (r.sweet === 'often') out.push('หวานจัด/ดื่มน้ำหวานบ่อย');
+  if (r.salty === 'often') out.push('เค็มจัด');
+  if (r.veg === 'low') out.push('กินผักผลไม้น้อย');
+  return out;
+};
+export const riskFactors = (r) => [...metabolicRisks(r), ...lifestyleRisks(r)];
+// เจาะน้ำตาลหรือไม่: 35–59 ปีเจาะทุกคน, 15–34 ปีเจาะเมื่อมีปัจจัยเสี่ยงทางร่างกาย/ประวัติ
 export function needGlucose(age, r) {
   const g = ageGroupOf(age);
   if (g === '35-59') return { need: true, why: 'อายุ 35–59 ปี เจาะน้ำตาลทุกคน' };
   if (g === '15-34') {
-    const f = riskFactors(r).filter((x) => !/สูบ|ดื่ม/.test(x));
+    const f = metabolicRisks(r);
     return f.length ? { need: true, why: `มีปัจจัยเสี่ยง: ${f.join(', ')}` } : { need: false, why: 'อายุ 15–34 ปี ไม่มีปัจจัยเสี่ยง ไม่ต้องเจาะน้ำตาล' };
   }
   return { need: false, why: 'อายุนอกช่วงคัดกรอง (15–59 ปี)' };
+}
+export const SYMPTOMS = [['polyuria', 'ปัสสาวะบ่อย/กลางคืน'], ['polydipsia', 'กระหายน้ำมาก'], ['weightloss', 'น้ำหนักลดโดยไม่ทราบสาเหตุ'], ['headache', 'ปวดศีรษะ/เวียนศีรษะบ่อย'], ['blurred', 'ตามัว'], ['numb', 'ชาปลายมือปลายเท้า']];
+// คำแนะนำตามผลสรุป (เบื้องต้น — ใช้ดุลยพินิจเจ้าหน้าที่ประกอบ)
+export function adviceFor(ov, r) {
+  const base = ['ออกกำลังกายสม่ำเสมอ อย่างน้อย 150 นาที/สัปดาห์', 'ลดหวาน มัน เค็ม กินผักผลไม้ให้มาก', 'งดสูบบุหรี่ ลดเครื่องดื่มแอลกอฮอล์'];
+  if (ov?.key === 'suspect') return ['นัดตรวจยืนยัน/ส่งพบแพทย์ภายใน 1–2 สัปดาห์ (ตามดุลยพินิจเจ้าหน้าที่)', 'งดอาหารมื้อเย็นก่อนวันตรวจยืนยันหากต้องเจาะเลือดอดอาหาร', ...base.slice(0, 2)];
+  if (ov?.key === 'risk') return ['ปรับพฤติกรรมตามหลัก 3อ. 2ส. และติดตามน้ำหนัก/รอบเอว', 'วัดความดัน/ตรวจน้ำตาลซ้ำภายใน 3–6 เดือน', ...base];
+  return ['ผลปกติ คัดกรองซ้ำทุกปี', ...base];
 }
 
 // สรุปผลรวมของคนหนึ่ง: 0 ปกติ · 1 เสี่ยง · 2 สงสัย (ส่งต่อ)
