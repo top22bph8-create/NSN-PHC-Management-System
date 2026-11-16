@@ -69,7 +69,7 @@ export const metabolicRisks = (r) => {
 export const lifestyleRisks = (r) => {
   const out = [];
   if (r.smokeStatus === 'current' || r.smoke) out.push('สูบบุหรี่');
-  if ((r.alcoholFreq && r.alcoholFreq !== 'none') || r.alcohol) out.push(r.alcoholFreq === 'regular' ? 'ดื่มสุราเป็นประจำ' : 'ดื่มสุรา');
+  if ((r.alcoholFreq && r.alcoholFreq !== 'none' && r.alcoholFreq !== 'former') || r.alcohol) out.push(r.alcoholFreq === 'regular' ? 'ดื่มสุราเป็นประจำ' : 'ดื่มสุรา');
   if (r.exercise === 'low') out.push('ออกกำลังกายไม่พอ');
   if (r.sweet === 'often') out.push('หวานจัด/ดื่มน้ำหวานบ่อย');
   if (r.salty === 'often') out.push('เค็มจัด');
@@ -107,7 +107,8 @@ export function ppCodes(r) {
   const out = [];
   const q = classify2Q(r.q2a, r.q2b); if (q) out.push(q.pp);
   if (r.smokeStatus === 'never') out.push('1B52'); else if (r.smokeStatus === 'former') out.push('1B51'); else if (r.smokeStatus === 'current') out.push('1B509');
-  if (r.alcoholFreq === 'none') out.push('1B600'); else if (r.alcoholFreq === 'sometimes' || r.alcoholFreq === 'regular') out.push('1B609');
+  if (r.alcoholFreq === 'none') out.push('1B600'); else if (r.alcoholFreq === 'former') out.push('1B601'); else if (r.alcoholFreq === 'sometimes' || r.alcoholFreq === 'regular') out.push('1B609');
+  if ((r.counsel || []).length) out.push('1F38');
   return out;
 }
 // ครบรายการตามเงื่อนไข สปสช. ข้อ 20 (อายุ 15–59 ปี) → ควรคีย์ค่าบริการ 12001 (100 บาท) ใน JHCIS ด้วยมือ

@@ -1485,7 +1485,7 @@ exports.ncdAsmSubmit = onCall({ cors: true }, async (request) => {
     cid, name, sex: r.sex, birthDate: String(r.birthDate), villageNo: cleanText(r.villageNo, 6), houseNo: cleanText(r.houseNo, 20), phone: cleanText(r.phone, 15),
     screenDate: /^\d{4}-\d{2}-\d{2}$/.test(String(r.screenDate || '')) ? String(r.screenDate) : today, screenPlace: r.screenPlace === 'unit' ? 'unit' : 'community',
     knownDM: !!r.knownDM, knownHT: !!r.knownHT, familyDM: !!r.familyDM, familyHT: !!r.familyHT, hxHT: !!r.hxHT,
-    smokeStatus: ['never', 'former', 'current'].includes(r.smokeStatus) ? r.smokeStatus : '', alcoholFreq: ['none', 'sometimes', 'regular'].includes(r.alcoholFreq) ? r.alcoholFreq : '',
+    smokeStatus: ['never', 'former', 'current'].includes(r.smokeStatus) ? r.smokeStatus : '', alcoholFreq: ['none', 'former', 'sometimes', 'regular'].includes(r.alcoholFreq) ? r.alcoholFreq : '',
     exercise: ['enough', 'low'].includes(r.exercise) ? r.exercise : '', sweet: ['rare', 'often'].includes(r.sweet) ? r.sweet : '', salty: ['ok', 'often'].includes(r.salty) ? r.salty : '', veg: ['ok', 'low'].includes(r.veg) ? r.veg : '',
     symptoms: (Array.isArray(r.symptoms) ? r.symptoms : []).filter((x) => ['polyuria', 'polydipsia', 'weightloss', 'headache', 'blurred', 'numb'].includes(x)),
     weight: num(r.weight, 20, 300), height: num(r.height, 100, 230), waist: num(r.waist, 30, 250),

@@ -76,7 +76,7 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
     for (let i = 0; i < 5; i++) { const e = check(i); if (e) { setErr(e); setStep(i); return; } }
     setBusy(true); setErr('');
     try {
-      const data = { ...f, cid: f.cid.replace(/\D/g, ''), name: f.name.trim(), age, ageGroup: grp, bmi, waistOver: waistOver(f.sex, f.waist), bpLevel: bp.key, bpSys: bp.sys, bpDia: bp.dia, gluLevel: gl?.key || '', overall: ov.key, risks: riskFactors(f), glucoseNeeded: !!ng?.need, pp: ppCodes(f), smoke: f.smokeStatus === 'current', alcohol: !!f.alcoholFreq && f.alcoholFreq !== 'none' };
+      const data = { ...f, cid: f.cid.replace(/\D/g, ''), name: f.name.trim(), age, ageGroup: grp, bmi, waistOver: waistOver(f.sex, f.waist), bpLevel: bp.key, bpSys: bp.sys, bpDia: bp.dia, gluLevel: gl?.key || '', overall: ov.key, risks: riskFactors(f), glucoseNeeded: !!ng?.need, pp: ppCodes(f), smoke: f.smokeStatus === 'current', alcohol: !!f.alcoholFreq && f.alcoholFreq !== 'none' && f.alcoholFreq !== 'former' };
       if (onSubmit) { await onSubmit(data); onSaved(data.name); return; }
       if (init?.id) { await updateDoc(doc(db, 'ncdScreenings', init.id), { ...data, updatedAt: serverTimestamp() }); await writeAudit({ action: 'update', module: 'ncd-screening', docId: init.id, label: data.name }); }
       else { const r = await addDoc(collection(db, 'ncdScreenings'), { ...data, jhcis: 'pending', screenedBy: profile?.name || profile?.email || '', createdAt: serverTimestamp() }); await writeAudit({ action: 'create', module: 'ncd-screening', docId: r.id, label: data.name }); }
@@ -125,7 +125,7 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
             <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-200">ถามพฤติกรรมของผู้รับการคัดกรอง แล้วแตะเลือกคำตอบ (ข้ามได้ถ้าไม่ตอบ)</p>
             <Seg id="s-smoke" label="การสูบบุหรี่" value={f.smokeStatus} onChange={s('smokeStatus')} opts={[['never', 'ไม่เคยสูบ'], ['former', 'เลิกแล้ว'], ['current', 'สูบอยู่']]} />
             {f.smokeStatus === 'current' && <Field id="ncd-cig" label="สูบวันละกี่มวน" unit="มวน" v={f.smokePerDay} set={s('smokePerDay')} />}
-            <Seg id="s-alc" label="การดื่มสุรา" value={f.alcoholFreq} onChange={s('alcoholFreq')} opts={[['none', 'ไม่ดื่ม'], ['sometimes', 'ดื่มบางครั้ง'], ['regular', 'ดื่มเป็นประจำ']]} />
+            <Seg id="s-alc" label="การดื่มสุรา" value={f.alcoholFreq} onChange={s('alcoholFreq')} opts={[['none', 'ไม่เคยดื่ม'], ['former', 'เลิกดื่มแล้ว ≥ 1 ปี'], ['sometimes', 'ดื่มบางครั้ง'], ['regular', 'ดื่มเป็นประจำ']]} />
             <Seg id="s-ex" label="ออกกำลังกาย (≥ 150 นาที/สัปดาห์)" value={f.exercise} onChange={s('exercise')} opts={[['enough', 'เพียงพอ'], ['low', 'ไม่เพียงพอ']]} />
             <Seg id="s-sweet" label="กินหวาน/ดื่มน้ำหวาน" value={f.sweet} onChange={s('sweet')} opts={[['rare', 'น้อย'], ['often', 'บ่อย']]} />
             <Seg id="s-salty" label="กินเค็ม (ปลาร้า น้ำปลา ของหมักดอง)" value={f.salty} onChange={s('salty')} opts={[['ok', 'ไม่จัด'], ['often', 'เค็มจัด']]} />
