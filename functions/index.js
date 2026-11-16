@@ -1453,6 +1453,8 @@ exports.ingestNcdTargets = onRequest({ cors: false, memory: '512MiB', timeoutSec
       keep.add(`v${m}`); n += rows.length;
       await db.doc(`ncdTargets/v${m}`).set({ no: m, asOf, rows: rows.map((r) => (Array.isArray(r) ? r.slice(0, 7).map((x) => String(x == null ? '' : x).slice(0, 120)) : [])), updatedAt: FieldValue.serverTimestamp() });
     }
+    const byMoo = {}; for (const [no, rows] of Object.entries(vs)) { const m = String(no).replace(/\D/g, '').slice(0, 3); if (m && Array.isArray(rows)) byMoo[m] = { total: rows.length, done: rows.filter((r) => Array.isArray(r) && String(r[6]) === '1').length }; }
+    await db.doc('settings/ncdTargetSummary').set({ asOf, byMoo, updatedAt: FieldValue.serverTimestamp() });
     const old = await db.collection('ncdTargets').listDocuments();
     await Promise.all(old.filter((x) => !keep.has(x.id)).map((x) => x.delete()));
     res.json({ ok: true, villages: keep.size, people: n });
