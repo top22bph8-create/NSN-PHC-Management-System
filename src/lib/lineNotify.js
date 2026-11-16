@@ -18,14 +18,16 @@ export async function getLineMeta() {
   // รวม (merge) events แบบลึกเสมอ ห้าม spread ค่าที่บันทึกไว้เดิมทับ events ทั้งก้อนตรงๆ
   // มิฉะนั้นเหตุการณ์ใหม่ที่เพิ่งเพิ่มเข้ามาทีหลัง (เช่น assignmentReminder) จะหายไปเงียบๆ สำหรับบัญชีที่เคยบันทึกค่าไว้ก่อนหน้านี้
   // (เป็นสาเหตุที่แจ้งเตือนปฏิทินมอบหมายงานไม่ทำงาน ทั้งที่โค้ดตั้งค่าเริ่มต้นเป็นเปิดไว้)
-  return { enabled: false, ...data, events: { ...DEFAULT_LINE_EVENTS, ...(data.events || {}) } };
+  return { enabled: false, autoSwitch: true, activeChannel: '1', ...data, events: { ...DEFAULT_LINE_EVENTS, ...(data.events || {}) } };
 }
 
 // บันทึก Channel Access Token และ/หรือ Target ID ใหม่ (ใช้ merge เพื่อแก้ทีละช่องได้ โดยไม่ต้องอ่านค่าเดิมกลับมาก่อน
 // เพราะกฎความปลอดภัยห้ามอ่านเอกสารนี้แม้แต่ Super Admin) — เว้นช่องไหนว่างไว้ = ไม่แตะค่าเดิมของช่องนั้น
-export async function saveLineCredentials({ channelAccessToken, targetId, vehicleTargetId, thaiTargetId }) {
+export async function saveLineCredentials({ channelAccessToken, channelAccessToken2, targetId, vehicleTargetId, thaiTargetId }) {
   const patch = { updatedAt: serverTimestamp() };
   if (channelAccessToken) patch.channelAccessToken = channelAccessToken;
+  // ไลน์ช่องที่ 2 (สำรอง): ใช้แทนอัตโนมัติเมื่อโควตาช่องแรกเต็ม — ตั้งค่า Target ID/เหตุการณ์แจ้งเตือนชุดเดียวกัน
+  if (channelAccessToken2) patch.channelAccessToken2 = channelAccessToken2;
   if (targetId) patch.targetId = targetId;
   // ไลน์กลุ่มแยกสำหรับระบบขออนุญาตใช้รถ (การ์ดอนุมัติ/ผลพิจารณาของงานรถส่งเข้ากลุ่มนี้ ไม่ปนกับกลุ่มหลัก)
   if (vehicleTargetId) patch.vehicleTargetId = vehicleTargetId;
@@ -35,9 +37,14 @@ export async function saveLineCredentials({ channelAccessToken, targetId, vehicl
 }
 
 // บันทึกสถานะเปิด/ปิด และเหตุการณ์ที่จะแจ้งเตือน (แก้ได้อิสระจาก Token/Target ID)
-export async function saveLineMeta({ enabled, events }) {
+export async function saveLineMeta({ enabled, events, autoSwitch }) {
   // merge:true เพื่อไม่ทับ directorUserId ที่ตั้งไว้แยกต่างหาก
-  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, events: { ...DEFAULT_LINE_EVENTS, ...events } }, { merge: true });
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, autoSwitch: autoSwitch !== false, events: { ...DEFAULT_LINE_EVENTS, ...events } }, { merge: true });
+}
+
+// สลับช่องไลน์ที่ใช้ส่งทันที ('1' หลัก / '2' สำรอง) — เขียนเฉพาะฟิลด์นี้ ไม่ทับค่าอื่น (ฟังก์ชันสลับอัตโนมัติก็เขียนฟิลด์เดียวกัน)
+export async function setLineActiveChannel(ch) {
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { activeChannel: ch === '2' ? '2' : '1' }, { merge: true });
 }
 
 // บันทึก LINE User ID ของ "ผู้อำนวยการ" — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ลับ อ่านได้ปกติ

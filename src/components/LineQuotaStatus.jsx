@@ -65,6 +65,14 @@ export default function LineQuotaStatus({ full }) {
             {full && <button type="button" className="btn btn-outline ml-auto !py-1 text-xs" onClick={check} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} ตรวจโควตาตอนนี้</button>}
           </div>
           {q?.limited && <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-2 rounded-full ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>}
+          {st.quotas && Object.keys(st.quotas).length > 1 && (
+            <div className="mt-1 text-xs text-slate-600">
+              {Object.entries(st.quotas).map(([ch, x]) => (
+                <span key={ch} className="mr-3">ไลน์ช่อง {ch}{String(st.activeChannel || '1') === ch ? ' (ใช้อยู่)' : ''}: {x.error ? 'ตรวจไม่ได้' : x.limited ? `ใช้ ${x.used}/${x.limit} เหลือ ${x.remaining}` : `ใช้ ${x.used} (ไม่จำกัด)`}</span>
+              ))}
+              {st.lastSwitch?.at?.toDate && <span className="text-slate-500">· สลับอัตโนมัติล่าสุด {fmtDateTime(st.lastSwitch.at)} ไปช่อง {st.lastSwitch.to}</span>}
+            </div>
+          )}
           {q?.checkedAt?.toDate && <div className="mt-1 text-xs text-slate-500">ตรวจล่าสุด {fmtDateTime(q.checkedAt)} · ระบบตรวจอัตโนมัติทุกวัน 08:00 และเตือนเข้าไลน์เมื่อใช้ไป 80%</div>}
           {err && <div className="mt-1 text-xs text-red-600">{err}</div>}
         </div>

@@ -10,7 +10,7 @@ import { PageHeader } from '../components/Logo';
 import { DEFAULT_HOLIDAYS, DEFAULT_QUOTA, getHolidays, getQuota } from '../lib/leave';
 import ThaiDateInput from '../components/ThaiDateInput';
 import LineQuotaStatus from '../components/LineQuotaStatus';
-import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta } from '../lib/lineNotify';
+import { DEFAULT_LINE_EVENTS, getLineMeta, getLineWebhookLog, saveLineCredentials, saveLineDirectorId, saveLineMeta, setLineActiveChannel } from '../lib/lineNotify';
 import {
   DEFAULT_DESTINATIONS, DEFAULT_MISSION_GROUPS, DEFAULT_MISSION_TYPES, DEFAULT_VEHICLE_FLEET, MISSION_LIST_VERSION, VEHICLE_STATUSES, VEHICLE_TYPES,
   getDestinations, getMissionTypes, getVehicleFleet, vehicleLabel,
@@ -32,6 +32,7 @@ export default function SettingsPage() {
   const [newDest, setNewDest] = useState('');
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
+  const [lineToken2, setLineToken2] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
   const [lineVehicleTargetId, setLineVehicleTargetId] = useState('');
   const [lineThaiTargetId, setLineThaiTargetId] = useState('');
@@ -71,14 +72,16 @@ export default function SettingsPage() {
       const tokenChanged = !!lineToken.trim();
       // Channel access token จริงของ LINE ยาวกว่า 100 ตัวอักษร — ถ้าสั้นกว่านี้มักเป็นค่าที่เบราว์เซอร์เติมให้เอง (เช่น จุด 11 ตัว) ห้ามบันทึกทับ
       if (tokenChanged && lineToken.trim().length < 100) throw new Error('ช่อง Channel access token สั้นผิดปกติ (อาจเป็นค่าที่เบราว์เซอร์เติมให้เอง) — ลบช่องนี้ให้ว่างแล้วบันทึกใหม่ หรือวาง token ที่คัดลอกจาก LINE Developers ใหม่ทั้งหมด');
+      const token2Changed = !!lineToken2.trim();
+      if (token2Changed && lineToken2.trim().length < 100) throw new Error('ช่อง Channel access token (ไลน์ช่องที่ 2) สั้นผิดปกติ — ลบช่องนี้แล้ววาง token จริงจาก LINE Developers Console อีกครั้ง');
       const targetChanged = !!lineTargetId.trim();
       const vehicleTargetChanged = !!lineVehicleTargetId.trim();
       const thaiTargetChanged = !!lineThaiTargetId.trim();
       const typed = [lineTargetId, lineVehicleTargetId, lineThaiTargetId].map((x) => x.trim()).filter(Boolean);
       if (new Set(typed).size !== typed.length) throw new Error('Target ID ของกลุ่มไลน์ซ้ำกัน — แต่ละกลุ่ม (กลุ่มหลัก / ใช้รถ / แพทย์แผนไทย) ต้องใช้รหัสคนละตัว');
-      if (tokenChanged || targetChanged || vehicleTargetChanged || thaiTargetChanged) {
-        await saveLineCredentials({ channelAccessToken: lineToken.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim(), thaiTargetId: lineThaiTargetId.trim() });
-        setLineToken(''); setLineTargetId(''); setLineVehicleTargetId(''); setLineThaiTargetId('');
+      if (tokenChanged || token2Changed || targetChanged || vehicleTargetChanged || thaiTargetChanged) {
+        await saveLineCredentials({ channelAccessToken: lineToken.trim(), channelAccessToken2: lineToken2.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim(), thaiTargetId: lineThaiTargetId.trim() });
+        setLineToken(''); setLineToken2(''); setLineTargetId(''); setLineVehicleTargetId(''); setLineThaiTargetId('');
       }
       await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged, vehicleTargetChanged } });
       const fleetV = (fleet || []).map((v, i) => ({ ...v, id: v.id || `v${Date.now()}_${i}` }));
@@ -193,6 +196,19 @@ export default function SettingsPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken">Channel access token</label>
                 <input id="lineToken" name="lineToken-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="วาง Channel access token ใหม่ที่นี่เพื่อบันทึก/เปลี่ยน (เว้นว่างไว้ = ไม่แก้ไขค่าเดิม)" value={lineToken} onChange={(e) => setLineToken(e.target.value)} />
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineToken2">Channel access token — ไลน์ช่องที่ 2 (สำรอง เมื่อโควตาช่องแรกเต็ม)</label>
+                <input id="lineToken2" name="lineToken2-nofill" type="text" style={{ WebkitTextSecurity: 'disc' }} autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false} className="input" placeholder="วาง Channel access token ของบอทตัวที่ 2 ที่นี่ (ว่างไว้ = ไม่เปลี่ยน)" value={lineToken2} onChange={(e) => setLineToken2(e.target.value)} />
+                <p className="mt-1 text-xs text-slate-500">ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่องแรกทั้งหมด — เชิญบอททั้ง 2 ตัวเข้ากลุ่มเดียวกัน (ต้องอยู่ Provider เดียวกันใน LINE Developers) และตั้ง Webhook URL ของบอทตัวที่ 2 เป็น URL เดียวกับตัวแรก</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-slate-600">ช่องที่ใช้ส่งตอนนี้:</span>
+                  {['1', '2'].map((c) => (
+                    <button key={c} type="button" onClick={async () => { await setLineActiveChannel(c); setLineMeta({ ...lineMeta, activeChannel: c }); say({ type: 'ok', text: `สลับไปใช้ไลน์ช่อง ${c} แล้ว` }); }}
+                      className={`btn !py-1 text-xs ${(lineMeta.activeChannel || '1') === c ? 'btn-primary' : 'btn-outline'}`}>ไลน์ช่อง {c}{c === '1' ? ' (หลัก)' : ' (สำรอง)'}</button>
+                  ))}
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="h-4 w-4" checked={lineMeta.autoSwitch !== false} onChange={(e) => setLineMeta({ ...lineMeta, autoSwitch: e.target.checked })} /> สลับอัตโนมัติเมื่อโควตาเต็ม (และกลับไปช่อง 1 ทุกวันที่ 1 ของเดือน) — กด "บันทึก" ด้านล่างเพื่อเก็บค่านี้</label>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="lineTargetId">Target ID (รหัสกลุ่ม/ผู้ใช้ปลายทาง) — กลุ่มหลัก: ใบลา/งานมอบหมาย/เงินยืม ฯลฯ</label>
