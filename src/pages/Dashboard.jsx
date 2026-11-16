@@ -13,6 +13,7 @@ import { GROUPS } from '../config/menu';
 import { TodayCards } from '../components/DashboardToday';
 import DashboardUnitDuty from '../components/DashboardUnitDuty';
 import LineQuotaStatus from '../components/LineQuotaStatus';
+import LineQuotaCard from '../components/LineQuotaCard';
 import MenuLink from '../components/MenuLink';
 import { getQuota, usage } from '../lib/leave';
 import { addDays, fmtDate, thMonths, todayStr } from '../lib/thai';
@@ -149,7 +150,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {normalizeRole(profile.role) === 'super_admin' && <LineQuotaStatus />}
+      {normalizeRole(profile.role) === 'super_admin' && <><LineQuotaStatus /><LineQuotaCard /></>}
 
       <TodayCards />
       <DashboardUnitDuty />
