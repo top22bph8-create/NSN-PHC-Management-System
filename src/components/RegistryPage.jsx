@@ -236,7 +236,9 @@ export default function RegistryPage({ cfg }) {
       snap.docs.forEach((d) => {
         if (d.id === excludeId) return;
         const x = d.data();
-        [x.odoCurrent, x.odoEnd].forEach((raw) => {
+        // เลขไมล์ก่อนเดินทางของคำขอที่ไม่อนุมัติ/ยกเลิกแล้ว ไม่นำมาเป็นเลขไมล์ครั้งก่อน (กันกรอกผิดแล้วล็อกคำขออื่น)
+        const dead = ['ไม่อนุมัติ', 'ยกเลิก'].includes(x.status);
+        [x.odoCurrent, x.odoEnd, ...(dead ? [] : [x.odoStart])].forEach((raw) => {
           if (raw === undefined || raw === null || String(raw).trim() === '') return;
           const n = Number(raw);
           if (!Number.isNaN(n) && (best === null || n > best)) best = n;
@@ -259,13 +261,27 @@ export default function RegistryPage({ cfg }) {
   // วัน+เวลา ของเที่ยวจริงเก็บเป็นข้อความ "YYYY-MM-DD HH:MM" เหมือนเดิม แต่หน้าจอแยกเป็น ช่องวันที่ + แป้นกดเวลา
   const splitDT = (str) => { const m = String(str || '').match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})/); return m ? { d: m[1], t: m[2].padStart(5, '0') } : { d: todayStr(), t: '' }; };
   const joinDT = (d, t) => (d && t ? `${d} ${t}` : '');
+  // เลขไมล์ครั้งก่อนสำหรับตรวจ/คำนวณ: undefined = กำลังโหลด, null = ไม่มีข้อมูล
+  const [tripPrev, setTripPrev] = useState(null);
+  const loadTripPrev = (it) => { setTripPrev(undefined); computePrevOdo(it.plate, it.id).then(setTripPrev).catch(() => setTripPrev(null)); };
+  // ป๊อปอัพ "เลขไมล์ก่อนเดินทาง" หลังบันทึกคำขอ (kind 'odo') — เก็บ odoStart ไว้กับคำขอ (สถานะยังเป็นรออนุมัติได้)
+  const openTripOdo = (it) => {
+    setTripForm({ odo: it.odoStart || '' });
+    setTripModal({ item: it, kind: 'odo' });
+    loadTripPrev(it);
+  };
   const openTripStart = (it) => {
-    setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}` });
+    setTripForm({ timeOut: `${todayStr()} ${nowTimeStr()}`, odo: it.odoStart || '' });
     setTripModal({ item: it, kind: 'start' });
+    if (isCarTrip(it)) loadTripPrev(it); else setTripPrev(null);
   };
   const openTripEnd = (it) => {
-    setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, tripResult: '', note: it.note || '' });
+    setTripForm({ timeIn: `${todayStr()} ${nowTimeStr()}`, tripResult: '', note: it.note || '', odo: '' });
     setTripModal({ item: it, kind: 'end' });
+    // ฐานคำนวณระยะทาง = เลขไมล์ก่อนเดินทางของเที่ยวนี้ ถ้าไม่มี (เที่ยวเก่า) ใช้เลขไมล์ครั้งก่อนของรถคันนี้
+    if (!isCarTrip(it)) setTripPrev(null);
+    else if (String(it.odoStart ?? '').trim() !== '') setTripPrev(Number(it.odoStart));
+    else loadTripPrev(it);
   };
   // เปิดหน้าลงเลขไมล์จากป๊อปอัพเตือน (?trip=รหัส&kind=start|end) — ดึงเอกสารตรงๆ เพราะเที่ยวอาจอยู่คนละปีงบประมาณกับที่เปิดดูอยู่
   useEffect(() => {
@@ -307,22 +323,43 @@ export default function RegistryPage({ cfg }) {
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const submitTrip = async () => {
     const { item, kind } = tripModal;
+    const car = isCarTrip(item);
+    const odoTxt = String(tripForm.odo ?? '').trim();
+    // รถยนต์ราชการต้องลงเลขไมล์ทุกขั้นตอน (ก่อนเดินทาง/สิ้นสุดการเดินทาง) ก่อนจึงบันทึกต่อได้ — ใช้ออกรายงานเลขกิโลเมตร
+    if (car && kind !== 'start' && kind !== 'end' && !odoTxt) { say({ type: 'error', text: 'กรุณากรอกเลขไมล์ก่อนเดินทาง' }); return; }
+    if (car && (kind === 'start' || kind === 'end')) {
+      if (tripPrev === undefined) { say({ type: 'error', text: 'กำลังโหลดเลขไมล์ครั้งก่อน กรุณารอสักครู่' }); return; }
+      if (!odoTxt) { say({ type: 'error', text: kind === 'start' ? 'กรุณากรอกเลขไมล์ก่อนเดินทาง' : 'กรุณากรอกเลขไมล์เมื่อสิ้นสุดการเดินทางก่อน จึงจะบันทึกต่อได้' }); return; }
+    }
+    if (car && kind === 'odo' && tripPrev === undefined) { say({ type: 'error', text: 'กำลังโหลดเลขไมล์ครั้งก่อน กรุณารอสักครู่' }); return; }
+    if (car && odoTxt && tripPrev !== null && tripPrev !== undefined && Number(odoTxt) < tripPrev) {
+      say({ type: 'error', text: `เลขไมล์ต้องไม่น้อยกว่า${kind === 'end' && String(item.odoStart ?? '').trim() !== '' ? 'เลขไมล์ก่อนเดินทาง' : 'เลขไมล์ครั้งก่อน'} (${tripPrev.toLocaleString('th-TH')} กม.)` }); return;
+    }
     let after;
-    if (kind === 'start') {
+    if (kind === 'odo') {
+      after = { odoStart: odoTxt, odoPrev: tripPrev !== null && tripPrev !== undefined ? String(tripPrev) : '' };
+    } else if (kind === 'start') {
       if (!String(tripForm.timeOut || '').trim()) { say({ type: 'error', text: 'กรุณากรอกวันและเวลาออกเดินทาง' }); return; }
       after = { status: 'กำลังใช้งาน', timeOut: tripForm.timeOut.trim() };
+      if (car) { after.odoStart = odoTxt; after.odoPrev = tripPrev !== null && tripPrev !== undefined ? String(tripPrev) : (item.odoPrev || ''); }
     } else {
       if (!String(tripForm.timeIn || '').trim()) { say({ type: 'error', text: 'กรุณากรอกวันและเวลากลับถึงหน่วยงาน' }); return; }
       after = {
         status: 'เสร็จสิ้น', timeIn: tripForm.timeIn.trim(),
         tripResult: String(tripForm.tripResult || '').trim(), note: String(tripForm.note || '').trim(),
       };
+      if (car) {
+        // ระยะทางครั้งนี้ = เลขไมล์เมื่อสิ้นสุด − เลขไมล์ก่อนเดินทาง (เที่ยวเก่าที่ไม่มี ใช้เลขไมล์ครั้งก่อนของรถ)
+        after.odoEnd = odoTxt; after.odoCurrent = odoTxt;
+        after.distance = tripPrev !== null && tripPrev !== undefined ? String(Number(odoTxt) - tripPrev) : '';
+        if (String(item.odoStart ?? '').trim() === '' && tripPrev !== null && tripPrev !== undefined) after.odoPrev = String(tripPrev);
+      }
     }
     setTripSaving(true);
     try {
       await updateDoc(doc(db, cfg.key, item.id), { ...after, updatedAt: serverTimestamp(), updatedBy: profile.email });
       await writeAudit({ action: 'update', module: cfg.key, docId: item.id, label: item[cfg.numberField], after });
-      say({ type: 'ok', text: kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : 'บันทึกสิ้นสุดการเดินทางแล้ว' });
+      say({ type: 'ok', text: kind === 'odo' ? 'บันทึกเลขไมล์ก่อนเดินทางแล้ว' : kind === 'start' ? 'บันทึกเริ่มเดินทางแล้ว' : `บันทึกสิ้นสุดการเดินทางแล้ว${after.distance ? ` · ใช้รถ ${Number(after.distance).toLocaleString('th-TH')} กม.` : ''}` });
       setTripModal(null);
     } catch (err) {
       say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) });
@@ -630,22 +667,8 @@ export default function RegistryPage({ cfg }) {
         if (hit) { say({ type: 'error', text: stockChequeMsg(hit, v) }); return; }
       }
     }
-    // คำนวณระยะทางครั้งนี้ = เลขไมล์ปัจจุบัน − เลขไมล์ครั้งก่อน (เฉพาะรถยนต์ที่กรอกเลขไมล์ปัจจุบัน)
-    if (isVehicle) {
-      const oldRec = form.id ? items.find((x) => x.id === form.id) : null;
-      const isCar = String(values.plate || '').startsWith(VEHICLE_TYPES[0]);
-      const curTxt = String(values.odoCurrent ?? '').trim();
-      if (isCar && curTxt !== '') {
-        const prev = await computePrevOdo(values.plate, form.id);
-        if (prev !== null && Number(curTxt) < prev) { say({ type: 'error', text: `เลขไมล์ปัจจุบันต้องไม่น้อยกว่าเลขไมล์ครั้งก่อน (${prev.toLocaleString('th-TH')} กม.)` }); return; }
-        values.odoCurrent = curTxt;
-        values.odoPrev = prev !== null ? String(prev) : '';
-        values.distance = prev !== null ? String(Number(curTxt) - prev) : '';
-      } else {
-        values.odoCurrent = '';
-        if (oldRec?.odoCurrent) { values.odoPrev = ''; values.distance = ''; }
-      }
-    }
+    // เลขไมล์ไม่ได้กรอกที่ฟอร์มนี้แล้ว (ใช้ป๊อปอัพหลังบันทึกคำขอ/เริ่ม/สิ้นสุดการเดินทาง) — ห้ามเขียนทับค่าเดิมตอนแก้ไขคำขอ
+    if (isVehicle) delete values.odoCurrent;
     setSaving(true);
     try {
       const old = form.id ? items.find((x) => x.id === form.id) : null;
@@ -692,6 +715,8 @@ export default function RegistryPage({ cfg }) {
         }
         await writeAudit({ action: 'create', module: cfg.key, docId: id, label: number, after: values });
         say({ type: 'ok', text: `บันทึกแล้ว ${cfg.numberLabel} ${number}` });
+        // คำขอใช้รถยนต์ใหม่: เด้งป๊อปอัพ "เลขไมล์ก่อนเดินทาง" ทันทีหลังบันทึก (รถจักรยานยนต์ไม่บันทึกเลขไมล์)
+        if (isVehicle && String(values.plate || '').startsWith(VEHICLE_TYPES[0])) setTimeout(() => openTripOdo({ id, [cfg.numberField]: number, ...values }), 0);
         // ปีงบประมาณของรายการใหม่อาจไม่ตรงกับปีที่เลือก
         if (fyVal !== fy) say({ type: 'ok', text: `บันทึกแล้ว ${number} (อยู่ในปีงบประมาณ ${fyVal})` });
         if (isIncoming) {
@@ -1376,8 +1401,8 @@ export default function RegistryPage({ cfg }) {
                                 <button className="btn btn-outline !py-1 !px-2 text-xs text-emerald-700" onClick={() => openTripEnd(it)}>สิ้นสุดการเดินทาง</button>
                               )}
                             </div>
-                            {it.odoCurrent && (
-                              <span className="text-xs text-slate-500">เลขไมล์ {Number(it.odoCurrent).toLocaleString('th-TH')}{it.distance && ` · ใช้รถ ${Number(it.distance).toLocaleString('th-TH')} กม.`}</span>
+                            {(it.odoStart || it.odoCurrent) && (
+                              <span className="text-xs text-slate-500">เลขไมล์ {it.odoStart ? `${Number(it.odoStart).toLocaleString('th-TH')}${it.odoEnd ? ` → ${Number(it.odoEnd).toLocaleString('th-TH')}` : ' (ก่อนเดินทาง)'}` : Number(it.odoCurrent).toLocaleString('th-TH')}{it.distance && ` · ใช้รถ ${Number(it.distance).toLocaleString('th-TH')} กม.`}</span>
                             )}
                             {it.status === 'เสร็จสิ้น' && it.timeOut && (
                               <span className="text-xs text-slate-500">{it.timeOut} → {it.timeIn}</span>
@@ -1860,17 +1885,37 @@ export default function RegistryPage({ cfg }) {
       {/* ทะเบียนควบคุมยานพาหนะ (เฟส 3): ป๊อปอัพเริ่มเดินทาง / สิ้นสุดการเดินทาง */}
       {tripModal && (
         <Modal
-          title={`${tripModal.kind === 'start' ? 'เริ่มเดินทาง' : 'สิ้นสุดการเดินทาง'} — ${tripModal.item[cfg.numberField]}`}
+          title={`${tripModal.kind === 'odo' ? 'เลขไมล์ก่อนเดินทาง' : tripModal.kind === 'start' ? 'เริ่มเดินทาง' : 'สิ้นสุดการเดินทาง'} — ${tripModal.item[cfg.numberField]}`}
           onClose={() => !tripSaving && setTripModal(null)}
           footer={
             <>
-              <button className="btn btn-outline" disabled={tripSaving} onClick={() => setTripModal(null)}>ยกเลิก</button>
+              <button className="btn btn-outline" disabled={tripSaving} onClick={() => setTripModal(null)}>{tripModal.kind === 'odo' ? 'กรอกภายหลัง' : 'ยกเลิก'}</button>
               <button className="btn btn-green" disabled={tripSaving} onClick={submitTrip}>{tripSaving && <Loader2 className="h-4 w-4 animate-spin" />} บันทึก</button>
             </>
           }
         >
           <div className="grid gap-4">
-            {tripModal.kind === 'start' ? (
+            {isCarTrip(tripModal.item) && (
+              <div className={`rounded-xl border-2 p-3 ${String(tripForm.odo || '').trim() ? 'border-emerald-300 bg-emerald-50/50' : 'border-amber-300 bg-amber-50/60'}`}>
+                <label className="mb-1 flex items-center gap-1 text-sm font-semibold text-slate-700" htmlFor="tripOdo">
+                  {tripModal.kind === 'end' ? 'เลขไมล์เมื่อสิ้นสุดการเดินทาง (กม.)' : 'เลขไมล์ก่อนเดินทาง (กม.)'} <span className="text-red-600">*</span>
+                </label>
+                <OdometerKeypadInput
+                  id="tripOdo" value={tripForm.odo || ''} onChange={(v) => setTripForm({ ...tripForm, odo: v })}
+                  prev={tripPrev === undefined ? null : tripPrev}
+                  label={tripModal.kind === 'end' ? 'เลขไมล์เมื่อสิ้นสุดการเดินทาง (กม.)' : 'เลขไมล์ก่อนเดินทาง (กม.)'}
+                  prevLabel={tripModal.kind === 'end' && String(tripModal.item.odoStart ?? '').trim() !== '' ? 'เลขไมล์ก่อนเดินทาง' : 'เลขไมล์ครั้งก่อน'}
+                  distanceLabel="ระยะทางที่ใช้ครั้งนี้" showDistance={tripModal.kind === 'end'}
+                  placeholder={tripModal.kind === 'end' ? 'แตะเพื่อกรอกเลขไมล์เมื่อสิ้นสุดการเดินทาง' : 'แตะเพื่อกรอกเลขไมล์ก่อนเดินทาง'}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  {tripModal.kind === 'end' ? 'ต้องกรอกเลขไมล์ก่อน จึงจะบันทึกสิ้นสุดการเดินทางได้ — ระบบคำนวณระยะทางลงรายงานเลขกิโลเมตรให้อัตโนมัติ' : tripModal.kind === 'odo' ? 'บันทึกเลขไมล์ก่อนออกเดินทางของคำขอนี้ (ถ้ายังไม่พร้อม กด "กรอกภายหลัง" แล้วกรอกตอนกด "เริ่มเดินทาง" ได้)' : 'ตรวจเลขไมล์ก่อนออกเดินทางให้ตรงกับหน้าปัดรถ'}
+                </p>
+              </div>
+            )}
+            {tripModal.kind === 'odo' ? (
+              <p className="text-sm text-slate-500">ผู้ขับรถ: {tripModal.item.driver || '-'} · ยานพาหนะ: {tripModal.item.plate}</p>
+            ) : tripModal.kind === 'start' ? (
               <>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">วันและเวลาออกเดินทางจริง <span className="text-red-600">*</span></label>

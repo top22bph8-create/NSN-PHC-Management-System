@@ -19,7 +19,7 @@ export function mileageSummary(fleet, allRecords, filtered) {
       let latest = null;
       (allRecords || []).forEach((r) => {
         if (r.plate !== label) return;
-        [r.odoCurrent, r.odoEnd].forEach((raw) => {
+        [r.odoCurrent, r.odoEnd, r.odoStart].forEach((raw) => {
           if (raw === undefined || raw === null || String(raw).trim() === '') return;
           const n = Number(raw);
           if (!Number.isNaN(n) && (latest === null || n > latest)) latest = n;

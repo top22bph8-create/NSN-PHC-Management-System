@@ -6,7 +6,7 @@ import { Delete, Gauge } from 'lucide-react';
 // ถ้าส่ง prev (เลขไมล์ครั้งก่อน) มาด้วย จะแสดงระยะทางครั้งนี้ (ปัจจุบัน − ครั้งก่อน) สดๆ ขณะกด และไม่ให้กดตกลงถ้าน้อยกว่าครั้งก่อน
 const fmtN = (s) => (s === '' ? '–' : Number(s).toLocaleString('th-TH'));
 
-export default function OdometerKeypadInput({ id, value, onChange, prev = null, placeholder = 'แตะเพื่อกรอกเลขไมล์' }) {
+export default function OdometerKeypadInput({ id, value, onChange, prev = null, placeholder = 'แตะเพื่อกรอกเลขไมล์', label = 'เลขไมล์ปัจจุบัน (กม.)', prevLabel = 'เลขไมล์ครั้งก่อน', distanceLabel = 'ระยะทางครั้งนี้', showDistance = true }) {
   const [open, setOpen] = useState(false);
   const [buf, setBuf] = useState('');
 
@@ -24,15 +24,15 @@ export default function OdometerKeypadInput({ id, value, onChange, prev = null, 
         <Gauge className="h-4 w-4 text-slate-400" />
       </button>
       {open && createPortal(
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="กรอกเลขไมล์ปัจจุบัน" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={label} onClick={() => setOpen(false)}>
           <div className="w-full max-w-sm rounded-t-3xl bg-white p-4 shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 rounded-2xl bg-brand-50 py-3 text-center">
-              <div className="text-sm text-slate-500">เลขไมล์ปัจจุบัน (กม.)</div>
+              <div className="text-sm text-slate-500">{label}</div>
               <div className="text-5xl font-bold tracking-wide text-brand-800">{fmtN(buf)}</div>
-              <div className="mt-1 text-sm text-slate-600">เลขไมล์ครั้งก่อน: <b>{prev !== null ? `${prev.toLocaleString('th-TH')} กม.` : 'ยังไม่มีข้อมูล'}</b></div>
+              <div className="mt-1 text-sm text-slate-600">{prevLabel}: <b>{prev !== null ? `${prev.toLocaleString('th-TH')} กม.` : 'ยังไม่มีข้อมูล'}</b></div>
               {prev !== null && cur !== null && (tooLow
                 ? <div className="mt-1 text-sm font-medium text-red-600">เลขไมล์ต้องไม่น้อยกว่าครั้งก่อน</div>
-                : <div className="mt-1 text-lg font-bold text-emerald-700">ระยะทางครั้งนี้ {(cur - prev).toLocaleString('th-TH')} กม.</div>)}
+                : showDistance ? <div className="mt-1 text-lg font-bold text-emerald-700">{distanceLabel} {(cur - prev).toLocaleString('th-TH')} กม.</div> : null)}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (

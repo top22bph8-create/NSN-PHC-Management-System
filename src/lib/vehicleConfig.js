@@ -126,6 +126,6 @@ export const VEHICLE_DRIVERS = ['นายแสงกล้า โพธิโ�
 
 // เลขไมล์/ระยะทางของคำขอ: รูปแบบใหม่ = เลขไมล์ครั้งก่อน (odoPrev) → เลขไมล์ปัจจุบัน (odoCurrent); คำขอเก่าที่เคยลงไป-กลับ ใช้ odoStart → odoEnd
 export const KM_STATUSES = ['อนุมัติ', 'กำลังใช้งาน', 'เสร็จสิ้น'];
-export const odoFrom = (r) => (String(r.odoPrev ?? '').trim() !== '' ? r.odoPrev : r.odoStart);
+export const odoFrom = (r) => (String(r.odoStart ?? '').trim() !== '' ? r.odoStart : r.odoPrev);
 export const odoTo = (r) => (String(r.odoCurrent ?? '').trim() !== '' ? r.odoCurrent : r.odoEnd);
 export const hasKm = (r) => KM_STATUSES.includes(r.status) && String(r.distance ?? '').trim() !== '';
