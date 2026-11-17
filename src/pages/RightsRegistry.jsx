@@ -26,24 +26,30 @@ const COLS = ['เลข PID', 'ชื่อ-สกุล', 'อายุ', 'ท
 // พิมพ์ "แบบสำรวจ อสม." (บันทึกเป็น PDF ได้จากหน้าต่างพิมพ์) — รายชื่อกลุ่มไม่ตรง แยกรายหมู่บ้าน หมู่ละหลายหน้า
 const escH = (x) => String(x ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const houseOf = (addr) => String(addr || '').replace(/\s*ม\.\d+\s*$/, '').trim() || '-';
+// ชื่อ-สกุลอยู่บรรทัดเดียวเสมอ: ชื่อยาวมากค่อยลดขนาดตัวอักษรลงตามความยาว
+const nmSize = (n) => { const L = String(n || '').length; return L <= 24 ? 16.5 : L <= 28 ? 15 : L <= 34 ? 13.5 : 12; };
+const bx = (t) => `<span class="bx">☐</span> ${t}`;
 const SURVEY_KINDS = {
   rights: {
-    note: (asOf) => `คำชี้แจง: กรุณาเยี่ยมบ้าน/สอบถามบุคคลตามรายชื่อ ว่า <b>อาศัยอยู่ในพื้นที่จริงหรือไม่ และอยู่ต่อเนื่องเกิน 6 เดือนหรือไม่</b> หากอยู่เกิน 6 เดือนและต้องการใช้บริการที่ รพ.สต.บ้านหนองสนม ให้แจ้งบุคคลนั้นนำบัตรประชาชนมาติดต่อ รพ.สต.บ้านหนองสนม เพื่อแจ้งย้ายสิทธิ์ (ข้อมูล ณ ${escH(asOf)})`,
-    head: '<tr><th rowspan="2" style="width:30px">ที่</th><th rowspan="2" style="width:48px">PID</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2" style="width:34px">อายุ</th><th rowspan="2" style="width:62px">บ้านเลขที่</th><th rowspan="2" style="width:190px">หน่วยบริการประจำ<br>(ปัจจุบัน)</th><th colspan="3">ผลการสำรวจ (ติ๊ก ✓)</th><th rowspan="2" style="width:90px">เบอร์โทรติดต่อ</th><th rowspan="2" style="width:100px">หมายเหตุ</th></tr><tr><th style="width:118px">การอยู่อาศัย</th><th style="width:78px">ระยะเวลา</th><th style="width:96px">การย้ายสิทธิ์</th></tr>',
-    row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td>${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="sm"><div class="clamp">${escH(r[6])}</div></td><td class="chk">☐ อยู่จริง<br>☐ ไม่ได้อยู่/ย้ายไปแล้ว</td><td class="chk">☐ ≥ 6 เดือน<br>☐ &lt; 6 เดือน</td><td class="chk">☐ ต้องการย้าย<br>☐ ไม่ต้องการ</td><td></td><td></td></tr>`,
+    note: (asOf) => `<b>คำชี้แจง:</b> กรุณาเยี่ยมบ้าน/สอบถามบุคคลตามรายชื่อ ว่า <b>อาศัยอยู่ในพื้นที่จริงหรือไม่ และอยู่ต่อเนื่องเกิน 6 เดือนหรือไม่</b> หากอยู่เกิน 6 เดือนและต้องการใช้บริการที่ รพ.สต.บ้านหนองสนม ให้แจ้งบุคคลนั้นนำบัตรประชาชนมาติดต่อ รพ.สต.บ้านหนองสนม เพื่อแจ้งย้ายสิทธิ์ <span class="asof">(ข้อมูล ณ ${escH(asOf)})</span>`,
+    cols: [4, 5, 22, 4, 6, 14, 11, 9, 11, 8, 6],
+    head: '<tr><th rowspan="2">ที่</th><th rowspan="2">PID</th><th rowspan="2">ชื่อ - สกุล</th><th rowspan="2">อายุ</th><th rowspan="2">บ้าน<br>เลขที่</th><th rowspan="2">หน่วยบริการประจำ<br>(ปัจจุบัน)</th><th colspan="3">ผลการสำรวจ (ติ๊ก ✓)</th><th rowspan="2">เบอร์โทร</th><th rowspan="2">หมายเหตุ</th></tr><tr><th>การอยู่อาศัย</th><th>ระยะเวลา</th><th>การย้ายสิทธิ์</th></tr>',
+    row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td class="nm" style="font-size:${nmSize(r[1])}px">${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="sm"><div class="clamp">${escH(r[6])}</div></td><td class="chk">${bx('อยู่จริง')}<br>${bx('ไม่ได้อยู่')}</td><td class="chk">${bx('≥ 6 เดือน')}<br>${bx('&lt; 6 เดือน')}</td><td class="chk">${bx('ต้องการย้าย')}<br>${bx('ไม่ต้องการ')}</td><td></td><td></td></tr>`,
   },
   dead: {
-    note: (asOf) => `คำชี้แจง: กรุณาสอบถามญาติ/เพื่อนบ้านของบุคคลตามรายชื่อ ว่า <b>เสียชีวิตจริงหรือไม่ วันที่เสียชีวิต และสาเหตุการตาย</b> (ถ้ามีใบมรณบัตรให้ติ๊กและแจ้งเจ้าหน้าที่ เพื่อบันทึกการตายในโปรแกรม JHCIS) รายชื่อนี้มาจากไฟล์ตรวจสอบสิทธิ์ที่ระบุว่าเสียชีวิต แต่ JHCIS ยังไม่ได้บันทึกการตาย (ข้อมูล ณ ${escH(asOf)})`,
-    head: '<tr><th rowspan="2" style="width:30px">ที่</th><th rowspan="2" style="width:48px">PID</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2" style="width:34px">อายุ</th><th rowspan="2" style="width:62px">บ้านเลขที่</th><th colspan="4">ผลการสำรวจ</th><th rowspan="2" style="width:110px">ผู้ให้ข้อมูล / เบอร์โทร</th><th rowspan="2" style="width:80px">หมายเหตุ</th></tr><tr><th style="width:92px">สถานะ (ติ๊ก ✓)</th><th style="width:104px">วันที่เสียชีวิต<br>(วัน/เดือน/ปี)</th><th style="width:190px">สาเหตุการตาย</th><th style="width:78px">ใบมรณบัตร</th></tr>',
-    row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td>${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="chk">☐ เสียชีวิตจริง<br>☐ ยังมีชีวิต</td><td class="c" style="color:#777">....../....../......</td><td></td><td class="chk">☐ มี<br>☐ ไม่มี</td><td></td><td></td></tr>`,
+    note: (asOf) => `<b>คำชี้แจง:</b> กรุณาสอบถามญาติ/เพื่อนบ้านของบุคคลตามรายชื่อ ว่า <b>เสียชีวิตจริงหรือไม่ วันที่เสียชีวิต และสาเหตุการตาย</b> (ถ้ามีใบมรณบัตรให้ติ๊กและแจ้งเจ้าหน้าที่ เพื่อบันทึกการตายในโปรแกรม JHCIS) รายชื่อนี้มาจากไฟล์ตรวจสอบสิทธิ์ที่ระบุว่าเสียชีวิต แต่ JHCIS ยังไม่ได้บันทึกการตาย <span class="asof">(ข้อมูล ณ ${escH(asOf)})</span>`,
+    cols: [4, 5, 22, 4, 6, 12, 11, 13, 7, 9, 7],
+    head: '<tr><th rowspan="2">ที่</th><th rowspan="2">PID</th><th rowspan="2">ชื่อ - สกุล</th><th rowspan="2">อายุ</th><th rowspan="2">บ้าน<br>เลขที่</th><th colspan="4">ผลการสำรวจ</th><th rowspan="2">ผู้ให้ข้อมูล<br>/ เบอร์โทร</th><th rowspan="2">หมายเหตุ</th></tr><tr><th>สถานะ (ติ๊ก ✓)</th><th>วันที่เสียชีวิต<br>(วัน/เดือน/ปี)</th><th>สาเหตุการตาย</th><th>ใบมรณบัตร</th></tr>',
+    row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td class="nm" style="font-size:${nmSize(r[1])}px">${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="chk">${bx('เสียชีวิตจริง')}<br>${bx('ยังมีชีวิต')}</td><td class="c dt">&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;/</td><td></td><td class="chk">${bx('มี')}<br>${bx('ไม่มี')}</td><td></td><td></td></tr>`,
   },
 };
 function openSurveyPrint({ groups, title, asOf, kind = 'rights' }) {
   const K = SURVEY_KINDS[kind];
   const w = window.open('', '_blank');
   if (!w) { window.alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้แล้วกดอีกครั้ง'); return; }
-  // แบ่งหน้าเอง หน้าละ PER แถว แล้วใส่ช่องลงชื่อท้ายทุกหน้า — กันช่องลงชื่อหล่นไปอยู่หน้าเปล่าแยกจากตาราง
-  const PER = 10;
+  // แบ่งหน้าเอง หน้าละ PER แถว (ตัวอักษรใหญ่ แถวสูง อ่านง่ายสำหรับ อสม. สูงวัย) แล้วใส่ช่องลงชื่อท้ายทุกหน้า
+  const PER = 8;
+  const colgroup = `<colgroup>${K.cols.map((c) => `<col style="width:${c}%">`).join('')}</colgroup>`;
   const pages = groups.flatMap((g) => {
     const total = Math.max(1, Math.ceil(g.rows.length / PER));
     return Array.from({ length: total }, (_, pi) => {
@@ -51,16 +57,24 @@ function openSurveyPrint({ groups, title, asOf, kind = 'rights' }) {
       return `<section class="pg"><h1>${escH(title)}</h1>
 <h2>${escH(g.label)} <span class="n">(รวม ${g.rows.length} คน · หน้า ${pi + 1}/${total})</span></h2>
 <p class="note">${K.note(asOf)}</p>
-<table><thead>${K.head}</thead><tbody>${rows}</tbody></table>
-<div class="sign"><div>ลงชื่อ ....................................................... อสม. ผู้สำรวจ</div><div>วันที่สำรวจ ........../........../..........</div><div>ลงชื่อ ....................................................... เจ้าหน้าที่ รพ.สต. ผู้รับข้อมูล</div></div></section>`;
+<table>${colgroup}<thead>${K.head}</thead><tbody>${rows}</tbody></table>
+<div class="sign"><div>ลงชื่อ <span class="ln"></span> อสม. ผู้สำรวจ</div><div>วันที่สำรวจ <span class="ln s"></span></div><div>ลงชื่อ <span class="ln"></span> เจ้าหน้าที่ รพ.สต. ผู้รับข้อมูล</div></div></section>`;
     });
   }).join('');
   w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${escH(title)}</title><style>
-@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:'Sarabun','TH Sarabun New','Noto Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;margin:0}
-.pg{page-break-after:always;break-inside:avoid;height:186mm}.pg:last-child{page-break-after:auto}h1{font-size:15px;margin:0 0 2px;text-align:center}h2{font-size:14px;margin:0 0 4px;text-align:center}h2 .n{font-weight:normal;font-size:12px}
-.note{margin:2px 0 6px;font-size:11px;line-height:1.35}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:3px 4px;vertical-align:middle}th{background:#e8f0f7;font-size:11px}
-.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;max-height:2.6em}td.c{text-align:center}td.sm{font-size:10.5px}td.chk{font-size:10.5px;line-height:1.5;white-space:nowrap}tbody tr{height:34px;page-break-inside:avoid}thead{display:table-header-group}
-.sign{display:flex;justify-content:space-between;margin-top:14px;font-size:12px}@media screen{body{padding:12px}.pg{margin-bottom:24px}}
+@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:'Sarabun','TH Sarabun New','Noto Sans Thai',Tahoma,sans-serif;font-size:15px;color:#111;margin:0}
+.pg{page-break-after:always;break-inside:avoid;height:188mm}.pg:last-child{page-break-after:auto}
+h1{font-size:19px;margin:0 0 3px;text-align:center}h2{font-size:18px;margin:0 0 6px;text-align:center}h2 .n{font-weight:normal;font-size:15px}
+.note{margin:0 0 8px;font-size:14px;line-height:1.45}.asof{color:#555}
+table{width:99.5%;border-collapse:collapse;table-layout:fixed}th,td{border:1.3px solid #222;padding:4px 6px;vertical-align:middle;overflow:hidden}
+th{background:#e3eef8;font-size:14.5px;line-height:1.3;font-weight:700}td{font-size:15.5px}
+td.c{text-align:center}td.nm{font-weight:600;line-height:1.3;white-space:nowrap}td.sm{font-size:13.5px}td.chk{font-size:14.5px;line-height:1.55;white-space:nowrap}td.dt{color:#666;letter-spacing:1px}
+.bx{font-size:17px;line-height:1;vertical-align:middle;margin-right:2px}
+tbody tr{height:60px;page-break-inside:avoid}thead{display:table-header-group}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;max-height:2.6em}
+.sign{display:flex;justify-content:space-between;align-items:flex-end;margin-top:18px;font-size:15px}.sign>div{white-space:nowrap}
+.ln{display:inline-block;width:185px;border-bottom:1.3px dotted #222;vertical-align:baseline}.ln.s{width:120px}
+@media screen{body{padding:12px}.pg{margin-bottom:24px}}
 </style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
   w.document.close();
 }
