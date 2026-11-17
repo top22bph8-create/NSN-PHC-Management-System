@@ -34,11 +34,24 @@ export default function RightsRegistry() {
   useEffect(() => onSnapshot(collection(db, 'rightsVillageOverrides'), (s) => setOv(Object.fromEntries(s.docs.map((d) => [d.id, Number(d.data().no)]))), () => setOv({})), []);
   const sum = docs?.find((d) => d.id === 'summary');
   const rowsOf = (cat) => (docs || []).filter((d) => d.cat === cat).sort((a, b) => a.idx - b.idx).flatMap((d) => d.rows || []);
-  const list = useMemo(() => {
+  const vnoOf = (r) => { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); return g ? Number(g[1]) : (ov[r[0]] ?? -1); };
+  // ตัวกรองรายหมู่บ้านในหน้าต่างรายชื่อ ('' = ทุกหมู่, -1 = ไม่ระบุหมู่) และในรายชื่อตายตามไฟล์
+  const [vf, setVf] = useState('');
+  const [dvf, setDvf] = useState('');
+  useEffect(() => { setVf(''); }, [open]);
+  useEffect(() => { if (!deadOpen) setDvf(''); }, [deadOpen]);
+  const vNames = useMemo(() => {
+    const base = (sum?.villages || []).length ? sum.villages : VILLAGES;
+    return base.filter((v) => v.no > 0).map((v) => ({ no: v.no, name: v.name })).sort((a, b) => a.no - b.no);
+  }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const baseList = useMemo(() => {
     if (!open) return [];
     const k = kw.trim();
     return rowsOf(open).filter((r) => (!k || r.slice(0, 4).join(' ').includes(k)) && (!hos || r[6] === hos));
-  }, [docs, open, kw, hos]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [docs, open, kw, hos, ov]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vilCounts = useMemo(() => { const m = {}; for (const r of baseList) { const n = vnoOf(r); m[n] = (m[n] || 0) + 1; } return m; }, [baseList, ov]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = useMemo(() => (vf === '' ? baseList : baseList.filter((r) => vnoOf(r) === Number(vf))), [baseList, vf, ov]); // eslint-disable-line react-hooks/exhaustive-deps
+  const deadVno = (d) => { const g = /ม\.(\d+)\s*$/.exec(String(d.addr || '')); return g ? Number(g[1]) : -1; };
   // กำหนด/ล้างหมู่บ้านของคนที่ไม่ระบุหมู่ (เก็บแยกใน rightsVillageOverrides — ไม่ถูกซิงก์ JHCIS ทับ)
   const setVil = async (pid, v) => {
     try {
@@ -46,7 +59,6 @@ export default function RightsRegistry() {
       else await setDoc(doc(db, 'rightsVillageOverrides', String(pid)), { no: Number(v), updatedAt: serverTimestamp() });
     } catch (e) { window.alert('บันทึกหมู่บ้านไม่สำเร็จ: ' + (e.code || e.message)); }
   };
-  const vnoOf = (r) => { const g = /ม\.(\d+)\s*$/.exec(String(r[3] || '')); return g ? Number(g[1]) : (ov[r[0]] ?? -1); };
   // คนที่ที่อยู่ไม่มีหมู่ (หรือที่เรากำหนดหมู่ให้เอง) รวมทุกประเภท ไม่ซ้ำ PID
   const fixList = useMemo(() => {
     const seen = new Map();
@@ -67,9 +79,12 @@ export default function RightsRegistry() {
   }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!docs) return <Spinner />;
   const c = sum?.counts || {};
+  const deadAll = sum?.deadReport?.list || [];
+  const deadCnt = {}; for (const d of deadAll) { const n = deadVno(d); deadCnt[n] = (deadCnt[n] || 0) + 1; }
+  const deadShown = dvf === '' ? deadAll : deadAll.filter((d) => deadVno(d) === Number(dvf));
   const VCOLS = [['pop', 'ประชากร (ทะเบียนราษฎร์)'], ['RUC', 'UC/Wel'], ['ROFC', 'ข้าราชการ'], ['RSSS', 'ประกันสังคม'], ['RLGO', 'อปท.'], ['RNRD', 'ต่างด้าว'], ['ROTH', 'อื่นๆ'], ['RNON', 'ไม่มีสิทธิ'], ['A', 'UC/Wel ตรง'], ['C', 'UC/Wel ไม่ตรง']];
   const vilXlsx = () => exportXlsx(vilRows.map((v) => ({ 'หมู่ที่': v.no > 0 ? v.no : '-', 'รหัสหมู่บ้าน': v.code || '', 'ชื่อหมู่บ้าน': v.name, 'บ้าน(หลัง)': v.houses, 'ครอบครัว': v.households, ...Object.fromEntries(VCOLS.map(([k, t]) => [t, v[k] || 0])) })), 'หมู่บ้าน', 'รายงานหมู่บ้านและสิทธิ์การรักษา');
-  const toXlsx = () => exportXlsx(list.map((r) => Object.fromEntries(COLS.map((h, i) => [h, r[i]]))), 'รายชื่อ', `ทะเบียนสิทธิ_${open}`);
+  const toXlsx = () => exportXlsx(list.map((r) => Object.fromEntries(COLS.map((h, i) => [h, r[i]]))), 'รายชื่อ', `ทะเบียนสิทธิ_${open}${vf !== '' ? `_${vf === '-1' ? 'ไม่ระบุหมู่' : `หมู่${vf}`}` : ''}`);
   return (
     <div className="space-y-4">
       <PageHeader title="รายงานหมู่บ้านและสิทธิ์การรักษา (UC/Wel ตรง–ไม่ตรง)" subtitle={sum ? `ข้อมูล ณ ${sum.asOf || ''} · ส่งล่าสุด ${sum.updatedAt?.toDate ? fmtDateTime(sum.updatedAt.toDate()) : ''}` : 'ยังไม่มีข้อมูล'} />
@@ -176,24 +191,37 @@ export default function RightsRegistry() {
         <Modal title="ตายตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่ตัดตาย" onClose={() => setDeadOpen(false)} wide>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs text-slate-500">กรุณาตรวจสอบแล้วบันทึกการตายในโปรแกรม JHCIS (ระบบนี้ไม่ได้ตัดตายให้เอง)</p>
-            <button className="btn-outline" onClick={() => exportXlsx((sum.deadReport.list || []).map((d) => ({ 'เลข PID': d.pid, 'ชื่อ-สกุล': d.name, 'อายุ': d.age, 'ที่อยู่': d.addr, 'รหัสสิทธิใน JHCIS': d.right, 'สิทธิตามไฟล์': d.newRight })), 'ยังไม่ตัดตาย', 'ตายตามไฟล์สิทธิ_JHCISยังไม่ตัดตาย')}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            <button className="btn-outline" onClick={() => exportXlsx(deadShown.map((d) => ({ 'เลข PID': d.pid, 'ชื่อ-สกุล': d.name, 'อายุ': d.age, 'ที่อยู่': d.addr, 'รหัสสิทธิใน JHCIS': d.right, 'สิทธิตามไฟล์': d.newRight })), 'ยังไม่ตัดตาย', 'ตายตามไฟล์สิทธิ_JHCISยังไม่ตัดตาย')}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+          </div>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <button onClick={() => setDvf('')} className={`rounded-full border px-3 py-1 text-xs font-medium ${dvf === '' ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>ทุกหมู่บ้าน ({nf(deadAll.length)})</button>
+            {vNames.filter((v) => deadCnt[v.no]).map((v) => (
+              <button key={v.no} onClick={() => setDvf(String(v.no))} title={v.name} className={`rounded-full border px-3 py-1 text-xs font-medium ${dvf === String(v.no) ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>หมู่ {v.no} ({nf(deadCnt[v.no])})</button>))}
+            {deadCnt[-1] ? <button onClick={() => setDvf('-1')} className={`rounded-full border px-3 py-1 text-xs font-medium ${dvf === '-1' ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}>ไม่ระบุหมู่ ({nf(deadCnt[-1])})</button> : null}
           </div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-50"><tr>{['เลข PID', 'ชื่อ-สกุล', 'อายุ', 'ที่อยู่', 'สิทธิใน JHCIS'].map((h) => <th key={h} className="px-2 py-1 text-left">{h}</th>)}</tr></thead>
-              <tbody>{(sum.deadReport.list || []).map((d) => <tr key={d.pid} className="border-b"><td className="px-2 py-1">{d.pid}</td><td className="px-2 py-1">{d.name}</td><td className="px-2 py-1">{d.age}</td><td className="px-2 py-1">{d.addr || '-'}</td><td className="px-2 py-1">{d.right || '-'}</td></tr>)}
-                {!(sum.deadReport.list || []).length && <tr><td colSpan={5} className="p-4 text-center text-slate-500">ไม่มีรายการค้างแล้ว 🎉</td></tr>}</tbody>
+              <tbody>{deadShown.map((d) => <tr key={d.pid} className="border-b"><td className="px-2 py-1">{d.pid}</td><td className="px-2 py-1">{d.name}</td><td className="px-2 py-1">{d.age}</td><td className="px-2 py-1">{d.addr || '-'}</td><td className="px-2 py-1">{d.right || '-'}</td></tr>)}
+                {!deadShown.length && <tr><td colSpan={5} className="p-4 text-center text-slate-500">ไม่มีรายการค้างแล้ว 🎉</td></tr>}</tbody>
             </table>
           </div>
         </Modal>
       )}
       {open && (
-        <Modal title={`${CATS[open].title}${hos ? ` — ${hos}` : ''}`} onClose={() => setOpen(null)} wide>
+        <Modal title={`${CATS[open].title}${hos ? ` — ${hos}` : ''}${vf !== '' ? ` — ${vf === '-1' ? 'ไม่ระบุหมู่' : vf === '0' ? 'นอกเขต' : `หมู่ ${vf}`}` : ''}`} onClose={() => setOpen(null)} wide>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-48"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><input className="input pl-8" placeholder="ค้นหาชื่อ / PID / ที่อยู่" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
             {hos && <button className="btn-outline" onClick={() => setHos('')}>ล้างตัวกรองหน่วยบริการ</button>}
             <button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
             <span className="text-sm text-slate-500">{nf(list.length)} คน</span>
+          </div>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <button onClick={() => setVf('')} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === '' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>ทุกหมู่บ้าน ({nf(baseList.length)})</button>
+            {vNames.filter((v) => vilCounts[v.no]).map((v) => (
+              <button key={v.no} onClick={() => setVf(String(v.no))} title={v.name} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === String(v.no) ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>หมู่ {v.no} ({nf(vilCounts[v.no])})</button>))}
+            {vilCounts[0] ? <button onClick={() => setVf('0')} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === '0' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>นอกเขต ({nf(vilCounts[0])})</button> : null}
+            {vilCounts[-1] ? <button onClick={() => setVf('-1')} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === '-1' ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}>ไม่ระบุหมู่ ({nf(vilCounts[-1])})</button> : null}
           </div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
