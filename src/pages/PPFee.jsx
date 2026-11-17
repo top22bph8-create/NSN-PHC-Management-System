@@ -7,6 +7,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { ChevronDown, ChevronRight, FileSpreadsheet, Printer, Search, Users } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
+import { BTN_PDF, BTN_XLSX, chipCls } from '../lib/chipStyle';
 import { PP_SPEC, houseOf, openPPReportPrint, openSurveyPrint } from '../lib/surveyPrint';
 import { FEE_ACTS, FEE_TARGETS, QUARTERS, fyMonths, money } from '../lib/ppFee';
 import { fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
@@ -73,14 +74,14 @@ function TargetModal({ id, act, tdocs, onClose }) {
               <button key={k} onClick={() => setSt(k)} className={`rounded-xl border p-2 text-left ${c} ${st === k ? 'ring-2 ring-sky-400' : ''}`}><div className="text-xs">{t}</div><div className="text-2xl font-bold tabular-nums">{nf(v)}</div>{info.total > 0 && k !== 'all' && <div className="text-xs opacity-70">{Math.round((v / info.total) * 100)}%</div>}</button>))}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <button onClick={() => setMoo('')} className={`rounded-full border px-3 py-1 ${!moo ? 'border-sky-500 bg-sky-50 text-sky-700' : 'bg-white text-slate-600'}`}>ทุกหมู่</button>
+            <button onClick={() => setMoo('')} className={chipCls('', !moo)}>{!moo && '✓ '}ทุกหมู่</button>
             {moos.map((m) => { const o = info.byMoo[m]; const todo = o.t - o.d - o.p; return (
-              <button key={m} onClick={() => setMoo(m)} title={vname(m)} className={`rounded-full border px-3 py-1 ${moo === m ? 'border-sky-500 bg-sky-50 text-sky-700' : 'bg-white text-slate-600'}`}>หมู่ {m} <span className="text-xs text-slate-400">{vname(m)}</span> <b className="ml-1 text-rose-600">{todo}</b><span className="text-xs text-slate-400">/{o.t}</span></button>); })}
+              <button key={m} onClick={() => setMoo(m)} title={vname(m)} className={chipCls(m, moo === m)}>{moo === m && '✓ '}หมู่ {m} <span className="text-xs font-normal opacity-80">{vname(m)}</span> <b className={`ml-1 rounded-full px-1.5 ${moo === m ? 'bg-white/90 text-rose-600' : 'bg-white text-rose-600'}`}>{todo}</b><span className="text-xs font-normal opacity-70">/{o.t}</span></button>); })}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-48 flex-1"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><input className="input pl-8" placeholder="ค้นหาชื่อ / PID / บ้านเลขที่" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
-            <button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
-            <button className="btn-outline" onClick={printSurvey}><Printer className="h-4 w-4" /> PDF แบบสำรวจ{moo ? ` หมู่ ${moo}` : ' (แยกหมู่บ้าน)'}</button>
+            <button className={BTN_XLSX} onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            <button className={BTN_PDF} onClick={printSurvey}><Printer className="h-4 w-4" /> PDF แบบสำรวจ{moo ? ` หมู่ ${moo}` : ' (แยกหมู่บ้าน)'}</button>
             <span className="text-slate-500">{nf(list.length)} คน</span>
           </div>
           <div className="max-h-[50vh] overflow-auto rounded-lg border">
@@ -157,13 +158,13 @@ export default function PPFee() {
       <SyncNowButton kinds={['pp', 'targets']} className="print:hidden" />
       {cur && (
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <button className="btn-outline" onClick={printReport}><Printer className="h-4 w-4" /> PDF สรุปผลงานทุกตัวชี้วัด</button>
+          <button className={BTN_PDF} onClick={printReport}><Printer className="h-4 w-4" /> PDF สรุปผลงานทุกตัวชี้วัด</button>
           <span className="text-sm text-slate-400">|</span>
           <select className="input !w-auto" value={pm} onChange={(e) => setPm(e.target.value)}>
             <option value="">ทุกหมู่บ้าน</option>
             {Object.entries(tsum?.villages || {}).filter(([n]) => Number(n) > 0).sort((a, b) => a[0] - b[0]).map(([n, nm]) => <option key={n} value={n}>หมู่ {n} {nm}</option>)}
           </select>
-          <button className="btn-outline" onClick={printAllSurvey}><Printer className="h-4 w-4" /> PDF แบบสำรวจ "อยู่ในพื้นที่หรือไม่" ทุกตัวชี้วัด (กลุ่มที่ยังไม่ทำ)</button>
+          <button className={BTN_PDF} onClick={printAllSurvey}><Printer className="h-4 w-4" /> PDF แบบสำรวจ "อยู่ในพื้นที่หรือไม่" ทุกตัวชี้วัด (กลุ่มที่ยังไม่ทำ)</button>
         </div>
       )}
       {!cur ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --pp</code></p> : (<>

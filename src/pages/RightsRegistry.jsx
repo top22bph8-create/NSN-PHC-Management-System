@@ -7,6 +7,7 @@ import { FileSpreadsheet, Printer, Search } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
 import { fmtDate, fmtDateTime } from '../lib/thai';
+import { BTN_PDF, BTN_XLSX, chipCls } from '../lib/chipStyle';
 import { openSurveyPrint, houseOf } from '../lib/surveyPrint';
 import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
@@ -133,7 +134,7 @@ export default function RightsRegistry() {
         <section className="card overflow-x-auto p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold text-slate-700">หมู่บ้านในเขตรับผิดชอบ และสิทธิ์การรักษาแยกหมู่บ้าน</h3>
-            <button className="btn-outline print:hidden" onClick={vilXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            <button className={`${BTN_XLSX} print:hidden`} onClick={vilXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
           </div>
           <table className="w-full whitespace-nowrap text-sm">
             <thead><tr className="border-b bg-slate-50 text-slate-500"><th className="px-2 py-1 text-left">หมู่</th><th className="px-2 py-1 text-left">หมู่บ้าน</th><th className="px-2 py-1 text-right">บ้าน(หลัง)</th><th className="px-2 py-1 text-right">ครอบครัว</th>{VCOLS.map(([k, t]) => <th key={k} className={`px-2 py-1 text-right ${k === 'A' ? 'text-emerald-700' : k === 'C' ? 'text-rose-700' : ''}`}>{t}</th>)}</tr></thead>
@@ -213,14 +214,14 @@ export default function RightsRegistry() {
         <Modal title="ตายตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่ตัดตาย" onClose={() => setDeadOpen(false)} wide>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-slate-500">กรุณาตรวจสอบแล้วบันทึกการตายในโปรแกรม JHCIS (ระบบนี้ไม่ได้ตัดตายให้เอง)</p>
-            <button className="btn bg-rose-600 text-white hover:bg-rose-700" onClick={printDeadSurvey} title="เปิดหน้าต่างพิมพ์ — เลือก 'บันทึกเป็น PDF' ได้"><Printer className="h-4 w-4" /> พิมพ์แบบสำรวจ อสม. (PDF){dvf !== '' ? ` — ${dvf === '-1' ? 'ไม่ระบุหมู่' : `หมู่ ${dvf}`}` : ' — ทุกหมู่'}</button>
-            <button className="btn-outline" onClick={() => exportXlsx(deadShown.map((d) => ({ 'เลข PID': d.pid, 'ชื่อ-สกุล': d.name, 'อายุ': d.age, 'ที่อยู่': d.addr, 'รหัสสิทธิใน JHCIS': d.right, 'สิทธิตามไฟล์': d.newRight })), 'ยังไม่ตัดตาย', 'ตายตามไฟล์สิทธิ_JHCISยังไม่ตัดตาย')}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            <button className={BTN_PDF} onClick={printDeadSurvey} title="เปิดหน้าต่างพิมพ์ — เลือก 'บันทึกเป็น PDF' ได้"><Printer className="h-4 w-4" /> พิมพ์แบบสำรวจ อสม. (PDF){dvf !== '' ? ` — ${dvf === '-1' ? 'ไม่ระบุหมู่' : `หมู่ ${dvf}`}` : ' — ทุกหมู่'}</button>
+            <button className={BTN_XLSX} onClick={() => exportXlsx(deadShown.map((d) => ({ 'เลข PID': d.pid, 'ชื่อ-สกุล': d.name, 'อายุ': d.age, 'ที่อยู่': d.addr, 'รหัสสิทธิใน JHCIS': d.right, 'สิทธิตามไฟล์': d.newRight })), 'ยังไม่ตัดตาย', 'ตายตามไฟล์สิทธิ_JHCISยังไม่ตัดตาย')}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
           </div>
           <div className="mb-3 flex flex-wrap gap-1.5">
-            <button onClick={() => setDvf('')} className={`rounded-full border px-3 py-1 text-xs font-medium ${dvf === '' ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>ทุกหมู่บ้าน ({nf(deadAll.length)})</button>
+            <button onClick={() => setDvf('')} className={chipCls('', dvf === '')}>ทุกหมู่บ้าน ({nf(deadAll.length)})</button>
             {vNames.filter((v) => deadCnt[v.no]).map((v) => (
-              <button key={v.no} onClick={() => setDvf(String(v.no))} title={v.name} className={`rounded-full border px-3 py-1 text-xs font-medium ${dvf === String(v.no) ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>หมู่ {v.no} ({nf(deadCnt[v.no])})</button>))}
-            {deadCnt[-1] ? <button onClick={() => setDvf('-1')} className={`rounded-full border px-3 py-1 text-xs font-medium ${dvf === '-1' ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}>ไม่ระบุหมู่ ({nf(deadCnt[-1])})</button> : null}
+              <button key={v.no} onClick={() => setDvf(String(v.no))} title={v.name} className={chipCls(v.no, dvf === String(v.no))}>หมู่ {v.no} ({nf(deadCnt[v.no])})</button>))}
+            {deadCnt[-1] ? <button onClick={() => setDvf('-1')} className={chipCls(-1, dvf === '-1')}>ไม่ระบุหมู่ ({nf(deadCnt[-1])})</button> : null}
           </div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
@@ -236,16 +237,16 @@ export default function RightsRegistry() {
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-48"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><input className="input pl-8" placeholder="ค้นหาชื่อ / PID / ที่อยู่" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
             {hos && <button className="btn-outline" onClick={() => setHos('')}>ล้างตัวกรองหน่วยบริการ</button>}
-            <button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
-            {open === 'C' && <button className="btn bg-sky-600 text-white hover:bg-sky-700" onClick={printSurvey} title="เปิดหน้าต่างพิมพ์ — เลือก 'บันทึกเป็น PDF' ได้"><Printer className="h-4 w-4" /> พิมพ์แบบสำรวจ อสม. (PDF){vf !== '' ? ` — ${vf === '-1' ? 'ไม่ระบุหมู่' : vf === '0' ? 'นอกเขต' : `หมู่ ${vf}`}` : ' — ทุกหมู่'}</button>}
+            <button className={BTN_XLSX} onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            {open === 'C' && <button className={BTN_PDF} onClick={printSurvey} title="เปิดหน้าต่างพิมพ์ — เลือก 'บันทึกเป็น PDF' ได้"><Printer className="h-4 w-4" /> พิมพ์แบบสำรวจ อสม. (PDF){vf !== '' ? ` — ${vf === '-1' ? 'ไม่ระบุหมู่' : vf === '0' ? 'นอกเขต' : `หมู่ ${vf}`}` : ' — ทุกหมู่'}</button>}
             <span className="text-sm text-slate-500">{nf(list.length)} คน</span>
           </div>
           <div className="mb-3 flex flex-wrap gap-1.5">
-            <button onClick={() => setVf('')} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === '' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>ทุกหมู่บ้าน ({nf(baseList.length)})</button>
+            <button onClick={() => setVf('')} className={chipCls('', vf === '')}>ทุกหมู่บ้าน ({nf(baseList.length)})</button>
             {vNames.filter((v) => vilCounts[v.no]).map((v) => (
-              <button key={v.no} onClick={() => setVf(String(v.no))} title={v.name} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === String(v.no) ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>หมู่ {v.no} ({nf(vilCounts[v.no])})</button>))}
-            {vilCounts[0] ? <button onClick={() => setVf('0')} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === '0' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>นอกเขต ({nf(vilCounts[0])})</button> : null}
-            {vilCounts[-1] ? <button onClick={() => setVf('-1')} className={`rounded-full border px-3 py-1 text-xs font-medium ${vf === '-1' ? 'border-amber-600 bg-amber-600 text-white' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}>ไม่ระบุหมู่ ({nf(vilCounts[-1])})</button> : null}
+              <button key={v.no} onClick={() => setVf(String(v.no))} title={v.name} className={chipCls(v.no, vf === String(v.no))}>หมู่ {v.no} ({nf(vilCounts[v.no])})</button>))}
+            {vilCounts[0] ? <button onClick={() => setVf('0')} className={chipCls(0, vf === '0')}>นอกเขต ({nf(vilCounts[0])})</button> : null}
+            {vilCounts[-1] ? <button onClick={() => setVf('-1')} className={chipCls(-1, vf === '-1')}>ไม่ระบุหมู่ ({nf(vilCounts[-1])})</button> : null}
           </div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
