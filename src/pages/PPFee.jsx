@@ -4,9 +4,10 @@ import SyncNowButton from '../components/SyncNowButton';
 // เงิน = จำนวนครั้งที่เบิกได้ (หลังจำกัดครั้งต่อคนต่อปี) × อัตราจ่ายในตาราง — เป็นการประมาณการ ไม่ใช่ยอดเบิกจ่ายจริง
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { ChevronDown, ChevronRight, FileSpreadsheet, Search, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileSpreadsheet, Printer, Search, Users } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
+import { PP_SPEC, houseOf, openPPReportPrint, openSurveyPrint } from '../lib/surveyPrint';
 import { FEE_ACTS, FEE_TARGETS, QUARTERS, fyMonths, money } from '../lib/ppFee';
 import { fmtDate, fmtDateTime, thMonths, todayStr } from '../lib/thai';
 import ThaiDateInput from '../components/ThaiDateInput';
@@ -27,6 +28,25 @@ const CATS = [
 const TARGET_CAT = Object.fromEntries(Object.entries(FEE_TARGETS).filter(([, v]) => v.cat).map(([k, v]) => [k, v.cat])); // กิจกรรมที่มีรายชื่อกลุ่มเป้าหมาย
 const STT = { done: ['ทำแล้ว', 'bg-emerald-100 text-emerald-700'], partial: ['ทำบางส่วน', 'bg-amber-100 text-amber-800'], todo: ['ยังไม่ทำ', 'bg-rose-100 text-rose-700'] };
 
+
+// สร้างกลุ่มแบบสำรวจ (กิจกรรม × หมู่บ้าน) จากรายชื่อที่ยังไม่ทำ/ทำบางส่วน
+function surveyGroups(actIds, tdocs, moo) {
+  const sum = tdocs.find((d) => d.id === 'summary');
+  const vname = (m) => sum?.villages?.[m] || '';
+  const numOf = (r) => parseInt(String(houseOf(r[3])).replace(/\D.*$/, ''), 10) || 0;
+  const out = [];
+  for (const id of actIds) {
+    const act = FEE_ACTS.find((a) => a.id === id); const info = sum?.acts?.[id]; if (!act || !info) continue;
+    const rows = tdocs.filter((d) => d.cat === TARGET_CAT[id]).sort((a, b) => a.idx - b.idx).flatMap((d) => d.rows || []).filter((r) => r[5] !== 'done' && (!moo || r[4] === moo));
+    const byV = {}; for (const r of rows) (byV[r[4] || '-'] ||= []).push(r);
+    for (const m of Object.keys(byV).sort((a, b) => a - b)) {
+      const label = m === '-' ? 'ไม่ระบุหมู่' : `หมู่ที่ ${m} ${vname(m)}`.trim();
+      out.push({ label, title: `แบบสำรวจกลุ่มเป้าหมาย: ${act.name}`, sub: `กิจกรรมที่ ${id}`, rule: info.rule, spec: PP_SPEC, rows: byV[m].sort((x, y) => numOf(x) - numOf(y) || String(x[1]).localeCompare(String(y[1]), 'th')) });
+    }
+  }
+  return out;
+}
+
 function TargetModal({ id, act, tdocs, onClose }) {
   const sum = tdocs.find((d) => d.id === 'summary');
   const info = sum?.acts?.[id];
@@ -37,6 +57,11 @@ function TargetModal({ id, act, tdocs, onClose }) {
   const list = useMemo(() => all.filter((r) => (!moo || r[4] === moo) && (st === 'all' || r[5] === st) && (!kw.trim() || r.slice(0, 4).join(' ').includes(kw.trim()))), [all, moo, st, kw]);
   const vname = (m) => sum?.villages?.[m] || '';
   const toXlsx = () => exportXlsx(list.map((r) => ({ 'เลข PID': r[0], 'ชื่อ-สกุล': r[1], 'อายุ': r[2], 'บ้านเลขที่': r[3], 'หมู่': r[4], 'หมู่บ้าน': vname(r[4]), 'สถานะ': STT[r[5]]?.[0] || r[5], 'รายละเอียด': r[6] })), 'กลุ่มเป้าหมาย', `กลุ่มเป้าหมาย_${act.name}_${st === 'all' ? 'ทั้งหมด' : STT[st][0]}${moo ? `_หมู่${moo}` : ''}`);
+  const printSurvey = () => {
+    const groups = surveyGroups([id], tdocs, moo);
+    if (!groups.length) { window.alert('ไม่มีรายชื่อที่ยังไม่ทำให้พิมพ์'); return; }
+    openSurveyPrint({ groups, title: `แบบสำรวจกลุ่มเป้าหมาย: ${act.name}`, asOf: sum?.asOf ? fmtDate(sum.asOf) : '' });
+  };
   const moos = Object.keys(info?.byMoo || {}).sort((a, b) => a - b);
   return (
     <Modal title={`กลุ่มเป้าหมาย: ${act.name}`} onClose={onClose} wide>
@@ -55,6 +80,7 @@ function TargetModal({ id, act, tdocs, onClose }) {
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-48 flex-1"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><input className="input pl-8" placeholder="ค้นหาชื่อ / PID / บ้านเลขที่" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
             <button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            <button className="btn-outline" onClick={printSurvey}><Printer className="h-4 w-4" /> PDF แบบสำรวจ{moo ? ` หมู่ ${moo}` : ' (แยกหมู่บ้าน)'}</button>
             <span className="text-slate-500">{nf(list.length)} คน</span>
           </div>
           <div className="max-h-[50vh] overflow-auto rounded-lg border">
@@ -80,6 +106,7 @@ export default function PPFee() {
   const [day, setDay] = useState('');
   const [open, setOpen] = useState(() => new Set());
   const [tgt, setTgt] = useState(null);
+  const [pm, setPm] = useState(''); // หมู่ที่เลือกสำหรับพิมพ์แบบสำรวจทุกตัวชี้วัด
   useEffect(() => onSnapshot(collection(db, 'ppFee'), (s) => setDocs(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.fy - a.fy)), () => setDocs([])), []);
   useEffect(() => onSnapshot(collection(db, 'ppTargets'), (s) => setTdocs(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setTdocs([])), []);
   const cur = docs?.find((d) => d.fy === fy) || docs?.[0];
@@ -108,11 +135,37 @@ export default function PPFee() {
   const maxB = Math.max(1, ...all.map((r) => r.baht)); const maxT = Math.max(1, ...trend.map((t) => t.v)); const maxD = Math.max(1, ...dtrend.map((t) => t.v));
   const label = mode === 'day' ? fmtDate(dayVal) : mode === 'year' ? `ปีงบประมาณ ${cur?.fy}` : mode === 'quarter' ? QUARTERS[q][0] : `${mLabel(pick[0] || '2026-10')} ${Number(pick[0]?.slice(0, 4)) + 543}`;
   const toggle = (id) => setOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const printAllSurvey = () => {
+    const ids = Object.keys(TARGET_CAT).sort((a, b) => a - b);
+    const groups = surveyGroups(ids, tdocs, pm);
+    if (!groups.length) { window.alert('ไม่มีรายชื่อที่ยังไม่ทำให้พิมพ์ (ต้องรัน sync.mjs --targets ก่อน)'); return; }
+    const pages = groups.reduce((n, g) => n + Math.max(1, Math.ceil(g.rows.length / 6)), 0);
+    if (pages > 60 && !window.confirm(`แบบสำรวจรวมประมาณ ${pages} หน้า (${groups.reduce((n, g) => n + g.rows.length, 0)} รายชื่อ) ต้องการพิมพ์ทั้งหมดใช่ไหม? แนะนำให้เลือกรายหมู่หรือรายตัวชี้วัดเพื่อแจกให้ อสม.`)) return;
+    openSurveyPrint({ groups, title: 'แบบสำรวจกลุ่มเป้าหมาย P&P', asOf: tsum?.asOf ? fmtDate(tsum.asOf) : '' });
+  };
+  const printReport = () => {
+    const sections = CATS.map((c) => {
+      const rs = c.ids.map((id) => byId[id]).filter(Boolean);
+      return { title: c.t, sub: rs.reduce((x, r) => x + r.baht, 0), rows: rs.map(({ a, auto, e, baht }) => { const ti = TARGET_CAT[a.id] ? tsum?.acts?.[a.id] : null; return [`${a.id}. ${a.name}`, a.rate * (a.mult || 1), auto ? e : null, auto ? baht : null, ti?.done || 0, ti?.partial || 0, ti?.todo || 0, ti ? ti.total : null]; }) };
+    });
+    openPPReportPrint({ title: 'รายงานผลงาน P&P Fee Schedule', label, asOf: cur?.asOf ? fmtDate(cur.asOf) : fmtDate(todayStr()), sections, total });
+  };
   const toXlsx = () => exportXlsx(all.map(({ a, auto, n, e, baht }) => ({ 'กิจกรรม': a.name, 'อัตราจ่าย (บาท)': a.rate * (a.mult || 1), 'สิทธิ': a.right, 'รหัส NDP': a.ndp, 'ICD-10': a.icd, 'จำนวนครั้งสูงสุด/คน': a.cap, 'บันทึกใน JHCIS (ครั้ง)': auto ? n : '', 'เบิกได้หลังจำกัดครั้ง': auto ? e : '', 'ประมาณการเงิน (บาท)': auto ? baht : 'ยังไม่ผูกรหัส' })), 'PP Fee Schedule', `PPFeeSchedule_${label}`);
   return (
     <div className="space-y-4">
       <PageHeader title="รายงานผลงาน P&P Fee Schedule" subtitle={cur ? `ปีงบประมาณ ${cur.fy} · ข้อมูล ณ ${cur.asOf || ''}${cur.updatedAt?.toDate ? ` · ส่งล่าสุด ${fmtDateTime(cur.updatedAt.toDate())}` : ''}` : 'ยังไม่มีข้อมูล'} actions={<button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>} />
       <SyncNowButton kinds={['pp', 'targets']} className="print:hidden" />
+      {cur && (
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <button className="btn-outline" onClick={printReport}><Printer className="h-4 w-4" /> PDF สรุปผลงานทุกตัวชี้วัด</button>
+          <span className="text-sm text-slate-400">|</span>
+          <select className="input !w-auto" value={pm} onChange={(e) => setPm(e.target.value)}>
+            <option value="">ทุกหมู่บ้าน</option>
+            {Object.entries(tsum?.villages || {}).filter(([n]) => Number(n) > 0).sort((a, b) => a[0] - b[0]).map(([n, nm]) => <option key={n} value={n}>หมู่ {n} {nm}</option>)}
+          </select>
+          <button className="btn-outline" onClick={printAllSurvey}><Printer className="h-4 w-4" /> PDF แบบสำรวจ "อยู่ในพื้นที่หรือไม่" ทุกตัวชี้วัด (กลุ่มที่ยังไม่ทำ)</button>
+        </div>
+      )}
       {!cur ? <p className="card p-6 text-slate-500">ยังไม่มีข้อมูล — ให้รันสคริปต์ที่เครื่อง JHCIS: <code>node sync.mjs --pp</code></p> : (<>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex overflow-hidden rounded-lg border bg-white">{[['year', 'รายปีงบ'], ['quarter', 'รายไตรมาส'], ['month', 'รายเดือน'], ['day', 'รายวัน']].map(([k, t]) => <button key={k} className={`px-3 py-1.5 text-sm ${mode === k ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setMode(k)}>{t}</button>)}</div>
