@@ -6,7 +6,7 @@ import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 
 import { FileSpreadsheet, Printer, Search } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
-import { fmtDateTime } from '../lib/thai';
+import { fmtDate, fmtDateTime } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
 import { VILLAGES, VILLAGES_ASOF } from '../config/villages';
@@ -27,19 +27,19 @@ const COLS = ['เลข PID', 'ชื่อ-สกุล', 'อายุ', 'ท
 const escH = (x) => String(x ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const houseOf = (addr) => String(addr || '').replace(/\s*ม\.\d+\s*$/, '').trim() || '-';
 // ชื่อ-สกุลอยู่บรรทัดเดียวเสมอ: ชื่อยาวมากค่อยลดขนาดตัวอักษรลงตามความยาว
-const nmSize = (n) => { const L = String(n || '').length; return L <= 24 ? 16.5 : L <= 28 ? 15 : L <= 34 ? 13.5 : 12; };
-const bx = (t) => `<span class="bx">☐</span> ${t}`;
+const nmSize = (n) => { const L = String(n || '').length; return L <= 22 ? 18 : L <= 26 ? 16.5 : L <= 32 ? 15 : 13.5; };
+const bx = (t) => `<span class="bx">☐</span>${t}`;
 const SURVEY_KINDS = {
   rights: {
-    note: (asOf) => `<b>คำชี้แจง:</b> กรุณาเยี่ยมบ้าน/สอบถามบุคคลตามรายชื่อ ว่า <b>อาศัยอยู่ในพื้นที่จริงหรือไม่ และอยู่ต่อเนื่องเกิน 6 เดือนหรือไม่</b> หากอยู่เกิน 6 เดือนและต้องการใช้บริการที่ รพ.สต.บ้านหนองสนม ให้แจ้งบุคคลนั้นนำบัตรประชาชนมาติดต่อ รพ.สต.บ้านหนองสนม เพื่อแจ้งย้ายสิทธิ์ <span class="asof">(ข้อมูล ณ ${escH(asOf)})</span>`,
-    cols: [4, 5, 22, 4, 6, 14, 11, 9, 11, 8, 6],
-    head: '<tr><th rowspan="2">ที่</th><th rowspan="2">PID</th><th rowspan="2">ชื่อ - สกุล</th><th rowspan="2">อายุ</th><th rowspan="2">บ้าน<br>เลขที่</th><th rowspan="2">หน่วยบริการประจำ<br>(ปัจจุบัน)</th><th colspan="3">ผลการสำรวจ (ติ๊ก ✓)</th><th rowspan="2">เบอร์โทร</th><th rowspan="2">หมายเหตุ</th></tr><tr><th>การอยู่อาศัย</th><th>ระยะเวลา</th><th>การย้ายสิทธิ์</th></tr>',
+    note: () => `<b>วิธีสำรวจ:</b> รายชื่อนี้คือผู้ที่อยู่ในเขต แต่ขึ้นทะเบียนสิทธิ์ที่หน่วยบริการอื่น สอบถามบุคคลตามรายชื่อว่า <b>อาศัยอยู่จริงในพื้นที่หรือไม่ และอยู่ต่อเนื่องเกิน 6 เดือนหรือไม่</b> — หากอยู่เกิน 6 เดือนและต้องการใช้บริการที่ รพ.สต.บ้านหนองสนม ให้แจ้งนำบัตรประชาชนมาติดต่อ รพ.สต. เพื่อแจ้งย้ายสิทธิ์`,
+    cols: [4, 5, 23, 4, 6, 14, 11, 9, 11, 7, 6],
+    head: '<tr><th rowspan="2">ที่</th><th rowspan="2">PID</th><th rowspan="2">ชื่อ - สกุล</th><th rowspan="2">อายุ</th><th rowspan="2">บ้าน<br>เลขที่</th><th rowspan="2">หน่วยบริการ<br>ประจำปัจจุบัน</th><th colspan="3" class="grp">ผลการสำรวจ (ติ๊ก ✓)</th><th rowspan="2">เบอร์<br>โทร</th><th rowspan="2">หมาย<br>เหตุ</th></tr><tr><th>การอยู่อาศัย</th><th>ระยะเวลา</th><th>การย้ายสิทธิ์</th></tr>',
     row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td class="nm" style="font-size:${nmSize(r[1])}px">${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="sm"><div class="clamp">${escH(r[6])}</div></td><td class="chk">${bx('อยู่จริง')}<br>${bx('ไม่ได้อยู่')}</td><td class="chk">${bx('≥ 6 เดือน')}<br>${bx('&lt; 6 เดือน')}</td><td class="chk">${bx('ต้องการย้าย')}<br>${bx('ไม่ต้องการ')}</td><td></td><td></td></tr>`,
   },
   dead: {
-    note: (asOf) => `<b>คำชี้แจง:</b> กรุณาสอบถามญาติ/เพื่อนบ้านของบุคคลตามรายชื่อ ว่า <b>เสียชีวิตจริงหรือไม่ วันที่เสียชีวิต และสาเหตุการตาย</b> (ถ้ามีใบมรณบัตรให้ติ๊กและแจ้งเจ้าหน้าที่ เพื่อบันทึกการตายในโปรแกรม JHCIS) รายชื่อนี้มาจากไฟล์ตรวจสอบสิทธิ์ที่ระบุว่าเสียชีวิต แต่ JHCIS ยังไม่ได้บันทึกการตาย <span class="asof">(ข้อมูล ณ ${escH(asOf)})</span>`,
-    cols: [4, 5, 22, 4, 6, 12, 11, 13, 7, 9, 7],
-    head: '<tr><th rowspan="2">ที่</th><th rowspan="2">PID</th><th rowspan="2">ชื่อ - สกุล</th><th rowspan="2">อายุ</th><th rowspan="2">บ้าน<br>เลขที่</th><th colspan="4">ผลการสำรวจ</th><th rowspan="2">ผู้ให้ข้อมูล<br>/ เบอร์โทร</th><th rowspan="2">หมายเหตุ</th></tr><tr><th>สถานะ (ติ๊ก ✓)</th><th>วันที่เสียชีวิต<br>(วัน/เดือน/ปี)</th><th>สาเหตุการตาย</th><th>ใบมรณบัตร</th></tr>',
+    note: () => `<b>วิธีสำรวจ:</b> สอบถามญาติ/เพื่อนบ้านของบุคคลตามรายชื่อว่า <b>เสียชีวิตจริงหรือไม่ วันที่เสียชีวิต และสาเหตุการตาย</b> (ถ้ามีใบมรณบัตรให้ติ๊กและแจ้งเจ้าหน้าที่) รายชื่อนี้ไฟล์ตรวจสอบสิทธิ์ระบุว่าเสียชีวิต แต่ JHCIS ยังไม่ได้บันทึกการตาย`,
+    cols: [4, 5, 22, 4, 6, 12, 12, 13, 7, 8, 7],
+    head: '<tr><th rowspan="2">ที่</th><th rowspan="2">PID</th><th rowspan="2">ชื่อ - สกุล</th><th rowspan="2">อายุ</th><th rowspan="2">บ้าน<br>เลขที่</th><th colspan="4" class="grp">ผลการสำรวจ</th><th rowspan="2">ผู้ให้ข้อมูล<br>/ เบอร์โทร</th><th rowspan="2">หมาย<br>เหตุ</th></tr><tr><th>สถานะ (ติ๊ก ✓)</th><th>วันที่เสียชีวิต<br>(วัน/เดือน/ปี)</th><th>สาเหตุการตาย</th><th>ใบ<br>มรณบัตร</th></tr>',
     row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td class="nm" style="font-size:${nmSize(r[1])}px">${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="chk">${bx('เสียชีวิตจริง')}<br>${bx('ยังมีชีวิต')}</td><td class="c dt">&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;/</td><td></td><td class="chk">${bx('มี')}<br>${bx('ไม่มี')}</td><td></td><td></td></tr>`,
   },
 };
@@ -47,35 +47,46 @@ function openSurveyPrint({ groups, title, asOf, kind = 'rights' }) {
   const K = SURVEY_KINDS[kind];
   const w = window.open('', '_blank');
   if (!w) { window.alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้แล้วกดอีกครั้ง'); return; }
-  // แบ่งหน้าเอง หน้าละ PER แถว (ตัวอักษรใหญ่ แถวสูง อ่านง่ายสำหรับ อสม. สูงวัย) แล้วใส่ช่องลงชื่อท้ายทุกหน้า
-  const PER = 8;
+  const mainTitle = String(title).replace(/\s*—\s*รพ\.สต\.บ้านหนองสนม\s*$/, '').replace(/\s*\((ขึ้นทะเบียนที่อื่น|ตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่บันทึกการตาย)\)\s*/, ' ').trim();
+  let logo = ''; try { logo = new URL('logo.png', document.baseURI).href; } catch { /* ไม่มีโลโก้ก็พิมพ์ได้ */ }
+  // แบ่งหน้าเอง หน้าละ PER แถว (ตัวอักษรใหญ่ แถวสูง อ่านง่ายสำหรับ อสม. สูงวัย) พอดี A4 แนวนอน แล้วใส่ช่องลงชื่อท้ายทุกหน้า
+  const PER = 7;
   const colgroup = `<colgroup>${K.cols.map((c) => `<col style="width:${c}%">`).join('')}</colgroup>`;
   const pages = groups.flatMap((g) => {
     const total = Math.max(1, Math.ceil(g.rows.length / PER));
     return Array.from({ length: total }, (_, pi) => {
       const rows = g.rows.slice(pi * PER, (pi + 1) * PER).map((r, i) => K.row(r, pi * PER + i + 1)).join('');
-      return `<section class="pg"><h1>${escH(title)}</h1>
-<h2>${escH(g.label)} <span class="n">(รวม ${g.rows.length} คน · หน้า ${pi + 1}/${total})</span></h2>
-<p class="note">${K.note(asOf)}</p>
-<table>${colgroup}<thead>${K.head}</thead><tbody>${rows}</tbody></table>
-<div class="sign"><div>ลงชื่อ <span class="ln"></span> อสม. ผู้สำรวจ</div><div>วันที่สำรวจ <span class="ln s"></span></div><div>ลงชื่อ <span class="ln"></span> เจ้าหน้าที่ รพ.สต. ผู้รับข้อมูล</div></div></section>`;
+      return `<section class="pg">
+<header class="band">${logo ? `<img class="lg" src="${escH(logo)}" alt="">` : ''}<div class="tt"><h1>${escH(mainTitle)}</h1><div class="sub">รพ.สต.บ้านหนองสนม · ต.เชียงเครือ อ.เมืองสกลนคร จ.สกลนคร · ข้อมูล ณ ${escH(asOf)}</div></div><div class="vil"><div class="vn">${escH(g.label)}</div><div class="vc">รวม ${g.rows.length} คน · หน้า ${pi + 1}/${total}</div></div></header>
+<p class="note">${K.note()}</p>
+<div class="tw"><table>${colgroup}<thead>${K.head}</thead><tbody>${rows}</tbody></table></div>
+<div class="sign"><div><span class="ln"></span><b>อสม. ผู้สำรวจ</b><i>(ลงชื่อ)</i></div><div><span class="ln s"></span><b>วันที่สำรวจ</b><i>วัน / เดือน / ปี</i></div><div><span class="ln"></span><b>เจ้าหน้าที่ รพ.สต. ผู้รับข้อมูล</b><i>(ลงชื่อ)</i></div></div>
+<div class="pv">เอกสารนี้มีข้อมูลส่วนบุคคลของประชาชน โปรดเก็บรักษา และส่งคืนเจ้าหน้าที่ รพ.สต. ทันทีเมื่อสำรวจเสร็จ</div></section>`;
     });
   }).join('');
-  w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${escH(title)}</title><style>
-@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:'Sarabun','TH Sarabun New','Noto Sans Thai',Tahoma,sans-serif;font-size:15px;color:#111;margin:0}
-.pg{page-break-after:always;break-inside:avoid;height:188mm}.pg:last-child{page-break-after:auto}
-h1{font-size:19px;margin:0 0 3px;text-align:center}h2{font-size:18px;margin:0 0 6px;text-align:center}h2 .n{font-weight:normal;font-size:15px}
-.note{margin:0 0 8px;font-size:14px;line-height:1.45}.asof{color:#555}
-table{width:99.5%;border-collapse:collapse;table-layout:fixed}th,td{border:1.3px solid #222;padding:4px 6px;vertical-align:middle;overflow:hidden}
-th{background:#e3eef8;font-size:14.5px;line-height:1.3;font-weight:700}td{font-size:15.5px}
-td.c{text-align:center}td.nm{font-weight:600;line-height:1.3;white-space:nowrap}td.sm{font-size:13.5px}td.chk{font-size:14.5px;line-height:1.55;white-space:nowrap}td.dt{color:#666;letter-spacing:1px}
-.bx{font-size:17px;line-height:1;vertical-align:middle;margin-right:2px}
-tbody tr{height:60px;page-break-inside:avoid}thead{display:table-header-group}
+  w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${escH(mainTitle)}</title><style>
+@page{size:A4 landscape;margin:8mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Sarabun','TH Sarabun New','Noto Sans Thai',Tahoma,sans-serif;font-size:15px;color:#0f172a;margin:0}
+.pg{page-break-after:always;break-inside:avoid;height:192mm;overflow:hidden;display:flex;flex-direction:column}.pg:last-child{page-break-after:auto}
+.band{display:flex;align-items:center;gap:14px;background:linear-gradient(100deg,#0b4f8a,#1d8ad8);color:#fff;border-radius:12px;padding:9px 16px}
+.band .lg{width:52px;height:52px;object-fit:contain;background:#fff;border-radius:50%;padding:3px;flex:none}
+.band .tt{flex:1;min-width:0}.band h1{margin:0;font-size:22px;line-height:1.25;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.band .sub{font-size:13.5px;opacity:.92;margin-top:2px}
+.band .vil{flex:none;text-align:center;background:#fff;color:#0b4f8a;border-radius:10px;padding:5px 16px;min-width:200px}
+.band .vn{font-size:21px;font-weight:800;line-height:1.25}.band .vc{font-size:13.5px;color:#334155}
+.note{margin:7px 0;padding:6px 12px;background:#eef6fd;border-left:5px solid #1d8ad8;border-radius:6px;font-size:15px;line-height:1.5}
+.tw{flex:1}table{width:calc(100% - 2px);border-collapse:collapse;table-layout:fixed}
+th,td{border:1.2px solid #64748b;padding:3px 6px;vertical-align:middle;overflow:hidden}
+th{background:#cfe3f7;color:#0b2f52;font-size:15px;line-height:1.3;font-weight:800}th.grp{background:#a9cdef;font-size:15.5px}
+td{font-size:16px}tbody tr:nth-child(even) td{background:#f4f8fc}tbody tr{height:58px;page-break-inside:avoid}thead{display:table-header-group}
+td.c{text-align:center}td.nm{font-weight:700;line-height:1.3;white-space:nowrap}td.sm{font-size:13.5px;color:#334155}td.chk{font-size:15px;line-height:1.55;white-space:nowrap}td.dt{color:#64748b;letter-spacing:1px}
+.bx{font-size:18px;line-height:1;vertical-align:middle;margin-right:3px}
 .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;max-height:2.6em}
-.sign{display:flex;justify-content:space-between;align-items:flex-end;margin-top:18px;font-size:15px}.sign>div{white-space:nowrap}
-.ln{display:inline-block;width:185px;border-bottom:1.3px dotted #222;vertical-align:baseline}.ln.s{width:120px}
-@media screen{body{padding:12px}.pg{margin-bottom:24px}}
-</style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
+.sign{display:grid;grid-template-columns:1.25fr 1fr 1.35fr;gap:26px;margin-top:8px;text-align:center;font-size:15px}
+.sign>div{display:flex;flex-direction:column;align-items:center}.sign .ln{display:block;width:100%;height:24px;border-bottom:1.4px dotted #334155}
+.sign b{margin-top:3px;font-size:15px}.sign i{font-style:normal;font-size:12.5px;color:#64748b}
+.pv{margin-top:6px;text-align:center;font-size:11.5px;color:#64748b}
+@media screen{body{padding:12px;background:#e2e8f0}.pg{background:#fff;padding:8px;margin-bottom:16px;border-radius:8px}}
+</style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script></body></html>`);
   w.document.close();
 }
 
@@ -116,7 +127,7 @@ export default function RightsRegistry() {
     const wanted = vf !== '' ? [Number(vf)] : [...vNames.map((v) => v.no), 0, -1];
     const groups = wanted.filter((n) => byV[n]?.length).map((n) => ({ label: n > 0 ? `หมู่ที่ ${n} ${vNames.find((v) => v.no === n)?.name || ''}` : n === 0 ? 'นอกเขต' : 'ไม่ระบุหมู่', rows: sortR(byV[n]) }));
     if (!groups.length) { window.alert('ไม่มีรายชื่อให้พิมพ์'); return; }
-    openSurveyPrint({ groups, title: 'แบบสำรวจบุคคลที่สิทธิ์ UC/Wel ไม่ตรงหน่วยบริการประจำ (ขึ้นทะเบียนที่อื่น) — รพ.สต.บ้านหนองสนม', asOf: sum?.asOf || '' });
+    openSurveyPrint({ groups, title: 'แบบสำรวจบุคคลที่สิทธิ์ UC/Wel ไม่ตรงหน่วยบริการประจำ (ขึ้นทะเบียนที่อื่น) — รพ.สต.บ้านหนองสนม', asOf: sum?.asOf ? fmtDate(sum.asOf) : '' });
   };
   const printDeadSurvey = () => {
     const src = deadShown.map((d) => [d.pid, d.name, d.age, d.addr || '', '', d.right || '']);
@@ -126,7 +137,7 @@ export default function RightsRegistry() {
     const wanted = dvf !== '' ? [Number(dvf)] : [...vNames.map((v) => v.no), 0, -1];
     const groups = wanted.filter((n) => byV[n]?.length).map((n) => ({ label: n > 0 ? `หมู่ที่ ${n} ${vNames.find((v) => v.no === n)?.name || ''}` : n === 0 ? 'นอกเขต' : 'ไม่ระบุหมู่', rows: sortR(byV[n]) }));
     if (!groups.length) { window.alert('ไม่มีรายชื่อให้พิมพ์'); return; }
-    openSurveyPrint({ kind: 'dead', groups, title: 'แบบสำรวจผู้เสียชีวิต (ตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่บันทึกการตาย) — รพ.สต.บ้านหนองสนม', asOf: sum?.deadReport?.asOf || sum?.asOf || '' });
+    openSurveyPrint({ kind: 'dead', groups, title: 'แบบสำรวจผู้เสียชีวิต (ตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่บันทึกการตาย) — รพ.สต.บ้านหนองสนม', asOf: sum?.asOf ? fmtDate(sum.asOf) : '' });
   };
   const deadVno = (d) => { const g = /ม\.(\d+)\s*$/.exec(String(d.addr || '')); return g ? Number(g[1]) : -1; };
   // กำหนด/ล้างหมู่บ้านของคนที่ไม่ระบุหมู่ (เก็บแยกใน rightsVillageOverrides — ไม่ถูกซิงก์ JHCIS ทับ)
@@ -148,7 +159,7 @@ export default function RightsRegistry() {
     for (const k of keys) for (const r of rowsOf(k)) { const no = vnoOf(r); ((m[no] ||= {})[k] = (m[no][k] || 0) + 1); }
     const reg = (v) => REG.reduce((a, x) => a + (v?.[x[0]] || 0), 0);
     // ชื่อหมู่บ้าน/หลังคาเรือนมาจาก JHCIS ที่ซิงก์ล่าสุด (sum.villages); ถ้ายังไม่มีใช้ค่าสำรองใน config
-    const live = (sum?.villages || []).map((v) => ({ ...v, households: VILLAGES.find((x) => x.no === v.no)?.households ?? 0 }));
+    const live = (sum?.villages || []).map((v) => ({ ...v, households: v.households ?? VILLAGES.find((x) => x.no === v.no)?.households ?? 0 }));
     const base = live.length ? live : VILLAGES;
     const list = base.map((v) => ({ ...v, name: v.no === 0 ? 'นอกเขต (ใช้บันทึกคนนอกเขตฯ)' : v.name, ...(m[v.no] || {}), pop: reg(m[v.no]) }));
     list.push({ no: -1, name: 'ไม่ระบุหมู่/ไม่มีที่อยู่', houses: 0, households: 0, ...(m[-1] || {}), pop: reg(m[-1]) });
@@ -164,7 +175,7 @@ export default function RightsRegistry() {
   const toXlsx = () => exportXlsx(list.map((r) => Object.fromEntries(COLS.map((h, i) => [h, r[i]]))), 'รายชื่อ', `ทะเบียนสิทธิ_${open}${vf !== '' ? `_${vf === '-1' ? 'ไม่ระบุหมู่' : `หมู่${vf}`}` : ''}`);
   return (
     <div className="space-y-4">
-      <PageHeader title="รายงานหมู่บ้านและสิทธิ์การรักษา (UC/Wel ตรง–ไม่ตรง)" subtitle={sum ? `ข้อมูล ณ ${sum.asOf || ''} · ส่งล่าสุด ${sum.updatedAt?.toDate ? fmtDateTime(sum.updatedAt.toDate()) : ''}` : 'ยังไม่มีข้อมูล'} />
+      <PageHeader title="รายงานหมู่บ้านและสิทธิ์การรักษา (UC/Wel ตรง–ไม่ตรง)" subtitle={sum ? `ข้อมูล ณ ${sum.asOf ? fmtDate(sum.asOf) : ''} · ส่งล่าสุด ${sum.updatedAt?.toDate ? fmtDateTime(sum.updatedAt.toDate()) : ''}` : 'ยังไม่มีข้อมูล'} />
       <SyncNowButton kinds={['rights']} className="print:hidden" />
       {sum?.reg && (
         <section className="card p-5 print:shadow-none">
@@ -197,7 +208,7 @@ export default function RightsRegistry() {
               <tr className="border-t-2 bg-slate-50 font-bold"><td className="px-2 py-1" colSpan={2}>รวม</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.houses, 0))}</td><td className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + v.households, 0))}</td>{VCOLS.map(([k]) => <td key={k} className="px-2 py-1 text-right tabular-nums">{nf(vilRows.reduce((a, v) => a + (v[k] || 0), 0))}</td>)}</tr>
             </tbody>
           </table>
-          <p className="mt-1 text-xs text-slate-400">ชื่อหมู่บ้านและจำนวนบ้านดึงจาก JHCIS ทุกครั้งที่ซิงก์ (ครอบครัวเป็นค่าที่บันทึกไว้ ณ {VILLAGES_ASOF}) · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
+          <p className="mt-1 text-xs text-slate-400">ข้อมูลซิงก์จาก JHCIS ณ {sum?.asOf ? fmtDate(sum.asOf) : '-'} (ชื่อหมู่บ้าน จำนวนบ้าน ประชากร และสิทธิ์ ดึงสดจาก JHCIS ทุกรอบซิงก์{(sum?.villages || []).some((v) => v.households != null) ? ' รวมครอบครัว' : ` · ครอบครัวเป็นค่าที่บันทึกไว้ ณ ${VILLAGES_ASOF}`}) · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
         </section>
       )}
       {sum?.deadReport && (
