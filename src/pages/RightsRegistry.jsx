@@ -3,7 +3,7 @@ import SyncNowButton from '../components/SyncNowButton';
 // ข้อมูลมาจากสคริปต์ที่เครื่อง JHCIS (node sync.mjs --rights) เก็บใน Firestore rightsRegistry (ชื่อ/อายุ/ที่อยู่/สถานพยาบาล ไม่มีเลขบัตร อ่านได้เฉพาะผู้ล็อกอิน)
 import { useEffect, useMemo, useState } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { FileSpreadsheet, Search } from 'lucide-react';
+import { FileSpreadsheet, Printer, Search } from 'lucide-react';
 import { db } from '../firebase';
 import { exportXlsx } from '../lib/exportFile';
 import { fmtDateTime } from '../lib/thai';
@@ -21,6 +21,49 @@ const CATS = {
 const REG = [['RUC', 'ประชากรสิทธิ UC (UCS+WEL)'], ['ROFC', 'ประชากรสิทธิ ข้าราชการ (OFC)'], ['RSSS', 'ประชากรสิทธิ ประกันสังคม (SSS)'], ['RLGO', 'ประชากรสิทธิพนักงานท้องถิ่น (LGO)'], ['RNON', 'ประชากรไร้สิทธิ'], ['RNRD', 'ประชากรแรงงานต่างด้าว (NRD)'], ['ROTH', 'ประชากรสิทธิอื่นๆ']];
 REG.forEach(([k, t]) => { CATS[k] = { title: t }; });
 const COLS = ['เลข PID', 'ชื่อ-สกุล', 'อายุ', 'ที่อยู่', 'ประเภทอาศัย', 'สิทธิ', 'หน่วยบริการประจำ'];
+
+
+// พิมพ์ "แบบสำรวจ อสม." (บันทึกเป็น PDF ได้จากหน้าต่างพิมพ์) — รายชื่อกลุ่มไม่ตรง แยกรายหมู่บ้าน หมู่ละหลายหน้า
+const escH = (x) => String(x ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const houseOf = (addr) => String(addr || '').replace(/\s*ม\.\d+\s*$/, '').trim() || '-';
+const SURVEY_KINDS = {
+  rights: {
+    note: (asOf) => `คำชี้แจง: กรุณาเยี่ยมบ้าน/สอบถามบุคคลตามรายชื่อ ว่า <b>อาศัยอยู่ในพื้นที่จริงหรือไม่ และอยู่ต่อเนื่องเกิน 6 เดือนหรือไม่</b> หากอยู่เกิน 6 เดือนและต้องการใช้บริการที่ รพ.สต.บ้านหนองสนม ให้แจ้งบุคคลนั้นนำบัตรประชาชนมาติดต่อ รพ.สต.บ้านหนองสนม เพื่อแจ้งย้ายสิทธิ์ (ข้อมูล ณ ${escH(asOf)})`,
+    head: '<tr><th rowspan="2" style="width:30px">ที่</th><th rowspan="2" style="width:48px">PID</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2" style="width:34px">อายุ</th><th rowspan="2" style="width:62px">บ้านเลขที่</th><th rowspan="2" style="width:190px">หน่วยบริการประจำ<br>(ปัจจุบัน)</th><th colspan="3">ผลการสำรวจ (ติ๊ก ✓)</th><th rowspan="2" style="width:90px">เบอร์โทรติดต่อ</th><th rowspan="2" style="width:100px">หมายเหตุ</th></tr><tr><th style="width:118px">การอยู่อาศัย</th><th style="width:78px">ระยะเวลา</th><th style="width:96px">การย้ายสิทธิ์</th></tr>',
+    row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td>${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="sm"><div class="clamp">${escH(r[6])}</div></td><td class="chk">☐ อยู่จริง<br>☐ ไม่ได้อยู่/ย้ายไปแล้ว</td><td class="chk">☐ ≥ 6 เดือน<br>☐ &lt; 6 เดือน</td><td class="chk">☐ ต้องการย้าย<br>☐ ไม่ต้องการ</td><td></td><td></td></tr>`,
+  },
+  dead: {
+    note: (asOf) => `คำชี้แจง: กรุณาสอบถามญาติ/เพื่อนบ้านของบุคคลตามรายชื่อ ว่า <b>เสียชีวิตจริงหรือไม่ วันที่เสียชีวิต และสาเหตุการตาย</b> (ถ้ามีใบมรณบัตรให้ติ๊กและแจ้งเจ้าหน้าที่ เพื่อบันทึกการตายในโปรแกรม JHCIS) รายชื่อนี้มาจากไฟล์ตรวจสอบสิทธิ์ที่ระบุว่าเสียชีวิต แต่ JHCIS ยังไม่ได้บันทึกการตาย (ข้อมูล ณ ${escH(asOf)})`,
+    head: '<tr><th rowspan="2" style="width:30px">ที่</th><th rowspan="2" style="width:48px">PID</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2" style="width:34px">อายุ</th><th rowspan="2" style="width:62px">บ้านเลขที่</th><th colspan="4">ผลการสำรวจ</th><th rowspan="2" style="width:110px">ผู้ให้ข้อมูล / เบอร์โทร</th><th rowspan="2" style="width:80px">หมายเหตุ</th></tr><tr><th style="width:92px">สถานะ (ติ๊ก ✓)</th><th style="width:104px">วันที่เสียชีวิต<br>(วัน/เดือน/ปี)</th><th style="width:190px">สาเหตุการตาย</th><th style="width:78px">ใบมรณบัตร</th></tr>',
+    row: (r, n) => `<tr><td class="c">${n}</td><td class="c">${escH(r[0])}</td><td>${escH(r[1])}</td><td class="c">${escH(r[2])}</td><td class="c">${escH(houseOf(r[3]))}</td><td class="chk">☐ เสียชีวิตจริง<br>☐ ยังมีชีวิต</td><td class="c" style="color:#777">....../....../......</td><td></td><td class="chk">☐ มี<br>☐ ไม่มี</td><td></td><td></td></tr>`,
+  },
+};
+function openSurveyPrint({ groups, title, asOf, kind = 'rights' }) {
+  const K = SURVEY_KINDS[kind];
+  const w = window.open('', '_blank');
+  if (!w) { window.alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้แล้วกดอีกครั้ง'); return; }
+  // แบ่งหน้าเอง หน้าละ PER แถว แล้วใส่ช่องลงชื่อท้ายทุกหน้า — กันช่องลงชื่อหล่นไปอยู่หน้าเปล่าแยกจากตาราง
+  const PER = 10;
+  const pages = groups.flatMap((g) => {
+    const total = Math.max(1, Math.ceil(g.rows.length / PER));
+    return Array.from({ length: total }, (_, pi) => {
+      const rows = g.rows.slice(pi * PER, (pi + 1) * PER).map((r, i) => K.row(r, pi * PER + i + 1)).join('');
+      return `<section class="pg"><h1>${escH(title)}</h1>
+<h2>${escH(g.label)} <span class="n">(รวม ${g.rows.length} คน · หน้า ${pi + 1}/${total})</span></h2>
+<p class="note">${K.note(asOf)}</p>
+<table><thead>${K.head}</thead><tbody>${rows}</tbody></table>
+<div class="sign"><div>ลงชื่อ ....................................................... อสม. ผู้สำรวจ</div><div>วันที่สำรวจ ........../........../..........</div><div>ลงชื่อ ....................................................... เจ้าหน้าที่ รพ.สต. ผู้รับข้อมูล</div></div></section>`;
+    });
+  }).join('');
+  w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${escH(title)}</title><style>
+@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:'Sarabun','TH Sarabun New','Noto Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;margin:0}
+.pg{page-break-after:always;break-inside:avoid;height:186mm}.pg:last-child{page-break-after:auto}h1{font-size:15px;margin:0 0 2px;text-align:center}h2{font-size:14px;margin:0 0 4px;text-align:center}h2 .n{font-weight:normal;font-size:12px}
+.note{margin:2px 0 6px;font-size:11px;line-height:1.35}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:3px 4px;vertical-align:middle}th{background:#e8f0f7;font-size:11px}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;max-height:2.6em}td.c{text-align:center}td.sm{font-size:10.5px}td.chk{font-size:10.5px;line-height:1.5;white-space:nowrap}tbody tr{height:34px;page-break-inside:avoid}thead{display:table-header-group}
+.sign{display:flex;justify-content:space-between;margin-top:14px;font-size:12px}@media screen{body{padding:12px}.pg{margin-bottom:24px}}
+</style></head><body>${pages}<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
+  w.document.close();
+}
 
 export default function RightsRegistry() {
   const [docs, setDocs] = useState(null);
@@ -51,6 +94,26 @@ export default function RightsRegistry() {
   }, [docs, open, kw, hos, ov]); // eslint-disable-line react-hooks/exhaustive-deps
   const vilCounts = useMemo(() => { const m = {}; for (const r of baseList) { const n = vnoOf(r); m[n] = (m[n] || 0) + 1; } return m; }, [baseList, ov]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => (vf === '' ? baseList : baseList.filter((r) => vnoOf(r) === Number(vf))), [baseList, vf, ov]); // eslint-disable-line react-hooks/exhaustive-deps
+  const printSurvey = () => {
+    const src = rowsOf(open).filter((r) => !hos || r[6] === hos);
+    const byV = {}; for (const r of src) { const n = vnoOf(r); (byV[n] ||= []).push(r); }
+    const numOf = (r) => parseInt(String(houseOf(r[3])).replace(/\D.*$/, ''), 10) || 0;
+    const sortR = (a) => a.sort((x, y) => numOf(x) - numOf(y) || String(x[1]).localeCompare(String(y[1]), 'th'));
+    const wanted = vf !== '' ? [Number(vf)] : [...vNames.map((v) => v.no), 0, -1];
+    const groups = wanted.filter((n) => byV[n]?.length).map((n) => ({ label: n > 0 ? `หมู่ที่ ${n} ${vNames.find((v) => v.no === n)?.name || ''}` : n === 0 ? 'นอกเขต' : 'ไม่ระบุหมู่', rows: sortR(byV[n]) }));
+    if (!groups.length) { window.alert('ไม่มีรายชื่อให้พิมพ์'); return; }
+    openSurveyPrint({ groups, title: 'แบบสำรวจบุคคลที่สิทธิ์ UC/Wel ไม่ตรงหน่วยบริการประจำ (ขึ้นทะเบียนที่อื่น) — รพ.สต.บ้านหนองสนม', asOf: sum?.asOf || '' });
+  };
+  const printDeadSurvey = () => {
+    const src = deadShown.map((d) => [d.pid, d.name, d.age, d.addr || '', '', d.right || '']);
+    const byV = {}; for (const r of src) { const n = deadVno({ addr: r[3] }); (byV[n] ||= []).push(r); }
+    const numOf = (r) => parseInt(String(houseOf(r[3])).replace(/\D.*$/, ''), 10) || 0;
+    const sortR = (a) => a.sort((x, y) => numOf(x) - numOf(y) || String(x[1]).localeCompare(String(y[1]), 'th'));
+    const wanted = dvf !== '' ? [Number(dvf)] : [...vNames.map((v) => v.no), 0, -1];
+    const groups = wanted.filter((n) => byV[n]?.length).map((n) => ({ label: n > 0 ? `หมู่ที่ ${n} ${vNames.find((v) => v.no === n)?.name || ''}` : n === 0 ? 'นอกเขต' : 'ไม่ระบุหมู่', rows: sortR(byV[n]) }));
+    if (!groups.length) { window.alert('ไม่มีรายชื่อให้พิมพ์'); return; }
+    openSurveyPrint({ kind: 'dead', groups, title: 'แบบสำรวจผู้เสียชีวิต (ตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่บันทึกการตาย) — รพ.สต.บ้านหนองสนม', asOf: sum?.deadReport?.asOf || sum?.asOf || '' });
+  };
   const deadVno = (d) => { const g = /ม\.(\d+)\s*$/.exec(String(d.addr || '')); return g ? Number(g[1]) : -1; };
   // กำหนด/ล้างหมู่บ้านของคนที่ไม่ระบุหมู่ (เก็บแยกใน rightsVillageOverrides — ไม่ถูกซิงก์ JHCIS ทับ)
   const setVil = async (pid, v) => {
@@ -189,8 +252,9 @@ export default function RightsRegistry() {
       })()}
       {deadOpen && sum?.deadReport && (
         <Modal title="ตายตามไฟล์ตรวจสอบสิทธิ์ แต่ JHCIS ยังไม่ตัดตาย" onClose={() => setDeadOpen(false)} wide>
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-slate-500">กรุณาตรวจสอบแล้วบันทึกการตายในโปรแกรม JHCIS (ระบบนี้ไม่ได้ตัดตายให้เอง)</p>
+            <button className="btn bg-rose-600 text-white hover:bg-rose-700" onClick={printDeadSurvey} title="เปิดหน้าต่างพิมพ์ — เลือก 'บันทึกเป็น PDF' ได้"><Printer className="h-4 w-4" /> พิมพ์แบบสำรวจ อสม. (PDF){dvf !== '' ? ` — ${dvf === '-1' ? 'ไม่ระบุหมู่' : `หมู่ ${dvf}`}` : ' — ทุกหมู่'}</button>
             <button className="btn-outline" onClick={() => exportXlsx(deadShown.map((d) => ({ 'เลข PID': d.pid, 'ชื่อ-สกุล': d.name, 'อายุ': d.age, 'ที่อยู่': d.addr, 'รหัสสิทธิใน JHCIS': d.right, 'สิทธิตามไฟล์': d.newRight })), 'ยังไม่ตัดตาย', 'ตายตามไฟล์สิทธิ_JHCISยังไม่ตัดตาย')}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
           </div>
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -214,6 +278,7 @@ export default function RightsRegistry() {
             <div className="relative flex-1 min-w-48"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><input className="input pl-8" placeholder="ค้นหาชื่อ / PID / ที่อยู่" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
             {hos && <button className="btn-outline" onClick={() => setHos('')}>ล้างตัวกรองหน่วยบริการ</button>}
             <button className="btn-outline" onClick={toXlsx}><FileSpreadsheet className="h-4 w-4" /> ส่งออก Excel</button>
+            {open === 'C' && <button className="btn bg-sky-600 text-white hover:bg-sky-700" onClick={printSurvey} title="เปิดหน้าต่างพิมพ์ — เลือก 'บันทึกเป็น PDF' ได้"><Printer className="h-4 w-4" /> พิมพ์แบบสำรวจ อสม. (PDF){vf !== '' ? ` — ${vf === '-1' ? 'ไม่ระบุหมู่' : vf === '0' ? 'นอกเขต' : `หมู่ ${vf}`}` : ' — ทุกหมู่'}</button>}
             <span className="text-sm text-slate-500">{nf(list.length)} คน</span>
           </div>
           <div className="mb-3 flex flex-wrap gap-1.5">
