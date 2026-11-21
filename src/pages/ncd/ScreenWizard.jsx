@@ -10,7 +10,7 @@ import ThaiDateInput from '../../components/ThaiDateInput';
 import { Badge } from '../../components/ui';
 import { COUNSEL, SYMPTOMS, adviceFor, ageFromBirth, ageGroupOf, calcBmi, classify2Q, classifyBp, classifyCvd, classifyGlucose, classifySt5, feeStatus, lifestyleRisks, mentalRisks, metabolicRisks, needCvd, needGlucose, needLipid, overall, ppCodes, riskFactors, validCid, waistOver } from '../../lib/ncdScreen';
 
-export const EMPTY = { cid: '', name: '', sex: '', birthDate: '', villageNo: '', houseNo: '', phone: '', screenDate: todayStr(), screenPlace: 'community', knownDM: false, knownHT: false, familyDM: false, familyHT: false, hxHT: false, smokeStatus: '', alcoholFreq: '', exercise: '', sweet: '', salty: '', veg: '', symptoms: [], weight: '', height: '', waist: '', sbp1: '', dbp1: '', sbp2: '', dbp2: '', fasting: true, glucose: '', smokePerDay: '', q2a: '', q2b: '', st5: '', drug: '', cvdRisk: '', tc: '', hdl: '', counsel: [], note: '' };
+export const EMPTY = { cid: '', name: '', sex: '', birthDate: '', villageNo: '', houseNo: '', phone: '', screenDate: todayStr(), screenPlace: 'community', knownDM: false, knownHT: false, familyDM: false, familyHT: false, hxHT: false, smokeStatus: '', alcoholFreq: '', exercise: '', sweet: '', salty: '', veg: '', symptoms: [], weight: '', height: '', waist: '', sbp1: '', dbp1: '', sbp2: '', dbp2: '', fasting: true, glucose: '', smokePerDay: '', q2a: '', q2b: '', st5: '', drug: '', cvdRisk: '', tc: '', hdl: '', counsel: [], note: '', authenReq: false, authenConsent: false };
 const STEPS = ['ข้อมูลบุคคล', 'พฤติกรรม', 'สุขภาพจิต', 'วัดร่างกาย', 'น้ำตาล/ไขมัน', 'สรุปผล'];
 
 // ปุ่มเลือกตัวเลือกเดียว (ใหญ่ กดง่ายบนมือถือ)
@@ -69,15 +69,24 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
     }
     if (i === 3 && !bp) return 'กรุณากรอกความดันอย่างน้อย 1 ครั้ง (ซิสโตลิกและไดแอสโตลิก)';
     if (i === 4 && ng?.need && !f.glucose) return `ต้องเจาะน้ำตาล: ${ng.why}`;
+    if (i === 5 && f.authenReq) {
+      if (!f.authenConsent) return 'ขอเปิดสิทธิ์ Authen ต้องติ๊กยืนยันว่าผู้รับบริการอยู่ด้วยและยินยอม';
+      if (!lockedMask && f.cid.length !== 13) return 'ขอเปิดสิทธิ์ Authen ต้องมีเลขบัตรประชาชน 13 หลัก';
+      if (f.phone.replace(/\D/g, '').length < 9) return 'ขอเปิดสิทธิ์ Authen ต้องกรอกเบอร์โทรผู้รับบริการ/ญาติ (ขั้นที่ 1)';
+    }
     return '';
   };
   const next = () => { const e = check(step); setErr(e); if (!e) setStep((x) => x + 1); };
   const save = async () => {
-    for (let i = 0; i < 5; i++) { const e = check(i); if (e) { setErr(e); setStep(i); return; } }
+    for (let i = 0; i < 6; i++) { const e = check(i); if (e) { setErr(e); setStep(i); return; } }
     setBusy(true); setErr('');
     try {
       const data = { ...f, cid: f.cid.replace(/\D/g, ''), name: f.name.trim(), age, ageGroup: grp, bmi, waistOver: waistOver(f.sex, f.waist), bpLevel: bp.key, bpSys: bp.sys, bpDia: bp.dia, gluLevel: gl?.key || '', overall: ov.key, risks: riskFactors(f), glucoseNeeded: !!ng?.need, pp: ppCodes(f), smoke: f.smokeStatus === 'current', alcohol: !!f.alcoholFreq && f.alcoholFreq !== 'none' && f.alcoholFreq !== 'former' };
       if (onSubmit) { await onSubmit(data); onSaved(data.name); return; }
+      // เจ้าหน้าที่บันทึกเอง: สร้างคำขอเปิดสิทธิ์ Authen (ถ้าติ๊ก) — ไม่ทับคำขอเดิมที่มีสถานะแล้ว
+      const reqAuthen = f.authenReq && f.authenConsent && !init?.authen?.status;
+      delete data.authenReq; delete data.authenConsent;
+      if (reqAuthen) data.authen = { status: 'requested', consent: true, phone: f.phone, requestedBy: profile?.name || profile?.email || '', requestedAt: serverTimestamp() };
       if (init?.id) { await updateDoc(doc(db, 'ncdScreenings', init.id), { ...data, updatedAt: serverTimestamp() }); await writeAudit({ action: 'update', module: 'ncd-screening', docId: init.id, label: data.name }); }
       else { const r = await addDoc(collection(db, 'ncdScreenings'), { ...data, jhcis: 'pending', screenedBy: profile?.name || profile?.email || '', createdAt: serverTimestamp() }); await writeAudit({ action: 'create', module: 'ncd-screening', docId: r.id, label: data.name }); }
       onSaved();
@@ -172,6 +181,16 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
             {fee && <div className={`rounded-2xl p-3 text-sm ring-1 ${fee.eligible ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-slate-100 text-slate-700 ring-slate-200'}`}>{fee.eligible ? <><b>ครบรายการเบิก สปสช. ข้อ 20</b> — เจ้าหน้าที่คีย์ค่าบริการ 12001 (100 บาท) และ Specialpp {ppCodes(f).join(', ')} ใน JHCIS เอง (แอปไม่คีย์ให้อัตโนมัติ)</> : <>{fee.note || <>ยังไม่ครบรายการเบิก: ขาด {fee.missing.join(', ')}</>}</>}</div>}
             {(!!metabolicRisks(f).length || !!lifestyleRisks(f).length || !!mentalRisks(f).length) && <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200 text-sm"><div className="mb-1 font-semibold">ปัจจัยเสี่ยงที่พบ</div><div className="flex flex-wrap gap-1.5">{riskFactors(f).map((x) => <Badge key={x} className="bg-amber-100 text-amber-800">{x}</Badge>)}</div></div>}
             <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-200"><div className="mb-1 font-semibold">คำแนะนำเบื้องต้น</div><ul className="list-disc space-y-1 pl-5">{adv.map((a) => <li key={a}>{a}</li>)}</ul></div>
+            {init?.authen?.status ? <div className="rounded-2xl bg-slate-100 p-3 text-sm text-slate-700 ring-1 ring-slate-200">สถานะขอเปิดสิทธิ์ Authen: <b>{{ requested: 'รอเจ้าหน้าที่เปิดสิทธิ์', opened: 'เปิดสิทธิ์แล้ว', cancelled: 'ยกเลิกคำขอ' }[init.authen.status] || init.authen.status}</b></div> : (
+              <div className="space-y-2 rounded-2xl bg-sky-50 p-3 ring-1 ring-sky-200">
+                <div className="text-sm font-semibold text-sky-900">ขอเปิดสิทธิ์การรับบริการ (Authen)</div>
+                <Toggle id="ncd-authen" label="ผู้รับบริการรับบริการจริงครั้งนี้ ขอให้เจ้าหน้าที่เปิดสิทธิ์" v={f.authenReq} set={(v) => setF((p) => ({ ...p, authenReq: v, authenConsent: v ? p.authenConsent : false }))} />
+                {f.authenReq && (<>
+                  <Toggle id="ncd-authen-ok" label="ผู้รับบริการอยู่ด้วยและยินยอมให้ยืนยันตัวตน (Authen) ด้วยเลขบัตรและเบอร์โทรนี้" v={f.authenConsent} set={s('authenConsent')} />
+                  <p className="text-xs text-sky-900">ระบบแค่ส่งคำขอเข้าคิว เจ้าหน้าที่ รพ.สต. จะเป็นผู้เปิดสิทธิ์ใน QM smart เอง ต้องมีเลขบัตร 13 หลักและเบอร์โทร (ขั้นที่ 1)</p>
+                </>)}
+              </div>
+            )}
             <div><label htmlFor="ncd-note" className="mb-1 block text-sm font-medium">หมายเหตุ</label><textarea id="ncd-note" rows={2} className="input" value={f.note} onChange={(e) => s('note')(e.target.value)} /></div>
           </>)}
           {err && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200" role="alert">{err}</div>}

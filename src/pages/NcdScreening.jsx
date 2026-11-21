@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import QRCode from 'qrcode';
-import { BadgeCheck, Copy, DatabaseZap, Download, FileSpreadsheet, HeartPulse, LayoutList, MapPinned, Pencil, Plus, QrCode, Search, Trash2 } from 'lucide-react';
+import { BadgeCheck, Copy, DatabaseZap, KeyRound, Download, FileSpreadsheet, HeartPulse, LayoutList, MapPinned, Pencil, Plus, QrCode, Search, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { normalizeRole } from '../lib/roles';
@@ -12,6 +12,7 @@ import { writeAudit } from '../lib/audit';
 import { fmtDate } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import ScreenWizard from './ncd/ScreenWizard';
+import AuthenQueue from './ncd/AuthenQueue';
 import { ExportModal, JhcisModal, OVL, fyStartOf } from './ncd/NcdTools';
 import { deriveRow, feeStatus } from '../lib/ncdScreen';
 import { Badge, ConfirmDialog, EmptyState, Modal, Spinner } from '../components/ui';
@@ -74,7 +75,7 @@ export default function NcdScreening() {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState(''); const [fOv, setFOv] = useState(''); const [fVil, setFVil] = useState(''); const [fAge, setFAge] = useState('');
   const [form, setForm] = useState(null); const [del, setDel] = useState(null);
-  const [view, setView] = useState('all'); const [exportOpen, setExportOpen] = useState(false); const [jhcisOpen, setJhcisOpen] = useState(false); const [target, setTarget] = useState(null);
+  const [authenOpen, setAuthenOpen] = useState(false); const [view, setView] = useState('all'); const [exportOpen, setExportOpen] = useState(false); const [jhcisOpen, setJhcisOpen] = useState(false); const [target, setTarget] = useState(null);
   useEffect(() => onSnapshot(doc(db, 'settings', 'ncdTargetSummary'), (d) => setTarget(d.exists() ? d.data() : null), () => setTarget(null)), []);
   useEffect(() => onSnapshot(collection(db, 'ncdScreenings'), (s) => setRows(s.docs.map((d) => deriveRow({ id: d.id, ...d.data() }))), () => setRows([])), []);
   const list = useMemo(() => (rows || []).filter((r) => (!q || `${r.name} ${r.cid}`.includes(q.trim())) && (!fOv || r.overall === fOv) && (!fVil || r.villageNo === fVil) && (!fAge || r.ageGroup === fAge)).sort((a, b) => String(b.screenDate).localeCompare(String(a.screenDate)) || String(a.name).localeCompare(String(b.name), 'th')), [rows, q, fOv, fVil, fAge]);
@@ -86,6 +87,7 @@ export default function NcdScreening() {
     return nos.map((no) => { const l = (rows || []).filter((r) => String(r.villageNo) === no); const t = target?.byMoo?.[no]; const f = l.filter((r) => String(r.screenDate) >= fy).length; const total = t?.total ?? null; const done = (t?.done || 0) + f;
       return { no, name: (villages || []).find((v) => v.no === no)?.name || '', total, jh: t?.done ?? null, app: f, pct: total ? Math.min(100, Math.round((done / total) * 1000) / 10) : null, normal: l.filter((r) => r.overall === 'normal').length, risk: l.filter((r) => r.overall === 'risk').length, suspect: l.filter((r) => r.overall === 'suspect').length, pending: l.filter((r) => r.source === 'asm' && r.review !== 'approved').length }; });
   }, [rows, villages, target, fy]);
+  const authenWait = useMemo(() => (rows || []).filter((r) => r.authen?.status === 'requested').length, [rows]);
   if (!rows) return <Spinner />;
   const remove = async () => { await deleteDoc(doc(db, 'ncdScreenings', del.id)); await writeAudit({ action: 'delete', module: 'ncd-screening', docId: del.id, label: del.name }); setDel(null); };
   return (
@@ -94,6 +96,7 @@ export default function NcdScreening() {
         {isSuper && <button type="button" onClick={() => setLinkOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white/95 px-4 py-2.5 text-sm font-bold text-rose-700 shadow-md ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"><QrCode className="h-5 w-5" /> ลิงก์ / QR อสม.</button>}
         <button type="button" onClick={() => setExportOpen(true)} disabled={!rows.length} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50"><FileSpreadsheet className="h-5 w-5" /> รายงาน Excel</button>
         <button type="button" onClick={() => setJhcisOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><DatabaseZap className="h-5 w-5" /> นำเข้า JHCIS</button>
+        <button type="button" onClick={() => setAuthenOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><KeyRound className="h-5 w-5" /> คิวเปิดสิทธิ์ Authen{authenWait ? ` (${authenWait})` : ''}</button>
         <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><Plus className="h-5 w-5" /> คัดกรองรายใหม่</button>
       </div>} />
       <div role="tablist" aria-label="มุมมองรายงาน" className="inline-flex rounded-2xl bg-slate-100 p-1 shadow-inner">
@@ -134,7 +137,7 @@ export default function NcdScreening() {
           {list.map((r) => (
             <div key={r.id} className="card flex flex-wrap items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2"><b>{r.name}</b><Badge className={OV[r.overall]}>{OVL[r.overall]}</Badge>{r.source === 'asm' && <Badge className={r.review === 'approved' ? 'bg-sky-100 text-sky-800' : 'bg-violet-100 text-violet-800'}>อสม. {r.asmName || ''}{r.review === 'approved' ? ' · ตรวจแล้ว' : ' · รอตรวจสอบ'}</Badge>}{r.jhcis === 'queued' ? <Badge className="bg-sky-100 text-sky-800">อยู่ในคิวส่ง JHCIS</Badge> : r.jhcis !== 'done' && <Badge className="bg-slate-100 text-slate-600">รอส่ง JHCIS</Badge>}{feeStatus(r).eligible && <Badge className="bg-emerald-100 text-emerald-800">พร้อมคิด 12001</Badge>}</div>
+                <div className="flex flex-wrap items-center gap-2"><b>{r.name}</b><Badge className={OV[r.overall]}>{OVL[r.overall]}</Badge>{r.authen?.status === 'requested' && <Badge className="bg-sky-100 text-sky-800">รอเปิดสิทธิ์ Authen</Badge>}{r.authen?.status === 'opened' && <Badge className="bg-emerald-100 text-emerald-800">เปิดสิทธิ์แล้ว</Badge>}{r.source === 'asm' && <Badge className={r.review === 'approved' ? 'bg-sky-100 text-sky-800' : 'bg-violet-100 text-violet-800'}>อสม. {r.asmName || ''}{r.review === 'approved' ? ' · ตรวจแล้ว' : ' · รอตรวจสอบ'}</Badge>}{r.jhcis === 'queued' ? <Badge className="bg-sky-100 text-sky-800">อยู่ในคิวส่ง JHCIS</Badge> : r.jhcis !== 'done' && <Badge className="bg-slate-100 text-slate-600">รอส่ง JHCIS</Badge>}{feeStatus(r).eligible && <Badge className="bg-emerald-100 text-emerald-800">พร้อมคิด 12001</Badge>}</div>
                 <div className="text-xs text-slate-600">{r.sex === 'M' ? 'ชาย' : 'หญิง'} {r.age} ปี · ม.{r.villageNo || '-'} · {fmtDate(r.screenDate)} · ความดัน {r.bpSys}/{r.bpDia}{r.glucose ? ` · น้ำตาล ${r.glucose} (${r.fasting ? 'อด' : 'ไม่อด'})` : ''}{r.bmi ? ` · BMI ${r.bmi}` : ''}</div>
                 {!!r.risks?.length && <div className="text-xs text-slate-500">ปัจจัยเสี่ยง: {r.risks.join(', ')}</div>}
               </div>
@@ -148,6 +151,7 @@ export default function NcdScreening() {
       {form && <ScreenWizard init={form.id ? form : null} villages={villages} existing={rows} onClose={() => setForm(null)} onSaved={() => setForm(null)} />}
       {exportOpen && <ExportModal rows={rows} filtered={list} villages={villages} target={target} onClose={() => setExportOpen(false)} />}
       {jhcisOpen && <JhcisModal rows={rows} onClose={() => setJhcisOpen(false)} />}
+      {authenOpen && <AuthenQueue rows={rows} onClose={() => setAuthenOpen(false)} />}
       {linkOpen && <AsmLinkModal villages={villages} onClose={() => setLinkOpen(false)} />}
       {del && <ConfirmDialog message={`ลบผลคัดกรองของ ${del.name}?`} onConfirm={remove} onCancel={() => setDel(null)} />}
     </div>
