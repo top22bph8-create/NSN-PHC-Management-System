@@ -28,9 +28,11 @@ export default function LineQuotaStatus({ full }) {
   const quotas = st.quotas || {};
   const hasPer = Object.keys(quotas).length > 0;
   const act = String(st.activeChannel || '1');
-  const other = act === '1' ? '2' : '1';
   const okQ = (ch) => (quotas[ch] && !quotas[ch].error ? quotas[ch] : null);
   const isExh = (x) => !!x && !!x.limited && x.remaining <= 0;
+  // ช่องสำรองที่แนะนำให้สลับไป: ช่องอื่นที่ยังมีโควตาเหลือก่อน (รองรับ 3 ช่อง) ไม่มีก็ช่องอื่นช่องแรก
+  const others = ['1', '2', '3'].filter((c) => c !== act);
+  const other = others.find((c) => okQ(c) && !isExh(okQ(c))) || others.find((c) => okQ(c)) || others[0];
   // โควตาของช่องที่ "ใช้อยู่" (ถ้ามีข้อมูลรายช่อง) ไม่ใช่ช่องแรกเสมอไป
   const q = hasPer ? okQ(act) : st.quota;
   const e = st.lastError;

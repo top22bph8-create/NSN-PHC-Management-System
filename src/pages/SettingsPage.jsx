@@ -107,6 +107,7 @@ export default function SettingsPage() {
   const [lineMeta, setLineMeta] = useState({ enabled: false, events: { ...DEFAULT_LINE_EVENTS } });
   const [lineToken, setLineToken] = useState('');
   const [lineToken2, setLineToken2] = useState('');
+  const [lineToken3, setLineToken3] = useState('');
   const [lineTargetId, setLineTargetId] = useState('');
   const [lineVehicleTargetId, setLineVehicleTargetId] = useState('');
   const [lineThaiTargetId, setLineThaiTargetId] = useState('');
@@ -148,14 +149,16 @@ export default function SettingsPage() {
       if (tokenChanged && lineToken.trim().length < 100) throw new Error('ช่อง Channel access token สั้นผิดปกติ (อาจเป็นค่าที่เบราว์เซอร์เติมให้เอง) — ลบช่องนี้ให้ว่างแล้วบันทึกใหม่ หรือวาง token ที่คัดลอกจาก LINE Developers ใหม่ทั้งหมด');
       const token2Changed = !!lineToken2.trim();
       if (token2Changed && lineToken2.trim().length < 100) throw new Error('ช่อง Channel access token (ไลน์ช่องที่ 2) สั้นผิดปกติ — ลบช่องนี้แล้ววาง token จริงจาก LINE Developers Console อีกครั้ง');
+      const token3Changed = !!lineToken3.trim();
+      if (token3Changed && lineToken3.trim().length < 100) throw new Error('ช่อง Channel access token (ไลน์ช่องที่ 3) สั้นผิดปกติ — ลบช่องนี้แล้ววาง token จริงจากหน้า LINE Developers (Messaging API → Channel access token) อีกครั้ง');
       const targetChanged = !!lineTargetId.trim();
       const vehicleTargetChanged = !!lineVehicleTargetId.trim();
       const thaiTargetChanged = !!lineThaiTargetId.trim();
       const typed = [lineTargetId, lineVehicleTargetId, lineThaiTargetId].map((x) => x.trim()).filter(Boolean);
       if (new Set(typed).size !== typed.length) throw new Error('Target ID ของกลุ่มไลน์ซ้ำกัน — แต่ละกลุ่ม (กลุ่มหลัก / ใช้รถ / แพทย์แผนไทย) ต้องใช้รหัสคนละตัว');
-      if (tokenChanged || token2Changed || targetChanged || vehicleTargetChanged || thaiTargetChanged) {
-        await saveLineCredentials({ channelAccessToken: lineToken.trim(), channelAccessToken2: lineToken2.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim(), thaiTargetId: lineThaiTargetId.trim() });
-        setLineToken(''); setLineToken2(''); setLineTargetId(''); setLineVehicleTargetId(''); setLineThaiTargetId('');
+      if (tokenChanged || token2Changed || token3Changed || targetChanged || vehicleTargetChanged || thaiTargetChanged) {
+        await saveLineCredentials({ channelAccessToken: lineToken.trim(), channelAccessToken2: lineToken2.trim(), channelAccessToken3: lineToken3.trim(), targetId: lineTargetId.trim(), vehicleTargetId: lineVehicleTargetId.trim(), thaiTargetId: lineThaiTargetId.trim() });
+        setLineToken(''); setLineToken2(''); setLineToken3(''); setLineTargetId(''); setLineVehicleTargetId(''); setLineThaiTargetId('');
       }
       await writeAudit({ action: 'settings', module: 'settings', docId: 'lineNotify', label: 'แจ้งเตือนไลน์ (LINE Messaging API)', after: { enabled: lineMeta.enabled, events: lineMeta.events, tokenChanged, targetChanged, vehicleTargetChanged } });
       const fleetV = (fleet || []).map((v, i) => ({ ...v, id: v.id || `v${Date.now()}_${i}` }));
@@ -276,11 +279,13 @@ export default function SettingsPage() {
             <Sub step="1" tone="sky" title="ช่องไลน์ (Channel access token)" hint="กรอกเฉพาะตอนต้องการบันทึก/เปลี่ยน — เว้นว่างไว้ = ไม่แก้ไขค่าเดิม (ค่าที่บันทึกแล้วดึงกลับมาดูไม่ได้)">
               <SecretInput id="lineToken" tone="sky" badge="ช่อง 1 · หลัก" label="Channel access token — ไลน์ช่องที่ 1 (หลัก)" placeholder="วาง token ของบอทตัวที่ 1 ที่นี่" value={lineToken} onChange={setLineToken} />
               <SecretInput id="lineToken2" tone="emerald" badge="ช่อง 2 · สำรอง" label="Channel access token — ไลน์ช่องที่ 2 (สำรอง เมื่อโควตาช่องแรกเต็ม)" placeholder="วาง token ของบอทตัวที่ 2 ที่นี่" value={lineToken2} onChange={setLineToken2}
-                hint="ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่องแรกทั้งหมด — เชิญบอททั้ง 2 ตัวเข้ากลุ่มเดียวกัน (ต้องอยู่ Provider เดียวกัน) และตั้ง Webhook URL ของบอทตัวที่ 2 เป็น URL เดียวกับตัวแรก" />
+                hint="ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่อง 1 ทุกคำสั่ง — ข้อควรรู้: LINE อนุญาตบอท 1 ตัวต่อ 1 กลุ่ม เมื่อสลับช่องต้องเอาบอทตัวเดิมออกจากกลุ่มแล้วเชิญตัวที่จะใช้เข้าแทน และตั้ง Webhook URL ของบอทให้เป็น URL เดียวกับตัวแรก (ปุ่มอนุมัติในไลน์จึงจะทำงาน)" />
+              <SecretInput id="lineToken3" tone="violet" badge="ช่อง 3 · สำรอง" label="Channel access token — ไลน์ช่องที่ 3 (สำรองอีกตัว)" placeholder="วาง token ของบอทตัวที่ 3 ที่นี่" value={lineToken3} onChange={setLineToken3}
+                hint="ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่อง 1 ทุกคำสั่ง — ข้อควรรู้: LINE อนุญาตบอท 1 ตัวต่อ 1 กลุ่ม เมื่อสลับช่องต้องเอาบอทตัวเดิมออกจากกลุ่มแล้วเชิญตัวที่จะใช้เข้าแทน และตั้ง Webhook URL ของบอทให้เป็น URL เดียวกับตัวแรก (ปุ่มอนุมัติในไลน์จึงจะทำงาน)" />
               <div className="rounded-lg border border-slate-200 bg-white p-3">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-medium text-slate-700">ช่องที่ใช้ส่งตอนนี้:</span>
-                  {['1', '2'].map((c) => (
+                  {['1', '2', '3'].map((c) => (
                     <button key={c} type="button" onClick={async () => { await setLineActiveChannel(c); setLineMeta({ ...lineMeta, activeChannel: c }); say({ type: 'ok', text: `สลับไปใช้ไลน์ช่อง ${c} แล้ว` }); }}
                       className={`btn !py-1 text-xs ${(lineMeta.activeChannel || '1') === c ? 'btn-primary' : 'btn-outline'}`}>ไลน์ช่อง {c}{c === '1' ? ' (หลัก)' : ' (สำรอง)'}</button>
                   ))}

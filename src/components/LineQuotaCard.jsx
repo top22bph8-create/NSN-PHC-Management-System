@@ -5,8 +5,8 @@ import { functions } from '../firebase';
 import { getLineMeta, getLineStatus, setLineActiveChannel } from '../lib/lineNotify';
 import { fmtDateTime } from '../lib/thai';
 
-// การ์ดโควตาข้อความไลน์ช่อง 1 และ 2 บนแดชบอร์ด (เฉพาะ Super Admin — ผู้เรียกต้องกรองสิทธิ์เอง และฟังก์ชัน getLineQuota ตรวจสิทธิ์ซ้ำฝั่งเซิร์ฟเวอร์)
-const CH = { '1': { name: 'ไลน์ช่อง 1', sub: 'หลัก', ring: 'border-sky-200', head: 'bg-sky-600' }, '2': { name: 'ไลน์ช่อง 2', sub: 'สำรอง', ring: 'border-emerald-200', head: 'bg-emerald-600' } };
+// การ์ดโควตาข้อความไลน์ช่อง 1, 2 และ 3 บนแดชบอร์ด (เฉพาะ Super Admin — ผู้เรียกต้องกรองสิทธิ์เอง และฟังก์ชัน getLineQuota ตรวจสิทธิ์ซ้ำฝั่งเซิร์ฟเวอร์)
+const CH = { '1': { name: 'ไลน์ช่อง 1', sub: 'หลัก', ring: 'border-sky-200', head: 'bg-sky-600' }, '2': { name: 'ไลน์ช่อง 2', sub: 'สำรอง', ring: 'border-emerald-200', head: 'bg-emerald-600' }, '3': { name: 'ไลน์ช่อง 3', sub: 'สำรอง', ring: 'border-violet-200', head: 'bg-violet-600' } };
 const STALE_MS = 30 * 60 * 1000;
 
 export default function LineQuotaCard() {
@@ -56,8 +56,8 @@ export default function LineQuotaCard() {
         </div>
         <button type="button" className="btn btn-outline ml-auto !py-1 text-xs" onClick={check} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} ตรวจโควตาตอนนี้</button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {['1', '2'].map((c) => {
+      <div className="grid gap-2 sm:grid-cols-3">
+        {['1', '2', '3'].map((c) => {
           const x = quotas[c];
           const meta = CH[c];
           if (!x) return (

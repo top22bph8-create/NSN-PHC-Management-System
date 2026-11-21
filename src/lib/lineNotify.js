@@ -23,11 +23,13 @@ export async function getLineMeta() {
 
 // บันทึก Channel Access Token และ/หรือ Target ID ใหม่ (ใช้ merge เพื่อแก้ทีละช่องได้ โดยไม่ต้องอ่านค่าเดิมกลับมาก่อน
 // เพราะกฎความปลอดภัยห้ามอ่านเอกสารนี้แม้แต่ Super Admin) — เว้นช่องไหนว่างไว้ = ไม่แตะค่าเดิมของช่องนั้น
-export async function saveLineCredentials({ channelAccessToken, channelAccessToken2, targetId, vehicleTargetId, thaiTargetId }) {
+export async function saveLineCredentials({ channelAccessToken, channelAccessToken2, channelAccessToken3, targetId, vehicleTargetId, thaiTargetId }) {
   const patch = { updatedAt: serverTimestamp() };
   if (channelAccessToken) patch.channelAccessToken = channelAccessToken;
   // ไลน์ช่องที่ 2 (สำรอง): ใช้แทนอัตโนมัติเมื่อโควตาช่องแรกเต็ม — ตั้งค่า Target ID/เหตุการณ์แจ้งเตือนชุดเดียวกัน
   if (channelAccessToken2) patch.channelAccessToken2 = channelAccessToken2;
+  // ไลน์ช่องที่ 3 (สำรองอีกตัว): ใช้ Target ID และการตั้งค่าแจ้งเตือนชุดเดียวกับช่องอื่น
+  if (channelAccessToken3) patch.channelAccessToken3 = channelAccessToken3;
   if (targetId) patch.targetId = targetId;
   // ไลน์กลุ่มแยกสำหรับระบบขออนุญาตใช้รถ (การ์ดอนุมัติ/ผลพิจารณาของงานรถส่งเข้ากลุ่มนี้ ไม่ปนกับกลุ่มหลัก)
   if (vehicleTargetId) patch.vehicleTargetId = vehicleTargetId;
@@ -42,9 +44,9 @@ export async function saveLineMeta({ enabled, events, autoSwitch }) {
   await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { enabled: !!enabled, autoSwitch: autoSwitch !== false, events: { ...DEFAULT_LINE_EVENTS, ...events } }, { merge: true });
 }
 
-// สลับช่องไลน์ที่ใช้ส่งทันที ('1' หลัก / '2' สำรอง) — เขียนเฉพาะฟิลด์นี้ ไม่ทับค่าอื่น (ฟังก์ชันสลับอัตโนมัติก็เขียนฟิลด์เดียวกัน)
+// สลับช่องไลน์ที่ใช้ส่งทันที ('1' หลัก / '2','3' สำรอง) — เขียนเฉพาะฟิลด์นี้ ไม่ทับค่าอื่น (ฟังก์ชันสลับอัตโนมัติก็เขียนฟิลด์เดียวกัน)
 export async function setLineActiveChannel(ch) {
-  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { activeChannel: ch === '2' ? '2' : '1' }, { merge: true });
+  await setDoc(doc(db, 'settings', 'lineNotifyMeta'), { activeChannel: ['1', '2', '3'].includes(String(ch)) ? String(ch) : '1' }, { merge: true });
 }
 
 // บันทึก LINE User ID ของ "ผู้อำนวยการ" — ใช้ตรวจสิทธิ์ตอนกดปุ่มอนุมัติ/ไม่อนุมัติในไลน์กลุ่ม (ไม่ลับ อ่านได้ปกติ
