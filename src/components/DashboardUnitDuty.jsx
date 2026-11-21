@@ -1,7 +1,7 @@
 // แดชบอร์ด: กำหนดการออกหน่วยปฐมพยาบาล / รับบริจาคโลหิต + คิวถัดไป (แถบสีเมื่อถึงคิว)
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { canRead } from '../lib/roles';
@@ -13,7 +13,7 @@ function KindCard({ kind }) {
   const [roster, setRoster] = useState(K.defaults);
   const [events, setEvents] = useState([]);
   const today = todayStr();
-  useEffect(() => { getDoc(doc(db, 'unitRoster', kind)).then((s) => { if (s.exists() && s.data().units?.length) setRoster({ units: s.data().units, nextIdx: Number.isInteger(s.data().nextIdx) ? s.data().nextIdx : 0 }); }).catch(() => {}); }, [kind]);
+  useEffect(() => onSnapshot(doc(db, 'unitRoster', kind), (s) => { if (s.exists() && s.data().units?.length) setRoster({ units: s.data().units, nextIdx: Number.isInteger(s.data().nextIdx) ? s.data().nextIdx : 0 }); }, () => {}), [kind]);
   useEffect(() => onSnapshot(query(collection(db, 'unitDuty'), where('date', '>=', today)),
     (s) => setEvents(s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => e.kind === kind && e.status === 'นัดหมาย').sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.time || '').localeCompare(String(b.time || '')))), () => setEvents([])), [kind, today]);
   const nextI = roster.nextIdx % roster.units.length;

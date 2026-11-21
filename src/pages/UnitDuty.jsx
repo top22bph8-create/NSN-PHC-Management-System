@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { writeAudit } from '../lib/audit';
 import { exportXlsx } from '../lib/exportFile';
 import { fmtDate, todayStr } from '../lib/thai';
-import { UNIT_KINDS, UNIT_STATUS, UNIT_STATUS_TONE, createUnitEvent, loadRoster, releaseQueue, saveRoster, unitColor } from '../lib/unitDuty';
+import { UNIT_KINDS, UNIT_STATUS, UNIT_STATUS_TONE, createUnitEvent, loadRoster, releaseQueue, saveRoster, swapUnitEvent, unitColor } from '../lib/unitDuty';
 import { PageHeader } from '../components/Logo';
 import ThaiDateInput from '../components/ThaiDateInput';
 import { Badge, ConfirmDialog, Modal, Spinner, Toast } from '../components/ui';
@@ -62,6 +62,49 @@ function EventForm({ kind, roster, onClose, onSaved, say, user }) {
   );
 }
 
+// ผอ. (Super Admin) เปลี่ยนทีม/คนที่ออกงาน — เลือกคิวถัดไปเองได้ ถ้าไม่เลือกระบบรันคิวให้อัตโนมัติเมื่องานเสร็จสิ้น/เลยวัน
+function SwapModal({ kind, roster, ev, user, onClose, onSaved, say }) {
+  const K = UNIT_KINDS[kind];
+  const [to, setTo] = useState('');
+  const [next, setNext] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const label = (i) => roster.units[i]?.label || `${K.unitWord}ที่ ${i + 1}`;
+  const save = async () => {
+    if (to === '') return say({ type: 'error', text: `เลือก${K.unitWord}ที่จะออกแทนก่อน` });
+    setBusy(true);
+    try {
+      await swapUnitEvent(kind, ev, to, { nextIdx: next, reason, by: user });
+      await writeAudit({ action: 'update', module: 'unit-duty', label: `สลับเวร ${K.short} ${ev.place} ${fmtDate(ev.date)}: ${ev.unitLabel} → ${label(Number(to))}` }).catch(() => {});
+      say({ type: 'ok', text: `เปลี่ยนเป็น ${label(Number(to))} แล้ว${next === '' ? ' · คิวถัดไประบบจะรันให้เองเมื่อเสร็จสิ้น/เลยวัน' : ` · ตั้งคิวถัดไปเป็น ${label(Number(next))}`}` });
+      onSaved();
+    } catch (err) { say({ type: 'error', text: 'สลับเวรไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title={`🔁 เปลี่ยน${K.unitWord}/สลับเวร`} onClose={onClose} footer={<button className="btn btn-primary w-full" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึกการสลับเวร'}</button>}>
+      <div className="space-y-3 text-sm">
+        <div className="rounded-lg bg-slate-50 p-2"><b>{fmtDate(ev.date)}{ev.time ? ` · ${ev.time} น.` : ''}</b> · {ev.place}<div>ตอนนี้: <b>{ev.unitLabel}</b></div></div>
+        <label className="block"><span className="mb-1 block font-medium">เปลี่ยนเป็น{K.unitWord}</span>
+          <select className="input" value={to} onChange={(e) => setTo(e.target.value)}>
+            <option value="">— เลือก —</option>
+            {roster.units.map((u, i) => i !== ev.unitIdx && <option key={i} value={i}>{label(i)}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block font-medium">คิวถัดไป (ไม่บังคับ)</span>
+          <select className="input" value={next} onChange={(e) => setNext(e.target.value)}>
+            <option value="">ให้ระบบรันคิวอัตโนมัติ (ต่อจาก{K.unitWord}ที่ไปออกจริง)</option>
+            {roster.units.map((u, i) => <option key={i} value={i}>กำหนดให้ {label(i)} เป็นคิวถัดไป</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block font-medium">เหตุผล/หมายเหตุ (ไม่บังคับ)</span>
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น ติดภารกิจ ลาป่วย" />
+        </label>
+        <p className="text-xs text-slate-500">ระบบจะแจ้งไลน์กลุ่มว่ามีการสลับเวร</p>
+      </div>
+    </Modal>
+  );
+}
+
 function RosterEditor({ kind, roster, onClose, onSaved, say }) {
   const K = UNIT_KINDS[kind];
   const [units, setUnits] = useState(JSON.parse(JSON.stringify(roster.units)));
@@ -72,7 +115,7 @@ function RosterEditor({ kind, roster, onClose, onSaved, say }) {
     const clean = units.map((u) => ({ ...u, members: u.members.filter((m) => m.name.trim()) })).filter((u) => u.label.trim() && u.members.length);
     if (!clean.length) return say({ type: 'error', text: 'ต้องมีอย่างน้อย 1 รายการ' });
     setBusy(true);
-    try { await saveRoster(kind, { units: clean, nextIdx: Math.min(nextIdx, clean.length - 1) }); await writeAudit({ action: 'update', module: 'unit-duty', label: `แก้ไขรายชื่อ/คิว ${K.title}` }).catch(() => {}); say({ type: 'ok', text: 'บันทึกรายชื่อและคิวแล้ว' }); onSaved(); onClose(); }
+    try { await saveRoster(kind, { units: clean, nextIdx: Math.min(nextIdx, clean.length - 1) }, { manual: nextIdx !== roster.nextIdx % roster.units.length }); await writeAudit({ action: 'update', module: 'unit-duty', label: `แก้ไขรายชื่อ/คิว ${K.title}` }).catch(() => {}); say({ type: 'ok', text: 'บันทึกรายชื่อและคิวแล้ว' }); onSaved(); onClose(); }
     catch (err) { say({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
   };
   return (
@@ -109,8 +152,11 @@ export default function UnitDuty({ kind }) {
   const [del, setDel] = useState(null);
   const [toast, setToast] = useState(null);
   const say = (t) => { setToast(t); setTimeout(() => setToast(null), 5000); };
+  const [swap, setSwap] = useState(null);
   const reload = () => loadRoster(kind).then(setRoster).catch((e) => say({ type: 'error', text: e.message }));
   useEffect(() => { setRoster(null); reload(); }, [kind]); // eslint-disable-line
+  // คิวขยับเองเมื่อเสร็จสิ้น/เลยวัน (ฝั่งเซิร์ฟเวอร์) → ติดตามเอกสารคิวแบบเรียลไทม์
+  useEffect(() => onSnapshot(doc(db, 'unitRoster', kind), () => reload(), () => {}), [kind]); // eslint-disable-line
   useEffect(() => onSnapshot(query(collection(db, 'unitDuty'), where('kind', '==', kind)),
     (s) => setEvents(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setEvents([])), [kind]);
 
@@ -190,7 +236,9 @@ export default function UnitDuty({ kind }) {
                     {e.date === today && e.status === 'นัดหมาย' && <Badge className="bg-red-600 text-white">วันนี้</Badge>}
                     <Badge className={UNIT_STATUS_TONE[e.status]}>{e.status}</Badge>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${c.chip}`}>{e.unitLabel}</span>
-                    {!e.auto && <span className="text-xs text-slate-400">กำหนดเอง</span>}
+                    {!e.auto && !e.swapped && <span className="text-xs text-slate-400">กำหนดเอง</span>}
+                    {e.swapped && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" title={e.swapReason || ''}>🔁 สลับเวร (จาก {e.swappedFromLabel})</span>}
+                    {e.status === 'นัดหมาย' && e.date < today && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">เลยวันแล้ว — ระบบจะตั้งเป็นเสร็จสิ้นและรันคิวให้</span>}
                   </div>
                   <div className="mt-1 font-medium">{e.place}{e.orderNo ? <span className="ml-2 text-sm font-normal text-slate-500">คำสั่ง/หนังสือที่ {e.orderNo}</span> : null}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1 text-sm text-slate-600"><Users className="h-4 w-4" />{(e.members || []).map((m) => m.name).join(' · ')}</div>
@@ -198,6 +246,7 @@ export default function UnitDuty({ kind }) {
                 </div>
                 <div className="flex shrink-0 flex-col items-end justify-center gap-1 p-2">
                   <select className="input !py-1 text-sm" value={e.status} onChange={(ev) => setStatus(e, ev.target.value)} aria-label="สถานะ">{UNIT_STATUS.map((s) => <option key={s}>{s}</option>)}</select>
+                  {profile?.role === 'super_admin' && e.status !== 'ยกเลิก' && <button className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 hover:bg-amber-100" onClick={() => setSwap(e)}>🔁 เปลี่ยนทีม/สลับเวร</button>}
                   <button className="text-slate-400 hover:text-red-600" onClick={() => setDel(e)} aria-label="ลบ"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
@@ -208,6 +257,7 @@ export default function UnitDuty({ kind }) {
 
       {form && <EventForm kind={kind} roster={roster} onClose={() => setForm(false)} onSaved={reload} say={say} user={userName} />}
       {edit && <RosterEditor kind={kind} roster={roster} onClose={() => setEdit(false)} onSaved={reload} say={say} />}
+      {swap && <SwapModal kind={kind} roster={roster} ev={swap} user={userName} onClose={() => setSwap(null)} onSaved={() => { setSwap(null); reload(); }} say={say} />}
       {del && <ConfirmDialog message={`ลบงาน "${del.place}" (${fmtDate(del.date)})? ${del.auto ? 'ระบบจะคืนคิวให้' + del.unitLabel : ''}`} onConfirm={remove} onCancel={() => setDel(null)} />}
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>

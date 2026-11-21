@@ -64,8 +64,28 @@ export async function loadRoster(kind) {
   return { units: x.units?.length ? x.units : d.units, nextIdx: Number.isInteger(x.nextIdx) ? x.nextIdx : d.nextIdx, saved: true };
 }
 
-export async function saveRoster(kind, roster) {
-  await runTransaction(db, async (tx) => { tx.set(rosterRef(kind), { units: roster.units, nextIdx: roster.nextIdx, updatedAt: serverTimestamp() }); });
+// manual = true เมื่อผู้ใช้ "เลือกคิวถัดไป" เอง → ระบบจะไม่เอาไปทับด้วยการรันคิวอัตโนมัติของงานที่สลับ/กำหนดทีมเอง (ที่เสร็จก่อนหน้านั้น)
+export async function saveRoster(kind, roster, { manual = false } = {}) {
+  await runTransaction(db, async (tx) => {
+    const old = await tx.get(rosterRef(kind));
+    tx.set(rosterRef(kind), { ...(old.exists() ? { settleEnabledAt: old.data().settleEnabledAt || null, manualAt: old.data().manualAt || null } : {}), units: roster.units, nextIdx: roster.nextIdx, ...(manual ? { manualAt: serverTimestamp() } : {}), updatedAt: serverTimestamp() });
+  });
+}
+
+// ผอ. สลับเวร: เปลี่ยนทีม/คนที่ออกงานนี้ · nextIdx ('' = ไม่เลือก → ระบบรันคิวต่อให้เองเมื่องานเสร็จสิ้น/เลยวัน, ตัวเลข = กำหนดคิวถัดไปเอง)
+export async function swapUnitEvent(kind, ev, newIdx, { nextIdx = '', reason = '', by = '' } = {}) {
+  await runTransaction(db, async (tx) => {
+    const rs = await tx.get(rosterRef(kind));
+    const d = UNIT_KINDS[kind].defaults;
+    const units = rs.exists() && rs.data().units?.length ? rs.data().units : d.units;
+    const u = units[Number(newIdx)];
+    if (!u) throw new Error('ไม่พบทีม/คนที่เลือก');
+    tx.update(doc(db, 'unitDuty', ev.id), {
+      unitIdx: Number(newIdx), unitLabel: u.label, members: u.members, swapped: true, swappedFromLabel: ev.swappedFromLabel || ev.unitLabel, swapReason: reason.trim(), swappedBy: by,
+      swappedAt: serverTimestamp(), queueSettled: false, updatedAt: serverTimestamp(),
+    });
+    if (nextIdx !== '' && nextIdx != null) tx.set(rosterRef(kind), { units, nextIdx: Number(nextIdx) % units.length, manualAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  });
 }
 
 // สร้างงานออกหน่วย + รันคิวอัตโนมัติ (overrideIdx = กำหนดทีม/คนเอง → ไม่ขยับคิว)
@@ -81,7 +101,7 @@ export async function createUnitEvent(kind, data, overrideIdx, userName) {
     const idx = auto ? cur % units.length : Number(overrideIdx);
     const u = units[idx];
     tx.set(evRef, { kind, ...data, unitIdx: idx, unitLabel: u.label, members: u.members, auto, status: 'นัดหมาย', createdBy: userName || '', createdAt: serverTimestamp() });
-    if (auto) tx.set(rosterRef(kind), { units, nextIdx: (idx + 1) % units.length, updatedAt: serverTimestamp() });
+    if (auto) tx.set(rosterRef(kind), { units, nextIdx: (idx + 1) % units.length, updatedAt: serverTimestamp() }, { merge: true });
     result = { id: evRef.id, unitIdx: idx, unitLabel: u.label, auto };
   });
   return result;
