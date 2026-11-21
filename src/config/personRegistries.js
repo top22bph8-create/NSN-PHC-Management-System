@@ -27,6 +27,31 @@ const COMMON_TAIL = [
 ];
 
 export const PERSON_REGISTRIES = {
+  // ทะเบียนรายชื่อ อสม. (อาสาสมัครสาธารณสุขประจำหมู่บ้าน) แยกรายหมู่บ้าน — กรองตามหมู่/ค้นหา/เพิ่ม/นำเข้า/ส่งออก Excel เหมือนทะเบียนอื่น
+  'reg-vhv': {
+    key: 'reg-vhv',
+    path: '/reg-vhv',
+    emoji: '🦺',
+    title: 'ทะเบียนรายชื่อ อสม.',
+    noun: 'อสม.',
+    unit: 'คน',
+    headerTone: 'from-emerald-700 via-green-600 to-lime-500',
+    reportColor: 'C6E0B4',
+    filterKey: 'vhvPosition',
+    filterLabel: 'ตำแหน่งในกลุ่ม อสม.',
+    // อสม. บางคนยังไม่มีข้อมูลครบ (เลขบัตร/หมู่) แล้วเติมภายหลังได้
+    idOptional: true,
+    fields: [
+      ...COMMON_HEAD.filter((f) => !['caregiver', 'caregiverPhone'].includes(f.key)).map((f) => (f.key === 'idCard' ? { ...f, required: false, hint: '13 หลัก — ถ้ายังไม่มีเว้นว่างไว้ได้ แล้วมาเติมภายหลัง' } : f.key === 'phone' ? { ...f, list: true } : f)),
+      { key: 'vhvPosition', label: 'ตำแหน่งในกลุ่ม อสม.', type: 'select', default: 'อสม.', list: true, options: ['อสม.', 'ประธาน อสม. หมู่บ้าน', 'รองประธาน อสม. หมู่บ้าน', 'เลขานุการ อสม. หมู่บ้าน', 'ประธาน อสม. ตำบล', 'อสม.ดีเด่น/ผู้ทรงคุณวุฒิ'] },
+      { key: 'vhvStatus', label: 'สถานะการเป็น อสม.', type: 'select', options: ['ปฏิบัติงาน', 'พ้นสภาพ (ลาออก/ครบวาระ)'], default: 'ปฏิบัติงาน', list: true },
+      { key: 'vhvCardNo', label: 'เลขที่บัตร อสม.', type: 'text' },
+      { key: 'registerYear', label: 'ปีที่ขึ้นทะเบียน (พ.ศ.)', type: 'text', list: true, hint: 'เช่น 2555' },
+      { key: 'houses', label: 'จำนวนหลังคาเรือนที่รับผิดชอบ', type: 'text', hint: 'เช่น 10' },
+      { key: 'expertise', label: 'ความเชี่ยวชาญ / การอบรม', type: 'text', hint: 'เช่น อสม.หมอประจำบ้าน, NCD, แพทย์แผนไทย' },
+      ...COMMON_TAIL,
+    ],
+  },
   'reg-elderly': {
     key: 'reg-elderly',
     path: '/reg-elderly',

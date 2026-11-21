@@ -237,6 +237,10 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isActive();
     }
+    match /reg-vhv/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /reg-mental/{id} {
       allow read: if isActive();
       allow create, update, delete: if isActive();

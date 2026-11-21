@@ -114,8 +114,10 @@ export const GROUPS = [
     ],
   },
   {
-    key: 'academic', title: 'งานวิชาการ', emoji: '🎓', icon: GraduationCap, tone: 'from-cyan-500 to-sky-600', soft: 'bg-cyan-50 text-cyan-700',
-    items: [{ key: 'academic', label: 'งานวิชาการ', path: '/soon/academic', icon: GraduationCap, ready: false }],
+    key: 'academic', title: 'งานวิชาการและงานสุขภาพภาคประชาชน', emoji: '🎓', icon: GraduationCap, tone: 'from-cyan-500 to-sky-600', soft: 'bg-cyan-50 text-cyan-700',
+    items: [
+      { key: 'reg-vhv', label: 'งานอาสาสมัครสาธารณสุขประจำหมู่บ้าน (อสม.)', path: '/reg-vhv', icon: HeartHandshake, emoji: '🦺', ready: true, module: 'reg-vhv', tone: 'from-emerald-600 to-lime-500', desc: 'ทะเบียนรายชื่อ อสม. แยกรายหมู่บ้าน เพิ่ม/แก้ไข/นำเข้า/ส่งออก Excel' },
+    ],
   },
   {
     key: 'disease', title: 'งานส่งเสริมป้องกันโรค', emoji: '🦠', icon: Activity, tone: 'from-teal-500 to-green-600', soft: 'bg-teal-50 text-teal-700',
@@ -159,5 +161,5 @@ export const SOON = {
   disease: { label: 'งานส่งเสริมป้องกันควบคุมโรค', features: ['บันทึกกิจกรรม/โครงการ ตามหมู่บ้านและกลุ่มเป้าหมาย', 'รายงานตามเดือน ไตรมาส ปีงบประมาณ', 'งานเฝ้าระวังโรค วัคซีน คัดกรอง ไข้เลือดออก ฯลฯ'] },
   'ncd-screening': { label: 'ระบบคัดกรองกลุ่มเสี่ยง NCD', features: ['หน้าจอมือถือสำหรับ อสม. คัดกรองเบาหวาน/ความดันโลหิตสูงประจำปี', 'แยกเกณฑ์ตามช่วงอายุ 15–34 ปี และ 35–59 ปี (ชาย/หญิง)', 'บันทึกพฤติกรรมเสี่ยง (SPECIALPP) และผลวัดร่างกาย/น้ำตาล/ความดัน (NCDSCREEN)', 'แปลผลอัตโนมัติ ปกติ/เสี่ยง/สงสัย', 'ส่งเข้า JHCIS หลังเจ้าหน้าที่อนุมัติ พร้อม ICD-10 และค่าบริการ'] },
   nursing: { label: 'งานการพยาบาล', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
-  academic: { label: 'งานวิชาการ', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
+  academic: { label: 'งานวิชาการและงานสุขภาพภาคประชาชน', features: ['กำหนดรายละเอียดงานร่วมกับ ผอ. ในรอบถัดไป'] },
 };

@@ -53,6 +53,7 @@ export const ACCESS = {
   'reg-elderly': { read: ALL, write: ALL },
   'reg-disabled': { read: ALL, write: ALL },
   'reg-mental': { read: ALL, write: ALL },
+  'reg-vhv': { read: ALL, write: ALL },
   'unit-duty': { read: ALL, write: ALL },
   'service-stats': { read: ALL, write: [] },
   'rights-registry': { read: ALL, write: [] },
