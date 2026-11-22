@@ -8,9 +8,9 @@ import { writeAudit } from '../../lib/audit';
 import { todayStr } from '../../lib/thai';
 import ThaiDateInput from '../../components/ThaiDateInput';
 import { Badge } from '../../components/ui';
-import { COUNSEL, DM_SYM, SYMPTOMS, adviceFor, ageFromBirth, ageGroupOf, calcBmi, classify2Q, classifyBp, classifyCvd, classifyGlucose, classifySt5, feeStatus, lifestyleRisks, mentalRisks, metabolicRisks, needCvd, needGlucose, needLipid, overall, ppCodes, riskFactors, validCid, waistOver } from '../../lib/ncdScreen';
+import { COUNSEL, SYMPTOMS, adviceFor, ageFromBirth, ageGroupOf, calcBmi, classify2Q, classifyBp, classifyCvd, classifyGlucose, classifySt5, feeStatus, lifestyleRisks, mentalRisks, metabolicRisks, needCvd, needGlucose, needLipid, overall, ppCodes, riskFactors, validCid, waistOver } from '../../lib/ncdScreen';
 
-export const EMPTY = { cid: '', name: '', sex: '', birthDate: '', villageNo: '', houseNo: '', phone: '', screenDate: todayStr(), screenPlace: 'community', knownDM: false, knownHT: false, familyDM: false, familyHT: false, hxHT: false, smokeStatus: '', alcoholFreq: '', exercise: '', sweet: '', salty: '', veg: '', symptoms: [], weight: '', height: '', waist: '', sbp1: '', dbp1: '', sbp2: '', dbp2: '', fasting: true, glucose: '', smokePerDay: '', q2a: '', q2b: '', st5: '', drug: '', cvdRisk: '', tc: '', hdl: '', counsel: [], note: '', pulse: '', tambon: '', dmSym: [], smokeYears: '', alcoholPerWeek: '', authenReq: false, authenConsent: false };
+export const EMPTY = { cid: '', name: '', sex: '', birthDate: '', villageNo: '', houseNo: '', phone: '', screenDate: todayStr(), screenPlace: 'community', knownDM: false, knownHT: false, familyDM: false, familyHT: false, hxHT: false, smokeStatus: '', alcoholFreq: '', exercise: '', sweet: '', salty: '', veg: '', symptoms: [], weight: '', height: '', waist: '', sbp1: '', dbp1: '', sbp2: '', dbp2: '', fasting: true, glucose: '', smokePerDay: '', q2a: '', q2b: '', st5: '', drug: '', cvdRisk: '', tc: '', hdl: '', counsel: [], note: '', authenReq: false, authenConsent: false };
 const STEPS = ['ข้อมูลบุคคล', 'พฤติกรรม', 'สุขภาพจิต', 'วัดร่างกาย', 'น้ำตาล/ไขมัน', 'สรุปผล'];
 
 // ปุ่มเลือกตัวเลือกเดียว (ใหญ่ กดง่ายบนมือถือ)
@@ -116,7 +116,6 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
               {age != null && <div className={`mt-2 rounded-xl p-3 text-sm ring-1 ${grp ? 'bg-sky-50 text-sky-900 ring-sky-200' : 'bg-red-50 text-red-700 ring-red-200'}`}>อายุ <b>{age}</b> ปี · {grp ? <>กลุ่มคัดกรอง <b>{grp === '15-34' ? '15–34 ปี' : grp === '35-59' ? '35–59 ปี' : '60 ปีขึ้นไป'}</b></> : 'ต่ำกว่า 15 ปี ไม่อยู่ในกลุ่มคัดกรอง'}</div>}</div>
             <div className="grid grid-cols-2 gap-3">
               <div><label htmlFor="ncd-vil" className="mb-1 block text-sm font-medium">หมู่บ้าน</label><select id="ncd-vil" className="input !h-12" value={f.villageNo} onChange={(e) => s('villageNo')(e.target.value)}><option value="">— เลือก —</option>{(villages || []).map((v) => <option key={v.no} value={v.no}>ม.{v.no} {v.name}</option>)}</select></div>
-              <div><label htmlFor="ncd-tambon" className="mb-1 block text-sm font-medium">ตำบล</label><input id="ncd-tambon" className="input !h-12" placeholder="เชียงเครือ" value={f.tambon} onChange={(e) => s('tambon')(e.target.value)} /></div>
               <div><label htmlFor="ncd-house" className="mb-1 block text-sm font-medium">บ้านเลขที่</label><input id="ncd-house" className="input !h-12" value={f.houseNo} onChange={(e) => s('houseNo')(e.target.value)} /></div>
               <div><label htmlFor="ncd-phone" className="mb-1 block text-sm font-medium">เบอร์โทร</label><input id="ncd-phone" inputMode="tel" className="input !h-12" value={f.phone} onChange={(e) => s('phone')(e.target.value.replace(/[^0-9-]/g, ''))} /></div>
               <div><div className="mb-1 text-sm font-medium">วันที่คัดกรอง</div><ThaiDateInput id="ncd-date" value={f.screenDate} onChange={s('screenDate')} /></div>
@@ -135,14 +134,11 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
             <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-200">ถามพฤติกรรมของผู้รับการคัดกรอง แล้วแตะเลือกคำตอบ (ข้ามได้ถ้าไม่ตอบ)</p>
             <Seg id="s-smoke" label="การสูบบุหรี่" value={f.smokeStatus} onChange={s('smokeStatus')} opts={[['never', 'ไม่เคยสูบ'], ['former', 'เลิกแล้ว'], ['current', 'สูบอยู่']]} />
             {f.smokeStatus === 'current' && <Field id="ncd-cig" label="สูบวันละกี่มวน" unit="มวน" v={f.smokePerDay} set={s('smokePerDay')} />}
-            {(f.smokeStatus === 'current' || f.smokeStatus === 'former') && <Field id="ncd-smy" label="ระยะเวลาที่สูบ" unit="ปี" v={f.smokeYears} set={s('smokeYears')} />}
             <Seg id="s-alc" label="การดื่มสุรา" value={f.alcoholFreq} onChange={s('alcoholFreq')} opts={[['none', 'ไม่เคยดื่ม'], ['former', 'เลิกดื่มแล้ว ≥ 1 ปี'], ['sometimes', 'ดื่มบางครั้ง'], ['regular', 'ดื่มเป็นประจำ']]} />
-            {f.alcoholFreq === 'regular' && <Field id="ncd-alw" label="ดื่มกี่ครั้งต่อสัปดาห์" unit="ครั้ง/สัปดาห์" v={f.alcoholPerWeek} set={s('alcoholPerWeek')} />}
             <Seg id="s-ex" label="ออกกำลังกาย (≥ 150 นาที/สัปดาห์)" value={f.exercise} onChange={s('exercise')} opts={[['enough', 'เพียงพอ'], ['low', 'ไม่เพียงพอ']]} />
             <Seg id="s-sweet" label="กินหวาน/ดื่มน้ำหวาน" value={f.sweet} onChange={s('sweet')} opts={[['rare', 'น้อย'], ['often', 'บ่อย']]} />
             <Seg id="s-salty" label="กินเค็ม (ปลาร้า น้ำปลา ของหมักดอง)" value={f.salty} onChange={s('salty')} opts={[['ok', 'ไม่จัด'], ['often', 'เค็มจัด']]} />
             <Seg id="s-veg" label="กินผักผลไม้" value={f.veg} onChange={s('veg')} opts={[['ok', 'เพียงพอ'], ['low', 'น้อย']]} />
-            <div className="space-y-2 rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200"><div className="text-sm font-semibold text-amber-900">อาการเบาหวาน 8 ข้อ (ตามแบบฟอร์ม) — แตะข้อที่ “มี”</div>{DM_SYM.map(([k, t]) => <Toggle key={k} id={`dm-${k}`} label={t} v={f.dmSym.includes(k)} set={() => setF((p) => ({ ...p, dmSym: p.dmSym.includes(k) ? p.dmSym.filter((x) => x !== k) : [...p.dmSym, k] }))} />)}</div>
             <div className="space-y-2"><div className="text-sm font-medium text-slate-700">อาการที่พบ (เลือกได้หลายข้อ)</div>{SYMPTOMS.map(([k, t]) => <Toggle key={k} id={`sym-${k}`} label={t} v={f.symptoms.includes(k)} set={() => toggleSym(k)} />)}</div>
           </>)}
 
@@ -162,7 +158,6 @@ export default function ScreenWizard({ init, villages, existing, onClose, onSave
             {(bmi != null || f.waist) && <div className="flex flex-wrap gap-2 text-sm">{bmi != null && <Badge className={bmi >= 25 ? 'bg-orange-100 text-orange-800' : bmi >= 23 ? 'bg-yellow-100 text-yellow-800' : 'bg-emerald-100 text-emerald-800'}>BMI {bmi}</Badge>}{f.waist && <Badge className={waistOver(f.sex, f.waist) ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800'}>รอบเอว{waistOver(f.sex, f.waist) ? 'เกินเกณฑ์' : 'ปกติ'} (เกณฑ์ {f.sex === 'M' ? '90' : '80'} ซม.)</Badge>}</div>}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200"><div className="mb-2 text-sm font-semibold">ความดันโลหิต ครั้งที่ 1</div><div className="grid grid-cols-2 gap-3"><Field id="ncd-s1" label="ตัวบน (ซิสโตลิก)" unit="mmHg" v={f.sbp1} set={s('sbp1')} ph="120" /><Field id="ncd-d1" label="ตัวล่าง (ไดแอสโตลิก)" unit="mmHg" v={f.dbp1} set={s('dbp1')} ph="80" /></div></div>
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200"><div className="mb-2 text-sm font-semibold">ครั้งที่ 2 <span className="font-normal text-slate-500">(วัดซ้ำหลังพัก 5 นาที — แนะนำเมื่อค่าสูง)</span></div><div className="grid grid-cols-2 gap-3"><Field id="ncd-s2" label="ตัวบน" unit="mmHg" v={f.sbp2} set={s('sbp2')} /><Field id="ncd-d2" label="ตัวล่าง" unit="mmHg" v={f.dbp2} set={s('dbp2')} /></div></div>
-            <Field id="ncd-pulse" label="ชีพจร" unit="ครั้ง/นาที" v={f.pulse} set={s('pulse')} />
             {bp && <div className={`rounded-2xl p-4 ring-1 ${bp.tone} ring-black/5`}><div className="text-xs opacity-80">ความดันเฉลี่ย</div><div className="text-3xl font-extrabold tabular-nums">{bp.sys}/{bp.dia}</div><div className="font-semibold">{bp.label}</div><div className="text-sm">{bp.action}</div>{bp.index >= 2 && !(f.sbp2 && f.dbp2) && <div className="mt-1 text-xs font-semibold">ค่าสูง — ควรวัดซ้ำครั้งที่ 2</div>}</div>}
           </>)}
 

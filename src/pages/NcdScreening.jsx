@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import QRCode from 'qrcode';
-import { BadgeCheck, Copy, DatabaseZap, FileText, KeyRound, Download, FileSpreadsheet, HeartPulse, LayoutList, MapPinned, Pencil, Plus, QrCode, Search, Trash2 } from 'lucide-react';
+import { BadgeCheck, Copy, DatabaseZap, KeyRound, Download, FileSpreadsheet, HeartPulse, LayoutList, MapPinned, Pencil, Plus, QrCode, Search, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { normalizeRole } from '../lib/roles';
@@ -13,7 +13,6 @@ import { fmtDate } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import ScreenWizard from './ncd/ScreenWizard';
 import AuthenQueue from './ncd/AuthenQueue';
-import { openNcdFormPrint } from '../lib/ncdFormPrint';
 import { ExportModal, JhcisModal, OVL, fyStartOf } from './ncd/NcdTools';
 import { deriveRow, feeStatus } from '../lib/ncdScreen';
 import { Badge, ConfirmDialog, EmptyState, Modal, Spinner } from '../components/ui';
@@ -97,8 +96,6 @@ export default function NcdScreening() {
         {isSuper && <button type="button" onClick={() => setLinkOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white/95 px-4 py-2.5 text-sm font-bold text-rose-700 shadow-md ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"><QrCode className="h-5 w-5" /> ลิงก์ / QR อสม.</button>}
         <button type="button" onClick={() => setExportOpen(true)} disabled={!rows.length} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50"><FileSpreadsheet className="h-5 w-5" /> รายงาน Excel</button>
         <button type="button" onClick={() => setJhcisOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><DatabaseZap className="h-5 w-5" /> นำเข้า JHCIS</button>
-        <button type="button" onClick={() => openNcdFormPrint(list)} disabled={!list.length} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-rose-400 to-red-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50"><FileText className="h-5 w-5" /> PDF แบบฟอร์ม ({list.length})</button>
-        <button type="button" onClick={() => openNcdFormPrint([], { blank: true })} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white/90 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-md ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"><FileText className="h-5 w-5" /> ฟอร์มเปล่า</button>
         <button type="button" onClick={() => setAuthenOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><KeyRound className="h-5 w-5" /> คิวเปิดสิทธิ์ Authen{authenWait ? ` (${authenWait})` : ''}</button>
         <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><Plus className="h-5 w-5" /> คัดกรองรายใหม่</button>
       </div>} />
