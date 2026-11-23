@@ -109,7 +109,7 @@ export default function NcdScreening() {
   useEffect(() => onSnapshot(doc(db, 'settings', 'ncdTargetSummary'), (d) => setTarget(d.exists() ? d.data() : null), () => setTarget(null)), []);
   useEffect(() => onSnapshot(collection(db, 'ncdScreenings'), (s) => setRows(s.docs.map((d) => deriveRow({ id: d.id, ...d.data() }))), () => setRows([])), []);
   const loadSt = (v) => { setSt(null); ncdTargetStatus(v ? { v } : {}).then(setSt).catch(() => setSt({ villages: {}, people: [], error: true })); };
-  useEffect(() => { if (view === 'village' || rosterNo) loadSt(rosterNo); }, [view, rosterNo, stTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadSt(rosterNo); }, [rosterNo, stTick, rows?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => (rows || []).filter((r) => (!q || `${r.name} ${r.cid}`.includes(q.trim())) && (!fOv || r.overall === fOv) && (!fVil || r.villageNo === fVil) && (!fAge || r.ageGroup === fAge)).sort((a, b) => String(b.screenDate).localeCompare(String(a.screenDate)) || String(a.name).localeCompare(String(b.name), 'th')), [rows, q, fOv, fVil, fAge]);
   const fy = fyStartOf();
   // ผลคัดกรองจริง: เฉพาะปีงบนี้ นับคนละครั้ง (เลขบัตร หรือ หมู่+ชื่อ) ใช้รายการล่าสุด
