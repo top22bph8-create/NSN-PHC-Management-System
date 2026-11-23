@@ -3,16 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import QRCode from 'qrcode';
-import { BadgeCheck, Copy, DatabaseZap, KeyRound, Download, FileSpreadsheet, HeartPulse, LayoutList, MapPinned, Pencil, Plus, QrCode, Search, Trash2 } from 'lucide-react';
+import { BadgeCheck, Copy, DatabaseZap, FileText, KeyRound, Download, FileSpreadsheet, HeartPulse, LayoutList, MapPinned, Pencil, Plus, QrCode, RefreshCw, Search, Trash2, Users } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { normalizeRole } from '../lib/roles';
-import { getNcdPublic, ncdPublicUrl, ncdVillageUrl, newToken, saveNcdPublic, villageKey } from '../lib/ncdPublic';
+import { getNcdPublic, ncdPublicUrl, ncdTargetStatus, ncdVillageUrl, newToken, saveNcdPublic, villageKey } from '../lib/ncdPublic';
 import { writeAudit } from '../lib/audit';
 import { fmtDate } from '../lib/thai';
 import { PageHeader } from '../components/Logo';
 import ScreenWizard from './ncd/ScreenWizard';
 import AuthenQueue from './ncd/AuthenQueue';
+import { openNcdFormPrint } from '../lib/ncdFormPrint';
 import { ExportModal, JhcisModal, OVL, fyStartOf } from './ncd/NcdTools';
 import { deriveRow, feeStatus } from '../lib/ncdScreen';
 import { Badge, ConfirmDialog, EmptyState, Modal, Spinner } from '../components/ui';
@@ -68,6 +69,35 @@ function AsmLinkModal({ onClose, villages }) {
   );
 }
 
+// รายชื่อกลุ่มเป้าหมาย 15–59 ปี ของหมู่บ้าน แยก ทำแล้ว / ยังไม่ทำ (ทำแล้ว = JHCIS ปีงบนี้ หรือบันทึกในแอปปีงบนี้)
+function VillageRoster({ no, name, st, rows, onClose, onRefresh }) {
+  const [tab, setTab] = useState('todo'); const [q, setQ] = useState('');
+  const byId = useMemo(() => Object.fromEntries((rows || []).map((r) => [r.id, r])), [rows]);
+  const people = st?.people || [];
+  const cnt = { all: people.length, done: people.filter((p) => p.status).length, todo: people.filter((p) => !p.status).length };
+  const shown = people.filter((p) => (tab === 'all' || (tab === 'done' ? p.status : !p.status)) && (!q || `${p.name} ${p.hno}`.includes(q.trim())));
+  return (
+    <Modal title={`กลุ่มเป้าหมาย ม.${no} ${name || ''}`} onClose={onClose} footer={<><button className="btn btn-outline" onClick={onRefresh}><RefreshCw className="h-4 w-4" /> รีเฟรช</button><button className="btn btn-outline" onClick={onClose}>ปิด</button></>}>
+      <div className="space-y-3 text-sm">
+        <div className="flex flex-wrap gap-2">{[['todo', 'ยังไม่ทำ'], ['done', 'ทำแล้ว'], ['all', 'ทั้งหมด']].map(([k, t]) => <button key={k} type="button" onClick={() => setTab(k)} className={`rounded-full px-3 py-1 text-xs font-bold ${tab === k ? (k === 'todo' ? 'bg-rose-600 text-white' : k === 'done' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white') : 'bg-slate-100 text-slate-600'}`}>{t} ({cnt[k]})</button>)}</div>
+        <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input aria-label="ค้นหาชื่อหรือบ้านเลขที่" className="input pl-9" placeholder="ค้นหาชื่อ / บ้านเลขที่" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        {!st ? <Spinner /> : !people.length && !st.villages?.[no] ? <p className="rounded-xl bg-slate-100 p-4 text-center text-slate-500">ยังไม่มีรายชื่อเป้าหมายของหมู่นี้ (ต้องรันตัวซิงก์ที่เครื่อง JHCIS: sync.mjs --ncd-targets)</p> : (
+          <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
+            {shown.map((p) => { const r = p.appId ? byId[p.appId] : null; return (
+              <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-2">
+                <div className="min-w-0 flex-1"><div className="font-semibold">{p.name}</div><div className="text-xs text-slate-500">{p.sex === 'M' ? 'ชาย' : 'หญิง'} · บ้านเลขที่ {p.hno || '-'} · {p.mask || 'ไม่มีเลขบัตร'}</div></div>
+                {p.jh && <Badge className="bg-emerald-100 text-emerald-800">ทำแล้วใน JHCIS</Badge>}
+                {p.status === 'app' && <Badge className="bg-sky-100 text-sky-800">ทำในแอป{r ? ` · ${OVL[r.overall] || ''}` : ''}</Badge>}
+                {!p.status && <Badge className="bg-rose-100 text-rose-700">ยังไม่ทำ</Badge>}
+              </li>); })}
+            {!shown.length && <li className="p-4 text-center text-slate-500">ไม่พบรายชื่อ</li>}
+          </ul>)}
+        <p className="text-xs text-slate-500">เลขบัตรแสดงแบบปิดบัง · รายชื่อเป้าหมาย ณ {st?.asOf || '-'} · ปีงบประมาณเริ่ม {st?.fy || '-'}</p>
+      </div>
+    </Modal>
+  );
+}
+
 const OV = { normal: 'bg-emerald-100 text-emerald-800', risk: 'bg-yellow-100 text-yellow-800', suspect: 'bg-red-100 text-red-800' };
 
 export default function NcdScreening() {
@@ -76,17 +106,25 @@ export default function NcdScreening() {
   const [q, setQ] = useState(''); const [fOv, setFOv] = useState(''); const [fVil, setFVil] = useState(''); const [fAge, setFAge] = useState('');
   const [form, setForm] = useState(null); const [del, setDel] = useState(null);
   const [authenOpen, setAuthenOpen] = useState(false); const [view, setView] = useState('all'); const [exportOpen, setExportOpen] = useState(false); const [jhcisOpen, setJhcisOpen] = useState(false); const [target, setTarget] = useState(null);
+  const [st, setSt] = useState(null); const [rosterNo, setRosterNo] = useState(''); const [stTick, setStTick] = useState(0);
   useEffect(() => onSnapshot(doc(db, 'settings', 'ncdTargetSummary'), (d) => setTarget(d.exists() ? d.data() : null), () => setTarget(null)), []);
   useEffect(() => onSnapshot(collection(db, 'ncdScreenings'), (s) => setRows(s.docs.map((d) => deriveRow({ id: d.id, ...d.data() }))), () => setRows([])), []);
+  const loadSt = (v) => { setSt(null); ncdTargetStatus(v ? { v } : {}).then(setSt).catch(() => setSt({ villages: {}, people: [], error: true })); };
+  useEffect(() => { if (view === 'village' || rosterNo) loadSt(rosterNo); }, [view, rosterNo, stTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => (rows || []).filter((r) => (!q || `${r.name} ${r.cid}`.includes(q.trim())) && (!fOv || r.overall === fOv) && (!fVil || r.villageNo === fVil) && (!fAge || r.ageGroup === fAge)).sort((a, b) => String(b.screenDate).localeCompare(String(a.screenDate)) || String(a.name).localeCompare(String(b.name), 'th')), [rows, q, fOv, fVil, fAge]);
-  const scoped = useMemo(() => (rows || []).filter((r) => !fVil || r.villageNo === fVil), [rows, fVil]);
-  const sum = useMemo(() => { const c = { total: scoped.length, normal: 0, risk: 0, suspect: 0 }; scoped.forEach((r) => { if (c[r.overall] != null) c[r.overall] += 1; }); return c; }, [scoped]);
   const fy = fyStartOf();
+  // ผลคัดกรองจริง: เฉพาะปีงบนี้ นับคนละครั้ง (เลขบัตร หรือ หมู่+ชื่อ) ใช้รายการล่าสุด
+  const fyRows = useMemo(() => { const m = new Map(); (rows || []).forEach((r) => { if (String(r.screenDate || '') < fy) return; const k = r.cid || `${r.villageNo}|${String(r.name || '').replace(/\s+/g, '')}`; const o = m.get(k); if (!o || String(o.screenDate) < String(r.screenDate)) m.set(k, r); }); return [...m.values()]; }, [rows, fy]);
+  const scoped = useMemo(() => fyRows.filter((r) => !fVil || String(r.villageNo) === fVil), [fyRows, fVil]);
+  const stV = st?.villages || null;
+  const tgt = useMemo(() => { const ks = Object.keys(stV || {}).filter((k) => !fVil || k === fVil); let total = 0; let done = 0; ks.forEach((k) => { total += stV[k].total; done += stV[k].jh + stV[k].appOnly; }); return stV ? { total, done, todo: total - done } : null; }, [stV, fVil]);
+  const sum = useMemo(() => { const c = { total: scoped.length, normal: 0, risk: 0, suspect: 0 }; scoped.forEach((r) => { if (c[r.overall] != null) c[r.overall] += 1; }); return c; }, [scoped]);
   const byVillage = useMemo(() => {
-    const nos = [...new Set([...(villages || []).map((v) => v.no), ...(rows || []).map((r) => String(r.villageNo || ''))])].filter(Boolean).sort((a, b) => Number(a) - Number(b));
-    return nos.map((no) => { const l = (rows || []).filter((r) => String(r.villageNo) === no); const t = target?.byMoo?.[no]; const f = l.filter((r) => String(r.screenDate) >= fy).length; const total = t?.total ?? null; const done = (t?.done || 0) + f;
-      return { no, name: (villages || []).find((v) => v.no === no)?.name || '', total, jh: t?.done ?? null, app: f, pct: total ? Math.min(100, Math.round((done / total) * 1000) / 10) : null, normal: l.filter((r) => r.overall === 'normal').length, risk: l.filter((r) => r.overall === 'risk').length, suspect: l.filter((r) => r.overall === 'suspect').length, pending: l.filter((r) => r.source === 'asm' && r.review !== 'approved').length }; });
-  }, [rows, villages, target, fy]);
+    const nos = [...new Set([...(villages || []).map((v) => v.no), ...Object.keys(stV || {}), ...Object.keys(target?.byMoo || {}), ...(rows || []).map((r) => String(r.villageNo || ''))])].filter(Boolean).sort((a, b) => Number(a) - Number(b));
+    return nos.map((no) => { const l = fyRows.filter((r) => String(r.villageNo) === no); const c = stV?.[no]; const t = target?.byMoo?.[no];
+      const total = c ? c.total : (t?.total ?? null); const done = c ? c.jh + c.appOnly : (t ? (t.done || 0) + l.length : l.length);
+      return { no, name: (villages || []).find((v) => v.no === no)?.name || '', total, done, jh: c ? c.jh : (t?.done ?? null), app: c ? c.appOnly : l.length, todo: total != null ? Math.max(0, total - done) : null, pct: total ? Math.min(100, Math.round((done / total) * 1000) / 10) : null, normal: l.filter((r) => r.overall === 'normal').length, risk: l.filter((r) => r.overall === 'risk').length, suspect: l.filter((r) => r.overall === 'suspect').length, pending: (rows || []).filter((r) => String(r.villageNo) === no && r.source === 'asm' && r.review !== 'approved').length }; });
+  }, [rows, fyRows, villages, target, stV]);
   const authenWait = useMemo(() => (rows || []).filter((r) => r.authen?.status === 'requested').length, [rows]);
   if (!rows) return <Spinner />;
   const remove = async () => { await deleteDoc(doc(db, 'ncdScreenings', del.id)); await writeAudit({ action: 'delete', module: 'ncd-screening', docId: del.id, label: del.name }); setDel(null); };
@@ -96,34 +134,36 @@ export default function NcdScreening() {
         {isSuper && <button type="button" onClick={() => setLinkOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white/95 px-4 py-2.5 text-sm font-bold text-rose-700 shadow-md ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"><QrCode className="h-5 w-5" /> ลิงก์ / QR อสม.</button>}
         <button type="button" onClick={() => setExportOpen(true)} disabled={!rows.length} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50"><FileSpreadsheet className="h-5 w-5" /> รายงาน Excel</button>
         <button type="button" onClick={() => setJhcisOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><DatabaseZap className="h-5 w-5" /> นำเข้า JHCIS</button>
+        <button type="button" onClick={() => openNcdFormPrint(list)} disabled={!list.length} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-rose-400 to-red-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50"><FileText className="h-5 w-5" /> PDF แบบฟอร์ม ({list.length})</button>
+        <button type="button" onClick={() => openNcdFormPrint([], { blank: true })} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white/90 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-md ring-1 ring-white/60 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"><FileText className="h-5 w-5" /> ฟอร์มเปล่า</button>
         <button type="button" onClick={() => setAuthenOpen(true)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><KeyRound className="h-5 w-5" /> คิวเปิดสิทธิ์ Authen{authenWait ? ` (${authenWait})` : ''}</button>
         <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-lg"><Plus className="h-5 w-5" /> คัดกรองรายใหม่</button>
       </div>} />
       <div role="tablist" aria-label="มุมมองรายงาน" className="inline-flex rounded-2xl bg-slate-100 p-1 shadow-inner">
         {[['all', 'ภาพรวมทั้งหมด', LayoutList], ['village', 'แยกรายหมู่บ้าน', MapPinned]].map(([k, t, Ic]) => <button key={k} role="tab" aria-selected={view === k} type="button" onClick={() => setView(k)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${view === k ? 'bg-white text-rose-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}><Ic className="h-4 w-4" /> {t}</button>)}
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[['คัดกรองแล้ว (ราย)', sum.total, 'from-sky-600 to-cyan-500'], ['ปกติ', sum.normal, 'from-emerald-600 to-teal-500'], ['กลุ่มเสี่ยง', sum.risk, 'from-amber-500 to-yellow-500'], ['สงสัย/ส่งต่อ', sum.suspect, 'from-rose-600 to-red-500']].map(([l, v, t]) => <div key={l} className={`rounded-2xl bg-gradient-to-br ${t} p-4 text-white shadow`}><div className="text-sm opacity-90">{l}</div><div className="text-3xl font-extrabold tabular-nums">{v}</div></div>)}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {[[tgt ? 'ทำแล้ว (JHCIS + แอป)' : 'คัดกรองในแอป (ปีงบนี้)', tgt ? tgt.done : sum.total, 'from-sky-600 to-cyan-500', tgt ? `จากเป้าหมาย ${tgt.total}` : ''], ['ยังไม่ทำ', tgt ? tgt.todo : '–', 'from-slate-600 to-slate-500', tgt && tgt.total ? `${Math.round((tgt.todo / tgt.total) * 1000) / 10}% ของเป้าหมาย` : ''], ['ปกติ', sum.normal, 'from-emerald-600 to-teal-500', 'ผลที่บันทึกในแอป'], ['กลุ่มเสี่ยง', sum.risk, 'from-amber-500 to-yellow-500', 'ผลที่บันทึกในแอป'], ['สงสัย/ส่งต่อ', sum.suspect, 'from-rose-600 to-red-500', 'ผลที่บันทึกในแอป']].map(([l, v, t, n]) => <div key={l} className={`rounded-2xl bg-gradient-to-br ${t} p-4 text-white shadow`}><div className="text-sm opacity-90">{l}</div><div className="text-3xl font-extrabold tabular-nums">{v}</div>{n && <div className="text-[11px] opacity-80">{n}</div>}</div>)}
       </div>
       <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-200">บันทึกและแปลผลในระบบนี้ · ปุ่ม “นำเข้า JHCIS” จัดคิว/ออกใบรหัสสำหรับคีย์ (ยังไม่เขียนลงฐาน JHCIS อัตโนมัติ) (เกณฑ์เป็นแนวทางเบื้องต้น กรุณาเทียบกับแนวทาง/KPI ฉบับล่าสุดก่อนใช้จริง)</div>
       {view === 'village' && (
         <div className="card overflow-x-auto p-0">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs text-slate-500"><tr><th className="p-3">หมู่บ้าน</th><th className="p-3 text-right">เป้าหมาย 15–59 ปี</th><th className="p-3 text-right">คัดกรองแล้ว</th><th className="p-3">ความครอบคลุม</th><th className="p-3 text-right">ปกติ</th><th className="p-3 text-right">เสี่ยง</th><th className="p-3 text-right">สงสัย</th><th className="p-3 text-right">รอตรวจสอบ</th></tr></thead>
+          <table className="w-full min-w-[820px] text-sm">
+            <thead className="bg-slate-50 text-left text-xs text-slate-500"><tr><th className="p-3">หมู่บ้าน</th><th className="p-3 text-right">เป้าหมาย 15–59 ปี</th><th className="p-3 text-right">ทำแล้ว</th><th className="p-3 text-right">ยังไม่ทำ</th><th className="p-3">ความครอบคลุม</th><th className="p-3 text-right">ปกติ</th><th className="p-3 text-right">เสี่ยง</th><th className="p-3 text-right">สงสัย</th><th className="p-3 text-right">รอตรวจสอบ</th><th className="p-3" /></tr></thead>
             <tbody>
               {byVillage.map((v) => (
                 <tr key={v.no} onClick={() => setFVil(fVil === v.no ? '' : v.no)} className={`cursor-pointer border-t transition hover:bg-rose-50 ${fVil === v.no ? 'bg-rose-50' : ''}`}>
                   <td className="p-3 font-semibold">ม.{v.no} {v.name}</td>
                   <td className="p-3 text-right tabular-nums">{v.total ?? '–'}</td>
-                  <td className="p-3 text-right tabular-nums">{v.total != null ? `${(v.jh || 0) + v.app}` : v.app}</td>
+                  <td className="p-3 text-right tabular-nums text-emerald-700">{v.done}</td><td className="p-3 text-right tabular-nums text-rose-600">{v.todo ?? '–'}</td>
                   <td className="p-3"><div className="flex items-center gap-2"><div className="h-2 w-24 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400" style={{ width: `${v.pct || 0}%` }} /></div><span className="w-12 text-xs tabular-nums text-slate-600">{v.pct != null ? `${v.pct}%` : '–'}</span></div></td>
-                  <td className="p-3 text-right tabular-nums text-emerald-700">{v.normal}</td><td className="p-3 text-right tabular-nums text-amber-700">{v.risk}</td><td className="p-3 text-right tabular-nums text-red-700">{v.suspect}</td><td className="p-3 text-right tabular-nums text-violet-700">{v.pending || ''}</td>
+                  <td className="p-3 text-right tabular-nums text-emerald-700">{v.normal}</td><td className="p-3 text-right tabular-nums text-amber-700">{v.risk}</td><td className="p-3 text-right tabular-nums text-red-700">{v.suspect}</td><td className="p-3 text-right tabular-nums text-violet-700">{v.pending || ''}</td><td className="p-3 text-right"><button type="button" className="btn-outline !px-2 !py-1 text-xs" onClick={(e) => { e.stopPropagation(); setRosterNo(v.no); }}><Users className="h-3 w-3" /> รายชื่อ</button></td>
                 </tr>
               ))}
-              {!byVillage.length && <tr><td colSpan={8} className="p-4 text-center text-slate-500">ยังไม่มีข้อมูลหมู่บ้าน</td></tr>}
+              {!byVillage.length && <tr><td colSpan={10} className="p-4 text-center text-slate-500">ยังไม่มีข้อมูลหมู่บ้าน</td></tr>}
             </tbody>
           </table>
-          <div className="border-t bg-slate-50 p-2 text-xs text-slate-500">คลิกแถวเพื่อดูเฉพาะหมู่นั้น (ตัวเลขด้านบนและรายการด้านล่างจะกรองตามหมู่) · “คัดกรองแล้ว” = ทำแล้วใน JHCIS ปีงบนี้ + บันทึกในแอป (โดยประมาณ){target?.asOf ? ` · รายชื่อเป้าหมาย ณ ${target.asOf}` : ' · ยังไม่ได้ซิงก์รายชื่อเป้าหมาย'}</div>
+          <div className="border-t bg-slate-50 p-2 text-xs text-slate-500">คลิกแถวเพื่อดูเฉพาะหมู่นั้น (ตัวเลขด้านบนและรายการด้านล่างจะกรองตามหมู่) · “ทำแล้ว” = ทำใน JHCIS ปีงบนี้ หรือบันทึกในแอปปีงบนี้ (จับคู่เลขบัตร/ชื่อ นับคนละครั้ง) · ปกติ/เสี่ยง/สงสัย นับจากผลที่บันทึกในแอปปีงบนี้ · กด “รายชื่อ” เพื่อดูว่าใครทำแล้ว/ยังไม่ทำ{target?.asOf ? ` · รายชื่อเป้าหมาย ณ ${target.asOf}` : ' · ยังไม่ได้ซิงก์รายชื่อเป้าหมาย'}</div>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
@@ -151,6 +191,7 @@ export default function NcdScreening() {
       {form && <ScreenWizard init={form.id ? form : null} villages={villages} existing={rows} onClose={() => setForm(null)} onSaved={() => setForm(null)} />}
       {exportOpen && <ExportModal rows={rows} filtered={list} villages={villages} target={target} onClose={() => setExportOpen(false)} />}
       {jhcisOpen && <JhcisModal rows={rows} onClose={() => setJhcisOpen(false)} />}
+      {rosterNo && <VillageRoster no={rosterNo} name={(villages || []).find((v) => v.no === rosterNo)?.name} st={st} rows={rows} onClose={() => setRosterNo('')} onRefresh={() => setStTick((n) => n + 1)} />}
       {authenOpen && <AuthenQueue rows={rows} onClose={() => setAuthenOpen(false)} />}
       {linkOpen && <AsmLinkModal villages={villages} onClose={() => setLinkOpen(false)} />}
       {del && <ConfirmDialog message={`ลบผลคัดกรองของ ${del.name}?`} onConfirm={remove} onCancel={() => setDel(null)} />}

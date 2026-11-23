@@ -9,6 +9,7 @@ const call = (name) => async (data) => {
 export const ncdAsmInfo = call('ncdAsmInfo');
 export const ncdAsmSubmit = call('ncdAsmSubmit');
 export const ncdAsmRoster = call('ncdAsmRoster');
+export const ncdTargetStatus = call('ncdTargetStatus');
 
 // รหัสรายหมู่บ้าน = HMAC-SHA256(รหัสหลัก, 'ncd-v'+หมู่) 24 ตัวแรก (ต้องตรงกับ Cloud Function ncdVillageKey)
 export const villageKey = async (master, no) => {
