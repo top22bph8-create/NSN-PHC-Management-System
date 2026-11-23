@@ -7,6 +7,9 @@ import { todayStr } from '../../lib/thai';
 import { Modal } from '../../components/ui';
 import { classify2Q, feeStatus, ppCodes } from '../../lib/ncdScreen';
 import { openNcdFormPrint } from '../../lib/ncdFormPrint';
+import { openNcdRosterPrint } from '../../lib/ncdRosterPrint';
+import { ncdTargetStatus } from '../../lib/ncdPublic';
+import { ageFromBirth } from '../../lib/ncdScreen';
 
 export const OVL = { normal: 'ปกติ', risk: 'กลุ่มเสี่ยง', suspect: 'สงสัย/ส่งต่อ' };
 
@@ -68,6 +71,27 @@ export function ExportModal({ rows, filtered, villages, target, onClose }) {
   const vname = (no) => (villages || []).find((v) => v.no === String(no))?.name || '';
   const vRows = useMemo(() => (vil ? rows.filter((r) => String(r.villageNo) === vil) : []), [rows, vil]);
   const people = useMemo(() => { const k = pq.trim(); if (!k) return []; return rows.filter((r) => `${r.name} ${r.cid}`.includes(k)).slice(0, 8); }, [rows, pq]);
+  const [rv, setRv] = useState('');
+  // รายชื่อกลุ่มเป้าหมาย ทำแล้ว / ยังไม่ทำ (ดึงจากเซิร์ฟเวอร์: จับคู่รายชื่อเป้าหมายกับ JHCIS + ผลคัดกรองในแอป ปีงบนี้)
+  const roster = async (which, how) => {
+    setBusy(`r-${which}-${how}`); setErr('');
+    try {
+      const st = await ncdTargetStatus({ v: rv || 'all' }); const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+      const list = (st.people || []).filter((p) => (which === 'done' ? p.status : !p.status));
+      const scope = rv ? `ม.${rv} ${vname(rv)}` : 'ทุกหมู่บ้าน';
+      if (!list.length) { setErr(which === 'done' ? 'ยังไม่มีผู้ที่ทำแล้วในขอบเขตนี้' : 'ไม่มีผู้ที่ยังไม่ทำในขอบเขตนี้ (หรือยังไม่ได้ซิงก์รายชื่อเป้าหมาย)'); return; }
+      if (how === 'form') { const rs = list.map((p) => byId[p.appId]).filter(Boolean); if (!rs.length) { setErr('ผู้ที่ทำแล้วเป็นการทำใน JHCIS เดิม ไม่มีผลละเอียดในระบบนี้ จึงพิมพ์ตามแบบฟอร์มไม่ได้'); return; } openNcdFormPrint(rs); return; }
+      const rec = (p) => (p.appId ? byId[p.appId] : null);
+      const base = (p) => ({ หมู่: p.moo, 'ชื่อ-สกุล': p.name, เพศ: p.sex === 'M' ? 'ชาย' : 'หญิง', อายุ: ageFromBirth(p.birth) ?? '', บ้านเลขที่: p.hno || '', 'เลขบัตร (ปิดบัง)': p.mask || '' });
+      const data = list.map((p) => { const r = rec(p); return which === 'done'
+        ? { ...base(p), ทำที่: p.jh ? 'JHCIS' : 'บันทึกในแอป', วันที่คัดกรอง: r?.screenDate || '', สรุปผล: r ? OVL[r.overall] || '' : '', ความดัน: r?.bpSys ? `${r.bpSys}/${r.bpDia}` : '', น้ำตาล: r?.glucose ?? '', BMI: r?.bmi ?? '', ผู้คัดกรอง: r?.screenedBy || r?.asmName || '' }
+        : { ...base(p), สถานะ: 'ยังไม่ทำ', 'ผู้รับผิดชอบ/อสม.': '', 'วันที่นัด/หมายเหตุ': '' }; });
+      const label = which === 'done' ? 'ผู้ที่ทำแล้ว' : 'ผู้ที่ยังไม่ทำ';
+      if (how === 'xlsx') { const XLSX = await import('xlsx'); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), sheetName(label)); XLSX.writeFile(wb, `ncd-${which}-${rv ? `moo${rv}` : 'all'}-${todayStr()}.xlsx`); return; }
+      const head = Object.keys(data[0]);
+      openNcdRosterPrint({ title: `รายชื่อกลุ่มเป้าหมายคัดกรอง NCD — ${label}`, sub: `${scope} · ปีงบประมาณเริ่ม ${st.fy} · รายชื่อเป้าหมาย ณ ${st.asOf || '-'}`, head, rows: data.map((d) => head.map((h) => d[h])), widths: which === 'done' ? [4, 5, 20, 5, 5, 7, 14, 9, 9, 9, 8, 7, 5, 8].slice(0, head.length + 1) : [4, 6, 24, 6, 6, 9, 16, 9, 10, 10].slice(0, head.length + 1) });
+    } catch (e) { setErr(e.message || 'ดึงรายชื่อไม่สำเร็จ'); } finally { setBusy(''); }
+  };
   const run = async (kind, data, fname) => { setBusy(`${kind}${fname || ''}`); setErr(''); try { await exportWorkbook(kind, data, villages, target, fy, fname); } catch (e) { setErr(e.message || 'ส่งออกไม่สำเร็จ'); } finally { setBusy(''); } };
   const H = ({ children }) => <div className="pt-1 text-xs font-bold uppercase tracking-wide text-slate-500">{children}</div>;
   const Btn = ({ icon: Icon, children, onClick, disabled, tone = 'btn-outline' }) => <button type="button" className={`${tone} !py-2 text-sm`} disabled={disabled} onClick={onClick}><Icon className="h-4 w-4" /> {children}</button>;
@@ -80,6 +104,17 @@ export function ExportModal({ rows, filtered, villages, target, onClose }) {
         <Opt icon={FileText} tone="bg-gradient-to-br from-rose-400 to-red-500" title="PDF แบบฟอร์ม — ตามตัวกรอง" desc={`พิมพ์แบบฟอร์มการตรวจสุขภาพประชาชนจากผลคัดกรอง ${filtered.length} ราย`} busy={false} onClick={() => filtered.length && openNcdFormPrint(filtered)} />
         <Opt icon={FileText} tone="bg-gradient-to-br from-slate-400 to-slate-600" title="PDF ฟอร์มเปล่า" desc="แบบฟอร์มเปล่าสำหรับให้ อสม. กรอกด้วยมือ" busy={false} onClick={() => openNcdFormPrint([], { blank: true })} />
         <Opt icon={ClipboardList} tone="bg-gradient-to-br from-violet-500 to-purple-600" title="ใบรหัสสำหรับคีย์ JHCIS" desc="ค่าที่วัด รหัสวินิจฉัย Specialpp และ 12001 ของรายการที่เลือกในตัวกรอง" busy={busy === 'jhcis'} onClick={() => run('jhcis', filtered)} />
+
+        <div className="border-t pt-3"><H>รายชื่อกลุ่มเป้าหมาย: ทำแล้ว / ยังไม่ทำ</H>
+          <select aria-label="ขอบเขตหมู่บ้านของรายชื่อ" className="input mt-1" value={rv} onChange={(e) => setRv(e.target.value)}><option value="">ทุกหมู่บ้าน</option>{nos.map((no) => <option key={no} value={no}>ม.{no} {vname(no)}</option>)}</select>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2"><div className="mb-1 text-sm font-bold text-emerald-800">ผู้ที่ทำแล้ว</div><div className="flex flex-wrap gap-1.5">
+              <Btn icon={FileSpreadsheet} disabled={!!busy} onClick={() => roster('done', 'xlsx')}>Excel</Btn><Btn icon={FileText} disabled={!!busy} onClick={() => roster('done', 'pdf')}>PDF รายชื่อ</Btn><Btn icon={FileText} disabled={!!busy} onClick={() => roster('done', 'form')}>PDF ตามแบบฟอร์ม</Btn></div></div>
+            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-2"><div className="mb-1 text-sm font-bold text-rose-800">ผู้ที่ยังไม่ทำ</div><div className="flex flex-wrap gap-1.5">
+              <Btn icon={FileSpreadsheet} disabled={!!busy} onClick={() => roster('todo', 'xlsx')}>Excel</Btn><Btn icon={FileText} disabled={!!busy} onClick={() => roster('todo', 'pdf')}>PDF รายชื่อ</Btn></div></div>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">ทำแล้ว = ทำใน JHCIS หรือบันทึกในแอปปีงบนี้ · “PDF ตามแบบฟอร์ม” พิมพ์เฉพาะคนที่มีผลคัดกรองในระบบนี้ (คนที่ทำใน JHCIS เดิมไม่มีผลละเอียด)</p>
+        </div>
 
         <div className="border-t pt-3"><H>รายหมู่บ้าน</H>
           <select aria-label="เลือกหมู่บ้าน" className="input mt-1" value={vil} onChange={(e) => setVil(e.target.value)}><option value="">เลือกหมู่บ้าน…</option>{nos.map((no) => <option key={no} value={no}>ม.{no} {vname(no)} ({rows.filter((r) => String(r.villageNo) === no).length} ราย)</option>)}</select>
