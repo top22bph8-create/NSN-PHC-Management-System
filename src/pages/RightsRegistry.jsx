@@ -12,6 +12,7 @@ import { openSurveyPrint, houseOf } from '../lib/surveyPrint';
 import { PageHeader } from '../components/Logo';
 import { Modal, Spinner } from '../components/ui';
 import { VILLAGES, VILLAGES_ASOF } from '../config/villages';
+import RightsCompare from './rights/RightsCompare';
 
 const nf = (n) => Number(n || 0).toLocaleString('th-TH');
 const TL = { 1: '1 อยู่จริงและมีชื่อในทะเบียนบ้าน', 2: '2 อยู่จริงแต่ไม่มีชื่อในทะเบียนบ้าน', 3: '3 มีชื่อในทะเบียนบ้านแต่ไม่ได้อยู่', 4: '4 ไม่มีชื่อในทะเบียนบ้านและไม่ได้อยู่' };
@@ -33,6 +34,7 @@ export default function RightsRegistry() {
   useEffect(() => onSnapshot(collection(db, 'rightsRegistry'), (s) => setDocs(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setDocs([])), []);
   const [ov, setOv] = useState({}); // กำหนดหมู่บ้านเอง: pid -> หมู่ที่ (เก็บแยกใน rightsVillageOverrides เพราะข้อมูลหลักถูกซิงก์ทับจาก JHCIS)
   const [deadOpen, setDeadOpen] = useState(false);
+  const [cmpOpen, setCmpOpen] = useState(false);
   const [fix, setFix] = useState(null); // {kw, tab, busy}
   useEffect(() => onSnapshot(collection(db, 'rightsVillageOverrides'), (s) => setOv(Object.fromEntries(s.docs.map((d) => [d.id, Number(d.data().no)]))), () => setOv({})), []);
   const sum = docs?.find((d) => d.id === 'summary');
@@ -100,6 +102,7 @@ export default function RightsRegistry() {
     list.push({ no: -1, name: 'ไม่ระบุหมู่/ไม่มีที่อยู่', houses: 0, households: 0, ...(m[-1] || {}), pop: reg(m[-1]) });
     return list;
   }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const jhAll = useMemo(() => { const m = new Map(); ['RUC', 'ROFC', 'RSSS', 'RLGO', 'RNRD', 'ROTH', 'RNON', 'A', 'C', 'B'].forEach((k) => rowsOf(k).forEach((r) => { if (!m.has(r[0])) m.set(r[0], r); })); return [...m.values()]; }, [docs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!docs) return <Spinner />;
   const c = sum?.counts || {};
   const deadAll = sum?.deadReport?.list || [];
@@ -146,6 +149,16 @@ export default function RightsRegistry() {
           <p className="mt-1 text-xs text-slate-400">ข้อมูลซิงก์จาก JHCIS ณ {sum?.asOf ? fmtDate(sum.asOf) : '-'} (ชื่อหมู่บ้าน จำนวนบ้าน ประชากร และสิทธิ์ ดึงสดจาก JHCIS ทุกรอบซิงก์{(sum?.villages || []).some((v) => v.households != null) ? ' รวมครอบครัว' : ` · ครอบครัวเป็นค่าที่บันทึกไว้ ณ ${VILLAGES_ASOF}`}) · ประชากรและสิทธิ์นับจากทะเบียนราษฎร์ (ประเภทอาศัย 1,3) แยกตามหมู่ในที่อยู่ · “UC/Wel ตรง/ไม่ตรง” ใช้เกณฑ์เดียวกับด้านบน</p>
         </section>
       )}
+      {sum && (
+        <section className="card flex flex-wrap items-center justify-between gap-3 border-sky-200 bg-sky-50/40 p-4 print:hidden">
+          <div>
+            <h3 className="font-bold text-slate-700">🔍 เปรียบเทียบสิทธิ์กับไฟล์จาก สปสช./แหล่งอื่น</h3>
+            <p className="text-xs text-slate-500">นำเข้าไฟล์ Excel เพื่อเทียบกับสิทธิ์ที่อยู่ใน JHCIS ({nf(jhAll.length)} คน) · ยึดไฟล์เป็นหลักฐาน · เทียบในเบราว์เซอร์ ไม่เก็บไฟล์/เลขบัตร</p>
+          </div>
+          <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2 font-bold text-white shadow hover:shadow-md" onClick={() => setCmpOpen(true)}>📎 นำเข้าไฟล์เพื่อเปรียบเทียบ</button>
+        </section>
+      )}
+      {cmpOpen && <RightsCompare jhRows={jhAll} onClose={() => setCmpOpen(false)} />}
       {sum?.deadReport && (
         <section className="card flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
