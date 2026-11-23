@@ -1,11 +1,12 @@
 // เครื่องมือรายงาน NCD: ส่งออก Excel (ทั้งหมด / แยกรายหมู่บ้าน / ใบรหัสสำหรับคีย์ JHCIS) และหน้าต่าง "นำเข้า JHCIS"
 import { useMemo, useState } from 'react';
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { CheckCircle2, ClipboardList, DatabaseZap, Download, FileSpreadsheet, MapPinned, Send } from 'lucide-react';
+import { CheckCircle2, ClipboardList, DatabaseZap, Download, FileSpreadsheet, FileText, MapPinned, Search, Send, User } from 'lucide-react';
 import { db } from '../../firebase';
 import { todayStr } from '../../lib/thai';
 import { Modal } from '../../components/ui';
 import { classify2Q, feeStatus, ppCodes } from '../../lib/ncdScreen';
+import { openNcdFormPrint } from '../../lib/ncdFormPrint';
 
 export const OVL = { normal: 'ปกติ', risk: 'กลุ่มเสี่ยง', suspect: 'สงสัย/ส่งต่อ' };
 
@@ -35,7 +36,7 @@ const jhcisSheet = (r) => {
 
 const sheetName = (t) => String(t).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31);
 
-export async function exportWorkbook(kind, rows, villages, target, fy) {
+export async function exportWorkbook(kind, rows, villages, target, fy, fname) {
   const XLSX = await import('xlsx'); const wb = XLSX.utils.book_new();
   const add = (name, data) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.length ? data : [{ ข้อมูล: 'ไม่มีรายการ' }]), sheetName(name));
   const vname = (no) => (villages || []).find((v) => v.no === String(no))?.name || '';
@@ -47,7 +48,7 @@ export async function exportWorkbook(kind, rows, villages, target, fy) {
     const none = rows.filter((r) => !r.villageNo); if (none.length) add('ไม่ระบุหมู่', none.map(rowMap));
     XLSX.writeFile(wb, `ncd-screening-by-village-${todayStr()}.xlsx`); return;
   }
-  add('คัดกรอง NCD', rows.map(rowMap)); XLSX.writeFile(wb, `ncd-screening-${todayStr()}.xlsx`);
+  add('คัดกรอง NCD', rows.map(rowMap)); XLSX.writeFile(wb, `${fname || `ncd-screening-${todayStr()}`}.xlsx`);
 }
 
 const Opt = ({ icon: Icon, title, desc, onClick, busy, tone }) => (
@@ -58,16 +59,50 @@ const Opt = ({ icon: Icon, title, desc, onClick, busy, tone }) => (
   </button>
 );
 
+// เมนูรายงาน: Excel / PDF แบบฟอร์ม / ฟอร์มเปล่า / ใบรหัส JHCIS — ส่งออกได้ทั้งภาพรวม รายหมู่บ้าน และรายบุคคล
 export function ExportModal({ rows, filtered, villages, target, onClose }) {
   const [busy, setBusy] = useState(''); const [err, setErr] = useState('');
+  const [vil, setVil] = useState(''); const [pq, setPq] = useState('');
   const fy = fyStartOf();
-  const run = async (kind, data) => { setBusy(kind); setErr(''); try { await exportWorkbook(kind, data, villages, target, fy); } catch (e) { setErr(e.message || 'ส่งออกไม่สำเร็จ'); } finally { setBusy(''); } };
+  const nos = useMemo(() => [...new Set([...(villages || []).map((v) => v.no), ...rows.map((r) => String(r.villageNo || ''))])].filter(Boolean).sort((a, b) => Number(a) - Number(b)), [villages, rows]);
+  const vname = (no) => (villages || []).find((v) => v.no === String(no))?.name || '';
+  const vRows = useMemo(() => (vil ? rows.filter((r) => String(r.villageNo) === vil) : []), [rows, vil]);
+  const people = useMemo(() => { const k = pq.trim(); if (!k) return []; return rows.filter((r) => `${r.name} ${r.cid}`.includes(k)).slice(0, 8); }, [rows, pq]);
+  const run = async (kind, data, fname) => { setBusy(`${kind}${fname || ''}`); setErr(''); try { await exportWorkbook(kind, data, villages, target, fy, fname); } catch (e) { setErr(e.message || 'ส่งออกไม่สำเร็จ'); } finally { setBusy(''); } };
+  const H = ({ children }) => <div className="pt-1 text-xs font-bold uppercase tracking-wide text-slate-500">{children}</div>;
+  const Btn = ({ icon: Icon, children, onClick, disabled, tone = 'btn-outline' }) => <button type="button" className={`${tone} !py-2 text-sm`} disabled={disabled} onClick={onClick}><Icon className="h-4 w-4" /> {children}</button>;
   return (
-    <Modal title="ส่งออกรายงาน Excel" onClose={onClose} footer={<button className="btn btn-outline" onClick={onClose}>ปิด</button>}>
-      <div className="space-y-2.5">
-        <Opt icon={FileSpreadsheet} tone="bg-gradient-to-br from-emerald-500 to-teal-600" title="รายงานทั้งหมด" desc={`ตามตัวกรองที่เลือกอยู่ตอนนี้ ${filtered.length} รายการ · 1 ชีต`} busy={busy === 'all'} onClick={() => run('all', filtered)} />
-        <Opt icon={MapPinned} tone="bg-gradient-to-br from-sky-500 to-blue-600" title="แยกรายหมู่บ้าน" desc={`สรุปความครอบคลุมรายหมู่ + 1 ชีตต่อหมู่บ้าน (ข้อมูลทั้งหมด ${rows.length} รายการ)`} busy={busy === 'village'} onClick={() => run('village', rows)} />
+    <Modal title="รายงาน NCD" onClose={onClose} footer={<button className="btn btn-outline" onClick={onClose}>ปิด</button>}>
+      <div className="space-y-3">
+        <H>ภาพรวม</H>
+        <Opt icon={FileSpreadsheet} tone="bg-gradient-to-br from-emerald-500 to-teal-600" title="Excel — ทั้งหมด" desc={`ตามตัวกรองที่เลือกอยู่ตอนนี้ ${filtered.length} รายการ · 1 ชีต`} busy={busy === 'all'} onClick={() => run('all', filtered)} />
+        <Opt icon={MapPinned} tone="bg-gradient-to-br from-sky-500 to-blue-600" title="Excel — แยกรายหมู่บ้านทุกหมู่" desc={`สรุปความครอบคลุมรายหมู่ + 1 ชีตต่อหมู่บ้าน (ข้อมูลทั้งหมด ${rows.length} รายการ)`} busy={busy === 'village'} onClick={() => run('village', rows)} />
+        <Opt icon={FileText} tone="bg-gradient-to-br from-rose-400 to-red-500" title="PDF แบบฟอร์ม — ตามตัวกรอง" desc={`พิมพ์แบบฟอร์มการตรวจสุขภาพประชาชนจากผลคัดกรอง ${filtered.length} ราย`} busy={false} onClick={() => filtered.length && openNcdFormPrint(filtered)} />
+        <Opt icon={FileText} tone="bg-gradient-to-br from-slate-400 to-slate-600" title="PDF ฟอร์มเปล่า" desc="แบบฟอร์มเปล่าสำหรับให้ อสม. กรอกด้วยมือ" busy={false} onClick={() => openNcdFormPrint([], { blank: true })} />
         <Opt icon={ClipboardList} tone="bg-gradient-to-br from-violet-500 to-purple-600" title="ใบรหัสสำหรับคีย์ JHCIS" desc="ค่าที่วัด รหัสวินิจฉัย Specialpp และ 12001 ของรายการที่เลือกในตัวกรอง" busy={busy === 'jhcis'} onClick={() => run('jhcis', filtered)} />
+
+        <div className="border-t pt-3"><H>รายหมู่บ้าน</H>
+          <select aria-label="เลือกหมู่บ้าน" className="input mt-1" value={vil} onChange={(e) => setVil(e.target.value)}><option value="">เลือกหมู่บ้าน…</option>{nos.map((no) => <option key={no} value={no}>ม.{no} {vname(no)} ({rows.filter((r) => String(r.villageNo) === no).length} ราย)</option>)}</select>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Btn icon={FileSpreadsheet} disabled={!vRows.length || !!busy} onClick={() => run('all', vRows, `ncd-moo${vil}-${todayStr()}`)}>Excel หมู่นี้ ({vRows.length})</Btn>
+            <Btn icon={FileText} disabled={!vRows.length} onClick={() => openNcdFormPrint(vRows)}>PDF แบบฟอร์มหมู่นี้ ({vRows.length})</Btn>
+            <Btn icon={ClipboardList} disabled={!vRows.length || !!busy} onClick={() => run('jhcis', vRows)}>ใบรหัส JHCIS หมู่นี้</Btn>
+          </div>
+        </div>
+
+        <div className="border-t pt-3"><H>รายบุคคล</H>
+          <div className="relative mt-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input aria-label="ค้นหาชื่อหรือเลขบัตร" className="input pl-9" placeholder="พิมพ์ชื่อ หรือเลขบัตร เพื่อเลือกรายบุคคล" value={pq} onChange={(e) => setPq(e.target.value)} /></div>
+          <ul className="mt-2 space-y-1">
+            {people.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-2 text-sm">
+                <User className="h-4 w-4 text-slate-400" />
+                <div className="min-w-0 flex-1"><b>{r.name}</b><div className="text-xs text-slate-500">ม.{r.villageNo || '-'} · {r.screenDate} · {OVL[r.overall] || ''}</div></div>
+                <Btn icon={FileText} onClick={() => openNcdFormPrint([r])}>PDF</Btn>
+                <Btn icon={FileSpreadsheet} disabled={!!busy} onClick={() => run('all', [r], `ncd-${String(r.cid || r.id).slice(-6)}-${r.screenDate}`)}>Excel</Btn>
+              </li>))}
+            {pq.trim() && !people.length && <li className="p-2 text-center text-xs text-slate-500">ไม่พบรายชื่อที่ตรงกัน</li>}
+          </ul>
+        </div>
         {err && <div className="rounded-lg bg-red-50 p-2 text-sm text-red-700" role="alert">{err}</div>}
       </div>
     </Modal>
