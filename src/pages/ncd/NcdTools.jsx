@@ -1,7 +1,7 @@
 // เครื่องมือรายงาน NCD: ส่งออก Excel (ทั้งหมด / แยกรายหมู่บ้าน / ใบรหัสสำหรับคีย์ JHCIS) และหน้าต่าง "นำเข้า JHCIS"
 import { useMemo, useState } from 'react';
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { CheckCircle2, ClipboardList, DatabaseZap, Download, FileSpreadsheet, FileText, MapPinned, Search, Send, User } from 'lucide-react';
+import { CheckCircle2, ClipboardList, DatabaseZap, Download, FileSpreadsheet, FileText, MapPinned, Send, User } from 'lucide-react';
 import { db } from '../../firebase';
 import { todayStr } from '../../lib/thai';
 import { Modal } from '../../components/ui';
@@ -94,46 +94,47 @@ export function ExportModal({ rows, filtered, villages, target, onClose }) {
   };
   const run = async (kind, data, fname) => { setBusy(`${kind}${fname || ''}`); setErr(''); try { await exportWorkbook(kind, data, villages, target, fy, fname); } catch (e) { setErr(e.message || 'ส่งออกไม่สำเร็จ'); } finally { setBusy(''); } };
   const H = ({ children }) => <div className="pt-1 text-xs font-bold uppercase tracking-wide text-slate-500">{children}</div>;
-  const Btn = ({ icon: Icon, children, onClick, disabled, tone = 'btn-outline' }) => <button type="button" className={`${tone} !py-2 text-sm`} disabled={disabled} onClick={onClick}><Icon className="h-4 w-4" /> {children}</button>;
+  const BT = { x: 'bg-gradient-to-br from-emerald-400 to-teal-500', p: 'bg-gradient-to-br from-rose-400 to-red-500', f: 'bg-gradient-to-br from-sky-400 to-blue-500', k: 'bg-gradient-to-br from-violet-400 to-purple-500' };
+  const Btn = ({ kind = 'x', emoji, children, onClick, disabled }) => <button type="button" className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 ${BT[kind]}`} disabled={disabled} onClick={onClick}><span aria-hidden="true">{emoji}</span> {children}</button>;
   return (
     <Modal title="รายงาน NCD" onClose={onClose} footer={<button className="btn btn-outline" onClick={onClose}>ปิด</button>}>
       <div className="space-y-3">
-        <H>ภาพรวม</H>
+        <H>📊 ภาพรวม</H>
         <Opt icon={FileSpreadsheet} tone="bg-gradient-to-br from-emerald-500 to-teal-600" title="Excel — ทั้งหมด" desc={`ตามตัวกรองที่เลือกอยู่ตอนนี้ ${filtered.length} รายการ · 1 ชีต`} busy={busy === 'all'} onClick={() => run('all', filtered)} />
         <Opt icon={MapPinned} tone="bg-gradient-to-br from-sky-500 to-blue-600" title="Excel — แยกรายหมู่บ้านทุกหมู่" desc={`สรุปความครอบคลุมรายหมู่ + 1 ชีตต่อหมู่บ้าน (ข้อมูลทั้งหมด ${rows.length} รายการ)`} busy={busy === 'village'} onClick={() => run('village', rows)} />
         <Opt icon={FileText} tone="bg-gradient-to-br from-rose-400 to-red-500" title="PDF แบบฟอร์ม — ตามตัวกรอง" desc={`พิมพ์แบบฟอร์มการตรวจสุขภาพประชาชนจากผลคัดกรอง ${filtered.length} ราย`} busy={false} onClick={() => filtered.length && openNcdFormPrint(filtered)} />
         <Opt icon={FileText} tone="bg-gradient-to-br from-slate-400 to-slate-600" title="PDF ฟอร์มเปล่า" desc="แบบฟอร์มเปล่าสำหรับให้ อสม. กรอกด้วยมือ" busy={false} onClick={() => openNcdFormPrint([], { blank: true })} />
         <Opt icon={ClipboardList} tone="bg-gradient-to-br from-violet-500 to-purple-600" title="ใบรหัสสำหรับคีย์ JHCIS" desc="ค่าที่วัด รหัสวินิจฉัย Specialpp และ 12001 ของรายการที่เลือกในตัวกรอง" busy={busy === 'jhcis'} onClick={() => run('jhcis', filtered)} />
 
-        <div className="border-t pt-3"><H>รายชื่อกลุ่มเป้าหมาย: ทำแล้ว / ยังไม่ทำ</H>
+        <div className="border-t pt-3"><H>👥 รายชื่อกลุ่มเป้าหมาย: ทำแล้ว / ยังไม่ทำ</H>
           <select aria-label="ขอบเขตหมู่บ้านของรายชื่อ" className="input mt-1" value={rv} onChange={(e) => setRv(e.target.value)}><option value="">ทุกหมู่บ้าน</option>{nos.map((no) => <option key={no} value={no}>ม.{no} {vname(no)}</option>)}</select>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2"><div className="mb-1 text-sm font-bold text-emerald-800">ผู้ที่ทำแล้ว</div><div className="flex flex-wrap gap-1.5">
-              <Btn icon={FileSpreadsheet} disabled={!!busy} onClick={() => roster('done', 'xlsx')}>Excel</Btn><Btn icon={FileText} disabled={!!busy} onClick={() => roster('done', 'pdf')}>PDF รายชื่อ</Btn><Btn icon={FileText} disabled={!!busy} onClick={() => roster('done', 'form')}>PDF ตามแบบฟอร์ม</Btn></div></div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-2"><div className="mb-1 text-sm font-bold text-rose-800">ผู้ที่ยังไม่ทำ</div><div className="flex flex-wrap gap-1.5">
-              <Btn icon={FileSpreadsheet} disabled={!!busy} onClick={() => roster('todo', 'xlsx')}>Excel</Btn><Btn icon={FileText} disabled={!!busy} onClick={() => roster('todo', 'pdf')}>PDF รายชื่อ</Btn></div></div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2"><div className="mb-1 text-sm font-bold text-emerald-800">ผู้ที่ทำแล้ว</div><div className="grid grid-cols-2 gap-1.5">
+              <Btn kind="x" emoji="📊" disabled={!!busy} onClick={() => roster('done', 'xlsx')}>Excel</Btn><Btn kind="p" emoji="📄" disabled={!!busy} onClick={() => roster('done', 'pdf')}>PDF รายชื่อ</Btn><div className="col-span-2"><Btn kind="f" emoji="📝" disabled={!!busy} onClick={() => roster('done', 'form')}>PDF ตามแบบฟอร์ม</Btn></div></div></div>
+            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-2"><div className="mb-2 text-sm font-bold text-rose-800">⏳ ผู้ที่ยังไม่ทำ</div><div className="grid grid-cols-2 gap-1.5">
+              <Btn kind="x" emoji="📊" disabled={!!busy} onClick={() => roster('todo', 'xlsx')}>Excel</Btn><Btn kind="p" emoji="📄" disabled={!!busy} onClick={() => roster('todo', 'pdf')}>PDF รายชื่อ</Btn></div></div>
           </div>
           <p className="mt-1 text-xs text-slate-500">ทำแล้ว = ทำใน JHCIS หรือบันทึกในแอปปีงบนี้ · “PDF ตามแบบฟอร์ม” พิมพ์เฉพาะคนที่มีผลคัดกรองในระบบนี้ (คนที่ทำใน JHCIS เดิมไม่มีผลละเอียด)</p>
         </div>
 
-        <div className="border-t pt-3"><H>รายหมู่บ้าน</H>
+        <div className="border-t pt-3"><H>🏘️ รายหมู่บ้าน</H>
           <select aria-label="เลือกหมู่บ้าน" className="input mt-1" value={vil} onChange={(e) => setVil(e.target.value)}><option value="">เลือกหมู่บ้าน…</option>{nos.map((no) => <option key={no} value={no}>ม.{no} {vname(no)} ({rows.filter((r) => String(r.villageNo) === no).length} ราย)</option>)}</select>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Btn icon={FileSpreadsheet} disabled={!vRows.length || !!busy} onClick={() => run('all', vRows, `ncd-moo${vil}-${todayStr()}`)}>Excel หมู่นี้ ({vRows.length})</Btn>
-            <Btn icon={FileText} disabled={!vRows.length} onClick={() => openNcdFormPrint(vRows)}>PDF แบบฟอร์มหมู่นี้ ({vRows.length})</Btn>
-            <Btn icon={ClipboardList} disabled={!vRows.length || !!busy} onClick={() => run('jhcis', vRows)}>ใบรหัส JHCIS หมู่นี้</Btn>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <Btn kind="x" emoji="📊" disabled={!vRows.length || !!busy} onClick={() => run('all', vRows, `ncd-moo${vil}-${todayStr()}`)}>Excel หมู่นี้ ({vRows.length})</Btn>
+            <Btn kind="p" emoji="📄" disabled={!vRows.length} onClick={() => openNcdFormPrint(vRows)}>PDF แบบฟอร์มหมู่นี้ ({vRows.length})</Btn>
+            <Btn kind="k" emoji="📋" disabled={!vRows.length || !!busy} onClick={() => run('jhcis', vRows)}>ใบรหัส JHCIS หมู่นี้</Btn>
           </div>
         </div>
 
-        <div className="border-t pt-3"><H>รายบุคคล</H>
-          <div className="relative mt-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input aria-label="ค้นหาชื่อหรือเลขบัตร" className="input pl-9" placeholder="พิมพ์ชื่อ หรือเลขบัตร เพื่อเลือกรายบุคคล" value={pq} onChange={(e) => setPq(e.target.value)} /></div>
+        <div className="border-t pt-3"><H>🧑 รายบุคคล</H>
+          <input aria-label="ค้นหาชื่อหรือเลขบัตร" className="input mt-1" placeholder="พิมพ์ชื่อ หรือเลขบัตร" value={pq} onChange={(e) => setPq(e.target.value)} autoComplete="off" />
           <ul className="mt-2 space-y-1">
             {people.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-2 text-sm">
                 <User className="h-4 w-4 text-slate-400" />
                 <div className="min-w-0 flex-1"><b>{r.name}</b><div className="text-xs text-slate-500">ม.{r.villageNo || '-'} · {r.screenDate} · {OVL[r.overall] || ''}</div></div>
-                <Btn icon={FileText} onClick={() => openNcdFormPrint([r])}>PDF</Btn>
-                <Btn icon={FileSpreadsheet} disabled={!!busy} onClick={() => run('all', [r], `ncd-${String(r.cid || r.id).slice(-6)}-${r.screenDate}`)}>Excel</Btn>
+                <div className="w-20"><Btn kind="p" emoji="📄" onClick={() => openNcdFormPrint([r])}>PDF</Btn></div>
+                <div className="w-24"><Btn kind="x" emoji="📊" disabled={!!busy} onClick={() => run('all', [r], `ncd-${String(r.cid || r.id).slice(-6)}-${r.screenDate}`)}>Excel</Btn></div>
               </li>))}
             {pq.trim() && !people.length && <li className="p-2 text-center text-xs text-slate-500">ไม่พบรายชื่อที่ตรงกัน</li>}
           </ul>
