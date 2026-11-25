@@ -139,6 +139,20 @@ service cloud.firestore {
       allow read: if isActive();
       allow write: if false;
     }
+    // งาน PM ข้อมูลข่าวสาร อำเภอเมืองสกลนคร: รายการไฟล์นำเข้าของแต่ละ รพ.สต. (ระบบตรวจสอบเงินค้างจ่ายจาก รพ.สกลนคร)
+    match /pmDebtFiles/{code} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    // รายงานพึงรับ รพ.สต. อำเภอเมือง: ยอดรวมรายงวด + ข้อมูลกรอกเอง (ไม่มีข้อมูลบุคคล)
+    match /pmReceivable/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
+    match /pmDistrictInputs/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isActive();
+    }
     match /serviceStats/{id} {
       allow read: if isActive();
       allow write: if false;
