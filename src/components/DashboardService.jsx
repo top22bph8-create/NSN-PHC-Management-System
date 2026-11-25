@@ -71,7 +71,7 @@ function RosterModal({ initial, onClose }) {
   );
 }
 
-export default function DashboardService() {
+export default function DashboardService({ hideLink = false }) {
   const [stats, setStats] = useState(null); // { 'YYYY-MM-DD': {visits, persons} }
   const [open, setOpen] = useState(null);
   const today = todayStr();
@@ -88,7 +88,7 @@ export default function DashboardService() {
     <div className="card mb-5 overflow-hidden">
       <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 px-4 py-2.5 text-white">
         <Activity className="h-5 w-5 shrink-0" /><h3 className="min-w-0 flex-1 text-sm font-bold !text-white sm:text-base">ผู้รับบริการ รพ.สต. (จาก JHCIS)</h3>
-        <Link to="/service-stats" className="shrink-0 text-xs underline opacity-90 hover:opacity-100">รายงานเต็ม</Link>
+        {!hideLink && <Link to="/service-stats" className="shrink-0 text-xs underline opacity-90 hover:opacity-100">รายงานเต็ม</Link>}
       </div>
       {stats === null ? <div className="p-4"><Spinner /></div> : (
         <div className="grid gap-4 p-4 md:grid-cols-[auto_1fr]">
