@@ -7,6 +7,8 @@ import { PERSON_REGISTRIES } from './config/personRegistries';
 import PersonRegistry from './pages/PersonRegistry';
 import UnitDuty from './pages/UnitDuty';
 import ServiceStats from './pages/ServiceStats';
+import PmInfo from './modules/pm/PmInfo';
+import HospitalDebt from './modules/pm/HospitalDebt';
 import RightsRegistry from './pages/RightsRegistry';
 import PopExport from './pages/PopExport';
 import PPFee from './pages/PPFee';
@@ -220,6 +222,8 @@ function Shell() {
           <Route path="pop-export" element={<Guard module="pop-export"><PopExport /></Guard>} />
           <Route path="ncd-screening" element={<Guard module="ncd-screening"><NcdScreening /></Guard>} />
           <Route path="pp-fee" element={<Guard module="pp-fee"><PPFee /></Guard>} />
+          <Route path="pm-info" element={<Guard module="pm-info"><PmInfo /></Guard>} />
+          <Route path="pm-info/hospital-debt" element={<Guard module="pm-info"><HospitalDebt /></Guard>} />
           <Route path="service-stats" element={<Guard module="service-stats"><ServiceStats /></Guard>} />
           <Route path="unit-blood" element={<Guard module="unit-duty"><UnitDuty kind="blood" /></Guard>} />
           <Route path="thai-booking" element={<Guard module="thai-booking"><ThaiBooking /></Guard>} />

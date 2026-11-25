@@ -56,6 +56,7 @@ export const ACCESS = {
   'reg-vhv': { read: ALL, write: ALL },
   'unit-duty': { read: ALL, write: ALL },
   'service-stats': { read: ALL, write: [] },
+  'pm-info': { read: ALL, write: ALL },
   'rights-registry': { read: ALL, write: [] },
   'pp-fee': { read: ALL, write: [] },
   'pop-export': { read: ALL, write: [] },
