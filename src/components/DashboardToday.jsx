@@ -86,7 +86,7 @@ export function TodayCards() {
   const dayInfo = DUTY_DAYS.find((d) => d.dow === dow);
 
   return (
-    <div className="mb-5 grid items-stretch gap-4 lg:grid-cols-3">
+    <div className="mb-5 grid items-stretch gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
       <Panel icon={Stethoscope} title="เวรประจำวันนี้" tone="bg-gradient-to-r from-sky-600 to-cyan-500" action={isAdmin ? <button className="inline-flex items-center gap-1 rounded-md bg-white/25 px-2 py-0.5 text-xs font-semibold hover:bg-white/40" onClick={() => setEditRoster(true)}><Pencil className="h-3 w-3" /> แก้ไขตารางเวร</button> : null}>
         {!duty || !dayInfo ? <Empty>วันนี้ไม่มีเวรประจำห้อง (วันหยุดสุดสัปดาห์)</Empty> : (
           <div>

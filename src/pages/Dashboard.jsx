@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import {
-  Car, Globe, Inbox, CalendarDays, Send, ArrowRight, Hammer, User,
+  Inbox, CalendarDays, Send, ArrowRight, Hammer, User, Clock, AlertTriangle,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -34,11 +34,15 @@ const LEAVE_TYPE_TONE = {
 };
 const leaveTone = (type) => LEAVE_TYPE_TONE[type] || LEAVE_TYPE_TONE['อื่น ๆ'];
 
-function Stat({ icon: Icon, label, value, tone }) {
+function Stat({ icon: Icon, label, value, tone, hint }) {
   return (
-    <div className="card flex items-center gap-3 p-4">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone}`}><Icon className="h-6 w-6" /></div>
-      <div><div className="text-2xl font-bold leading-none">{value}</div><div className="mt-1 text-sm text-slate-500">{label}</div></div>
+    <div className="card flex min-w-0 items-center gap-3 p-3 transition hover:shadow-md sm:p-4">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12 ${tone}`}><Icon className="h-5 w-5 sm:h-6 sm:w-6" /></div>
+      <div className="min-w-0">
+        <div className="text-2xl font-bold leading-none tabular-nums sm:text-3xl">{value}</div>
+        <div className="mt-1 truncate text-xs text-slate-500 sm:text-sm">{label}</div>
+        {hint && <div className="truncate text-[11px] text-slate-400">{hint}</div>}
+      </div>
     </div>
   );
 }
@@ -137,16 +141,20 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
-      <div className="relative mb-5 flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-600 to-brand-400 p-5 text-white shadow-md">
-        <div className="hidden shrink-0 rounded-2xl bg-white/90 p-2 shadow sm:block"><Logo size={88} /></div>
-        <div className="min-w-0">
-        <div className="text-sm text-brand-50">{today}</div>
-        <h1 className="mt-1 text-lg font-bold leading-snug !text-white sm:text-xl">{SYSTEM_NAME_TH}</h1>
-        <div className="text-sm text-brand-50">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
-        <div className="mt-1 text-brand-50">
-          {profile.email === 'top22bph8@gmail.com' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[normalizeRole(profile.role)]}`}
-        </div>
-        <div className="mt-1 text-sm text-brand-100">ปีงบประมาณ {fy}</div>
+      <div className="relative mb-4 flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-700 via-brand-600 to-brand-400 p-4 text-white shadow-md sm:gap-5 sm:p-6">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -bottom-14 right-24 hidden h-32 w-32 rounded-full bg-white/10 md:block" />
+        <div className="shrink-0 rounded-2xl bg-white/90 p-1.5 shadow sm:p-2"><Logo size={56} className="sm:hidden" /><Logo size={88} className="hidden sm:block" /></div>
+        <div className="relative min-w-0 flex-1">
+          <div className="text-xs text-brand-50 sm:text-sm">{today}</div>
+          <h1 className="mt-0.5 text-base font-bold leading-snug !text-white sm:text-xl lg:text-2xl">{SYSTEM_NAME_TH}</h1>
+          <div className="text-xs text-brand-50 sm:text-sm">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-sm font-medium sm:text-base">
+              {profile.email === 'top22bph8@gmail.com' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[normalizeRole(profile.role)]}`}
+            </span>
+            <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold">ปีงบประมาณ {fy}</span>
+          </div>
         </div>
       </div>
 
@@ -161,16 +169,18 @@ export default function Dashboard() {
           <>
             {m && (
               <>
-                <h2 className="mb-2 text-lg font-semibold">ภาพรวมงานธุรการ</h2>
-                <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
-                  <Stat icon={Inbox} label="หนังสือรับทั้งหมด" value={m.inTotal} tone="bg-brand-100 text-brand-700" />
-                  <Stat icon={Send} label="หนังสือส่งทั้งหมด" value={m.outTotal} tone="bg-sky-100 text-sky-700" />
+                <h2 className="mb-2 text-base font-semibold sm:text-lg">ภาพรวมงานธุรการ</h2>
+                <div className="mb-5 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+                  <Stat icon={Inbox} label="หนังสือรับทั้งหมด" value={m.inTotal} hint={`เดือนนี้ ${m.inMonth}`} tone="bg-brand-100 text-brand-700" />
+                  <Stat icon={Send} label="หนังสือส่งทั้งหมด" value={m.outTotal} hint={`เดือนนี้ ${m.outMonth}`} tone="bg-sky-100 text-sky-700" />
+                  <Stat icon={Clock} label="รอดำเนินการ" value={m.pending.length} hint={m.near.length ? `ใกล้ครบกำหนด ${m.near.length}` : 'ไม่มีใกล้ครบกำหนด'} tone="bg-amber-100 text-amber-700" />
+                  <Stat icon={AlertTriangle} label="เกินกำหนด" value={m.overdue.length} hint={m.overdue.length ? 'ควรเร่งติดตาม' : 'ไม่มีค้าง'} tone={m.overdue.length ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'} />
                 </div>
               </>
             )}
 
-            <h2 className="mb-3 text-lg font-semibold">กลุ่มงาน</h2>
-            <div className="mb-7 grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <h2 className="mb-3 text-base font-semibold sm:text-lg">กลุ่มงาน</h2>
+            <div className="mb-7 grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
               {GROUPS.map((g) => {
                 const items = g.items.filter((i) => !i.module || canRead(profile.role, i.module));
                 const live = items.filter((i) => i.ready);
@@ -179,7 +189,7 @@ export default function Dashboard() {
                   <div key={g.key} className="card overflow-hidden transition hover:shadow-lg">
                     <MenuLink item={g.items.length === 1 && g.items[0].href ? g.items[0] : { path: `/group/${g.key}` }} className={`flex items-center gap-3 bg-gradient-to-r ${g.tone} px-4 py-3 text-white`}>
                       <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-xl">{g.emoji}</span>
-                      <span className="flex-1 font-bold leading-snug">{g.title}</span>
+                      <span className="min-w-0 flex-1 font-bold leading-snug">{g.title}</span>
                       <ArrowRight className="h-5 w-5 opacity-70" />
                     </MenuLink>
                     <div className="p-2">
@@ -192,7 +202,7 @@ export default function Dashboard() {
                           ? 'my-1 flex items-center gap-3 rounded-xl border-2 border-dashed border-sky-400 bg-gradient-to-r from-sky-50 to-cyan-50 px-3 py-2.5 text-sm font-semibold text-sky-900 shadow-sm transition hover:border-sky-600 hover:shadow-md'
                           : 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50'}>
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${g.soft}`}><i.icon className="h-4 w-4" /></span>
-                          <span className="flex-1 leading-snug">{i.manual && i.emoji && <span className="emoji-blink mr-1 text-base">{i.emoji}</span>}{i.label}</span>
+                          <span className="min-w-0 flex-1 leading-snug">{i.manual && i.emoji && <span className="emoji-blink mr-1 text-base">{i.emoji}</span>}{i.label}</span>
                           {i.manual && <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[11px] font-bold text-white">คู่มือ</span>}
                           {statOf(i) && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${g.soft}`}>{statOf(i)}</span>}
                         </MenuLink>
@@ -206,29 +216,29 @@ export default function Dashboard() {
               })}
             </div>
 
-            <h2 className="mb-3 text-lg font-semibold">ภาพรวมและแจ้งเตือน</h2>
+            <h2 className="mb-3 text-base font-semibold sm:text-lg">ภาพรวมและแจ้งเตือน</h2>
             {m && (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="card overflow-hidden">
+              <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+                <div className="card overflow-hidden lg:col-span-2">
                   <div className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-cyan-500 px-4 py-2.5 text-white">
-                    <Inbox className="h-5 w-5" /><h3 className="flex-1 font-bold !text-white">จำนวนเอกสารรายเดือน (ปีงบประมาณ {fy})</h3>
-                    <span className="rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold">รับ {m.inTotal} · ส่ง {m.outTotal}</span>
+                    <Inbox className="h-5 w-5" /><h3 className="min-w-0 flex-1 text-sm font-bold !text-white sm:text-base">จำนวนเอกสารรายเดือน (ปีงบ {fy})</h3>
+                    <span className="shrink-0 rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold">รับ {m.inTotal} · ส่ง {m.outTotal}</span>
                   </div>
                   <div className="p-4">
-                    <div className="relative flex h-40 items-end gap-1 rounded-lg bg-gradient-to-b from-sky-50 to-white px-1 pt-2" role="img" aria-label="กราฟจำนวนหนังสือรับและส่งรายเดือน">
+                    <div className="relative flex h-44 items-end gap-0.5 sm:h-56 sm:gap-1.5 lg:h-64 rounded-lg bg-gradient-to-b from-sky-50 to-white px-1 pt-2" role="img" aria-label="กราฟจำนวนหนังสือรับและส่งรายเดือน">
                       {[25, 50, 75].map((g) => <div key={g} className="pointer-events-none absolute inset-x-0 border-t border-dashed border-sky-100" style={{ bottom: `${g * 0.8 + 20}%` }} />)}
                       {m.monthly.every((x) => !x.inc && !x.out) && <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">ยังไม่มีหนังสือรับ/ส่งในปีงบประมาณนี้</div>}
                       {m.monthly.map((x) => (
                         <div key={x.label} className="flex flex-1 flex-col items-center gap-1">
-                          <div className="flex h-32 w-full items-end justify-center gap-0.5">
+                          <div className="flex h-36 w-full items-end justify-center gap-px sm:h-48 sm:gap-0.5 lg:h-56">
                             <div className="w-1/2 rounded-t bg-gradient-to-t from-sky-700 to-sky-400" style={{ height: `${(x.inc / maxBar) * 100}%` }} title={`รับ ${x.inc}`} />
                             <div className="w-1/2 rounded-t bg-gradient-to-t from-fuchsia-600 to-pink-400" style={{ height: `${(x.out / maxBar) * 100}%` }} title={`ส่ง ${x.out}`} />
                           </div>
-                          <span className="text-[11px] text-slate-500">{x.label}</span>
+                          <span className="text-[10px] text-slate-500 sm:text-xs">{x.label}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 flex gap-4 text-sm text-slate-600"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-sky-500" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-pink-500" />หนังสือส่ง</span></div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 sm:text-sm"><span><i className="mr-1 inline-block h-3 w-3 rounded bg-sky-500" />หนังสือรับ</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-pink-500" />หนังสือส่ง</span></div>
                   </div>
                 </div>
 
@@ -236,13 +246,13 @@ export default function Dashboard() {
                   <div className="card overflow-hidden">
                     <div className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-white">
                       <CalendarDays className="h-5 w-5" /><h3 className="flex-1 font-bold !text-white">คนลาเดือน{leaveMonth.monthLabel}</h3>
-                      <span className="rounded-full bg-white/25 px-2.5 py-0.5 text-sm font-bold">{leaveMonth.onLeave.length}</span>
+                      <span className="shrink-0 rounded-full bg-white/25 px-2.5 py-0.5 text-sm font-bold">{leaveMonth.onLeave.length}</span>
                     </div>
                     <div className="p-4">
                     {leaveMonth.onLeave.length === 0 ? (
                       <p className="py-6 text-center text-slate-400">ไม่มีใครลาในเดือนนี้</p>
                     ) : (
-                      <ul className="divide-y divide-slate-100">
+                      <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
                         {leaveMonth.onLeave.map((l) => (
                           <li key={l.id} className="flex cursor-pointer items-center gap-2 py-2 hover:bg-slate-50" onClick={() => nav('/leave')}>
                             <User className="h-4 w-4 shrink-0 text-slate-400" />
