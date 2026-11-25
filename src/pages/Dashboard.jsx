@@ -12,6 +12,7 @@ import { REGISTRIES } from '../config/registries';
 import { GROUPS } from '../config/menu';
 import { TodayCards } from '../components/DashboardToday';
 import DashboardUnitDuty from '../components/DashboardUnitDuty';
+import DashboardService from '../components/DashboardService';
 import LineQuotaStatus from '../components/LineQuotaStatus';
 import LineQuotaCard from '../components/LineQuotaCard';
 import MenuLink from '../components/MenuLink';
@@ -161,6 +162,7 @@ export default function Dashboard() {
       {normalizeRole(profile.role) === 'super_admin' && <><LineQuotaStatus /><LineQuotaCard /></>}
 
       <TodayCards />
+      {canRead(profile.role, 'service-stats') && <DashboardService />}
       <DashboardUnitDuty />
 
       {error ? <ErrorState message={error} />
