@@ -265,6 +265,31 @@ export default function ReceivableReport() {
           <p className="mb-3 text-sm text-slate-600">เลือกไฟล์ zip หรือ rar ที่ รพ.สต. ส่งมา (หรือไฟล์ .xls รายงานพึงรับทีละไฟล์) ระบบอ่านรหัสหน่วยจากในไฟล์ และงวดจากเลข REP (หรือจากชื่อไฟล์ถ้ามี เช่น 6809_OP_02) ถ้านำเข้างวดเดิมซ้ำจะเขียนทับ · ระบบเก็บยอดรวมและรายเคสแบบไม่ระบุตัวตน (มีเฉพาะ REP, TRAN_ID, HN, ยอดเงิน — ไม่เก็บชื่อและเลขบัตรประชาชน)</p>
           <input ref={fileRef} type="file" multiple accept=".zip,.rar,.xls,.xlsx" className="hidden" onChange={(e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) readFiles(l); }} />
           <button type="button" className="btn btn-primary" disabled={busy || !canEdit} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} เลือกไฟล์ zip / rar / xls</button>
+          <div className="mb-4 overflow-x-auto rounded-lg border border-slate-200">
+            <div className="flex flex-wrap items-center gap-3 bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-medium">เช็กลิสต์การนำเข้า</span>
+              <span className="text-emerald-700">นำเข้าแล้ว {PM_UNITS.filter(([c]) => (byUnit[c] || []).length).length} หน่วย</span>
+              <span className="text-rose-700">ยังไม่นำเข้า {PM_UNITS.filter(([c]) => !(byUnit[c] || []).length).length} หน่วย: {PM_UNITS.filter(([c]) => !(byUnit[c] || []).length).map(([, n]) => n.replace('รพ.สต.', '')).join(', ') || '— ครบแล้ว'}</span>
+            </div>
+            <table className="w-full text-sm">
+              <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="px-2 py-1.5">✔</th><th className="px-2 py-1.5">รหัส</th><th className="px-2 py-1.5">รพ.สต.</th><th className="px-2 py-1.5 text-right">งวด</th><th className="px-2 py-1.5">งวดล่าสุด</th><th className="px-2 py-1.5">นำเข้าโดย</th><th className="px-2 py-1.5">นำเข้าเมื่อ</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {PM_UNITS.map(([c, n]) => {
+                  const ds = byUnit[c] || [];
+                  const last = ds.reduce((a, d) => (!a || (d.importedAt?.seconds || 0) > (a.importedAt?.seconds || 0) ? d : a), null);
+                  const who = [...new Set(ds.map((d) => d.importedBy).filter(Boolean))].join(', ');
+                  return (
+                    <tr key={c} className={ds.length ? '' : 'bg-rose-50/60'}>
+                      <td className="px-2 py-1">{ds.length ? '✅' : '⬜'}</td><td className="px-2 py-1 font-mono text-xs">{c}</td><td className="px-2 py-1">{n}</td>
+                      <td className="px-2 py-1 text-right">{ds.length || '-'}</td>
+                      <td className="px-2 py-1">{ds.length ? [...ds].map((d) => d.period).sort().pop() : <span className="text-rose-700">ยังไม่นำเข้า</span>}</td>
+                      <td className="px-2 py-1 text-xs">{who || '-'}</td>
+                      <td className="px-2 py-1 text-xs">{last?.importedAt?.seconds ? new Date(last.importedAt.seconds * 1000).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
+                    </tr>);
+                })}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm">
             <span className="font-medium text-rose-800">ลบข้อมูลที่นำเข้า</span>
             <select className="input !w-auto !py-1.5" value={delUnit} onChange={(e) => setDelUnit(e.target.value)}>
