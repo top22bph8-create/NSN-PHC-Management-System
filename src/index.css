@@ -78,3 +78,17 @@
   background: url("./assets/logo.png") center / contain no-repeat; opacity: .05; pointer-events: none;
 }
 main, header { position: relative; z-index: 1; }
+
+/* ===== แถบเมนูซ้ายแบบการ์ดไอคอน (ปรับหน้าตา) — คงโทนกรมท่า + ทอง ของ รพ.สต.บ้านหนองสนม ===== */
+.side-home-off { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #0d3357; box-shadow: 0 4px 10px rgb(0 0 0 / .25), inset 0 1px 0 rgb(255 255 255 / .5); }
+.side-home-on { background: linear-gradient(135deg, #fcd34d, #d97706); color: #0d3357; box-shadow: 0 4px 12px rgb(0 0 0 / .3), inset 0 1px 0 rgb(255 255 255 / .6); }
+.side-card { background: linear-gradient(180deg, #ffffff, #e8f4fc); color: #0d3357; box-shadow: 0 3px 8px rgb(0 0 0 / .22); border: 1px solid rgb(255 255 255 / .6); }
+.side-card:hover { filter: brightness(.97); transform: translateX(2px); }
+.side-card-on { background: linear-gradient(180deg, #fff7d6, #fde68a); box-shadow: 0 0 0 2px #f59e0b, 0 4px 10px rgb(0 0 0 / .3); }
+
+/* ===== แดชบอร์ด: ป้ายต้อนรับ + ตัวเลขสรุปแบบการ์ดสี ===== */
+.hero { position: relative; overflow: hidden; border-radius: 1.25rem; color: #fff; background: linear-gradient(120deg, #0d3357 0%, #175a96 55%, #1fa3e0 100%); box-shadow: 0 10px 25px -8px rgb(13 51 87 / .55); }
+.hero::after { content: ""; position: absolute; inset: auto -40px -60px auto; width: 260px; height: 260px; border-radius: 9999px; background: radial-gradient(circle, rgb(251 191 36 / .35), transparent 70%); }
+.hero-clock { border-radius: .9rem; background: rgb(255 255 255 / .12); border: 1px solid rgb(255 255 255 / .25); backdrop-filter: blur(4px); }
+.kpi-tile { border-radius: 1rem; color: #fff; box-shadow: 0 6px 14px -6px rgb(0 0 0 / .45); transition: transform .15s; }
+.kpi-tile:hover { transform: translateY(-2px); }

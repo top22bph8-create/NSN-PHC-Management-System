@@ -5,6 +5,8 @@ import { can, canRead } from './lib/roles';
 import { REGISTRIES } from './config/registries';
 import { PERSON_REGISTRIES } from './config/personRegistries';
 import PersonRegistry from './pages/PersonRegistry';
+import CareLog from './components/CareLog';
+import { SMART_VISIT, TELEMED } from './config/careLogs';
 import UnitDuty from './pages/UnitDuty';
 import ServiceStats from './pages/ServiceStats';
 import PmInfo from './modules/pm/PmInfo';
@@ -211,6 +213,8 @@ function Shell() {
           {Object.values(PERSON_REGISTRIES).map((cfg) => (
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><PersonRegistry cfg={cfg} /></Guard>} />
           ))}
+          <Route path="smart-visit" element={<Guard module="smart-visit"><CareLog cfg={SMART_VISIT} /></Guard>} />
+          <Route path="telemedicine" element={<Guard module="telemedicine"><CareLog cfg={TELEMED} /></Guard>} />
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
           <Route path="rights-registry" element={<Guard module="rights-registry"><RightsRegistry /></Guard>} />
           <Route path="reg-budget" element={<Guard module="reg-budget"><BudgetPlan /></Guard>} />

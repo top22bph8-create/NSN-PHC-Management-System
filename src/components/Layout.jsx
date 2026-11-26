@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { CalendarDays, Car, Home, Inbox, KeyRound, LogOut, Menu, Search, Settings, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFiscalYear } from '../context/FiscalYearContext';
-import { ADMIN_ITEMS, GROUPS, groupOfPath } from '../config/menu';
+import { ADMIN_ITEMS, GROUPS, QUICK, groupOfPath } from '../config/menu';
 import { ORG_SHORT, SYSTEM_NAME_EN } from '../config/brand';
 import { ROLES, canRead, normalizeRole } from '../lib/roles';
 import { usernameOf } from '../lib/accounts';
@@ -37,31 +37,36 @@ export default function Layout() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
-        {/* เมนูซ้ายเหลือแค่ทางลัด: หน้าหลัก + 11 กลุ่มงาน + ผู้ดูแลระบบ — รายการงานย่อยทั้งหมดย้ายไปอยู่กลางหน้า Dashboard / หน้ากลุ่มงานแล้ว */}
+        {/* แถบเมนูแบบการ์ดไอคอน: ปุ่มหน้าหลักสีทอง · ปุ่มลัดงานเด่น (Smart Home Visit / Telemedicine) · กลุ่มงานเป็นการ์ดขาวมีไอคอนสีประจำกลุ่ม */}
         <NavLink to="/" end onClick={() => setOpen(false)}
-          className={({ isActive }) => `mb-2 flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm font-semibold transition ${isActive ? 'border-brand-300 bg-brand-600 text-white shadow-md' : 'border-transparent text-brand-100 hover:bg-white/10 hover:text-white'}`}>
-          <Home className="h-5 w-5 shrink-0" /> หน้าหลัก (Dashboard)
+          className={({ isActive }) => `side-home mb-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-extrabold transition ${isActive ? 'side-home-on' : 'side-home-off'}`}>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/70 text-brand-800"><Home className="h-5 w-5" /></span> หน้าหลัก (Dashboard)
         </NavLink>
-        <div className="mb-1 mt-3 px-3 text-xs font-bold uppercase tracking-wider text-brand-300">กลุ่มงาน</div>
+        {QUICK.filter((x) => canRead(profile.role, x.module)).map((x) => (
+          <NavLink key={x.key} to={x.path} onClick={() => setOpen(false)}
+            className={({ isActive }) => `mb-2 flex items-center gap-3 rounded-xl bg-gradient-to-r ${x.tone} px-3 py-2 text-white shadow-lg ring-2 transition hover:brightness-110 ${isActive ? 'ring-amber-300' : 'ring-white/10'}`}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/90 text-lg shadow">{x.emoji}</span>
+            <span className="min-w-0 leading-tight"><span className="block text-sm font-extrabold">{x.title}</span><span className="block text-[11px] text-white/85">{x.sub}</span></span>
+          </NavLink>
+        ))}
+        <div className="mb-1.5 mt-3 px-1 text-xs font-bold uppercase tracking-wider text-amber-300">กลุ่มงาน</div>
+        <div className="space-y-1.5">
         {GROUPS.map((g) => {
           const on = activeGroup === g.key;
           const ext = g.items.length === 1 && g.items[0].href;
-          if (ext) return (
-            <a key={g.key} href={ext} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-lg border-l-4 border-transparent px-3 py-2 text-sm text-brand-100 transition hover:bg-white/10 hover:text-white">
-              <span className="w-5 shrink-0 text-center text-base leading-none">{g.emoji}</span>
-              <span className="flex-1 leading-snug">{g.title}</span>
-              <span className="text-xs opacity-60">↗</span>
-            </a>
+          const body = (
+            <>
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${g.tone || 'from-brand-500 to-brand-700'} text-lg leading-none shadow-sm`}>{g.emoji}</span>
+              <span className="min-w-0 flex-1 text-sm font-semibold leading-snug">{g.title}</span>
+              {ext && <span className="text-xs opacity-50">↗</span>}
+            </>
           );
-          return (
-            <NavLink key={g.key} to={`/group/${g.key}`} onClick={() => setOpen(false)}
-              className={`flex items-center gap-3 rounded-lg border-l-4 px-3 py-2 text-sm transition ${on ? 'border-brand-300 bg-brand-600 font-bold text-white shadow-md' : 'border-transparent text-brand-100 hover:bg-white/10 hover:text-white'}`}>
-              <span className="w-5 shrink-0 text-center text-base leading-none">{g.emoji}</span>
-              <span className="flex-1 leading-snug">{g.title}</span>
-            </NavLink>
-          );
+          const cls = `side-card flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition ${on ? 'side-card-on' : ''}`;
+          return ext
+            ? <a key={g.key} href={ext} target="_blank" rel="noopener noreferrer" className={cls}>{body}</a>
+            : <NavLink key={g.key} to={`/group/${g.key}`} onClick={() => setOpen(false)} className={cls}>{body}</NavLink>;
         })}
+        </div>
         {adminVisible.length > 0 && (
           <div className="mt-4 border-t border-white/10 pt-3">
             <div className="mb-1 flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-brand-300"><Settings className="h-3.5 w-3.5" /> ผู้ดูแลระบบ</div>

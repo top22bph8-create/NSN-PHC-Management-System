@@ -2,7 +2,7 @@ import {
   Home, Search, Inbox, Send, ScrollText, Wallet, Armchair, Package, Car, Activity, Users, Settings, CalendarDays, DatabaseBackup,
   ClipboardList, MapPinned, CalendarClock, Megaphone, ShoppingCart, FileSignature, HandCoins, Landmark, Receipt, FileStack,
   Award, KeyRound, Building2, Stethoscope, GraduationCap, HeartHandshake, Globe, Database, ClipboardCheck, Pill, ShieldPlus, IdCard, BadgeCheck, Store, Banknote, Calculator, ShieldCheck, FileBarChart, PersonStanding, Accessibility, Brain, Leaf, Ambulance, Droplets, CalendarCheck, BookOpenCheck, HeartPulse, BarChart3, FileCheck2, UserCheck, Biohazard, FolderOpen,
-  Star,
+  Star, MonitorSmartphone,
 } from 'lucide-react';
 
 export const REGISTRY_LINKS = [
@@ -22,6 +22,12 @@ export const REGISTRY_LINKS = [
 const R = (key, desc) => { const r = REGISTRY_LINKS.find((x) => x.key === key); return { ...r, desc, ready: true, module: key }; };
 // ลิงก์ระบบงาน รพ.สต. Qubit Portal (แสดงเป็นไอคอนเดี่ยวคู่กับ "ภาพรวมงานธุรการ" ในแดชบอร์ด) — ใส่ URL จริงที่นี่
 export const QUBIT_PORTAL_URL = 'https://qubitco.online/portal';
+
+// ปุ่มลัดงานเด่นบนแถบเมนูซ้าย (อยู่เหนือกลุ่มงาน)
+export const QUICK = [
+  { key: 'smart-visit', title: 'Smart Home Visit', sub: 'ระบบเยี่ยมบ้านเชิงรุก', path: '/smart-visit', module: 'smart-visit', emoji: '🏠', tone: 'from-rose-700 to-orange-600' },
+  { key: 'telemedicine', title: 'Telemedicine', sub: 'การแพทย์ทางไกล', path: '/telemedicine', module: 'telemedicine', emoji: '📡', tone: 'from-teal-700 to-cyan-600' },
+];
 
 export const GROUPS = [
   {
@@ -101,6 +107,8 @@ export const GROUPS = [
   {
     key: 'nursing', title: 'งานการพยาบาล', emoji: '🩺', icon: Stethoscope, tone: 'from-rose-500 to-pink-600', soft: 'bg-rose-50 text-rose-700',
     items: [
+      { key: 'smart-visit', label: 'Smart Home Visit (ระบบเยี่ยมบ้าน)', path: '/smart-visit', icon: HeartPulse, emoji: '🏠', ready: true, module: 'smart-visit', tone: 'from-rose-600 to-orange-500', desc: 'บันทึกผลเยี่ยมบ้านรายครั้ง สัญญาณชีพ ADL พิกัดบ้าน และติดตามเยี่ยมซ้ำ' },
+      { key: 'telemedicine', label: 'Telemedicine (การแพทย์ทางไกล)', path: '/telemedicine', icon: MonitorSmartphone, emoji: '📡', ready: true, module: 'telemedicine', tone: 'from-teal-600 to-cyan-600', desc: 'ทะเบียนบันทึกการให้บริการและนัดคิวปรึกษาแพทย์ทางไกล สรุปยอดเบิก CUP' },
       { key: 'reg-elderly', label: 'ทะเบียนผู้สูงอายุ', path: '/reg-elderly', icon: PersonStanding, ready: true, module: 'reg-elderly', tone: 'from-orange-500 to-amber-500', desc: 'รายชื่อผู้สูงอายุ กรองรายหมู่บ้าน นำเข้า/ส่งออก Excel' },
       { key: 'reg-disabled', label: 'ทะเบียนผู้พิการ', path: '/reg-disabled', icon: Accessibility, ready: true, module: 'reg-disabled', tone: 'from-sky-600 to-blue-600', desc: 'รายชื่อผู้พิการ ประเภท/บัตร/เบี้ยความพิการ กรองรายหมู่บ้าน' },
       { key: 'reg-mental', label: 'ทะเบียนผู้ป่วยจิตเวช', path: '/reg-mental', icon: Brain, ready: true, module: 'reg-mental', tone: 'from-violet-600 to-fuchsia-600', desc: 'รายชื่อผู้ป่วยจิตเวช ความเสี่ยง การกินยา วันนัด กรองรายหมู่บ้าน' },

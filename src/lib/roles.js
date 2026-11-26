@@ -30,6 +30,8 @@ export const ACCESS = {
   vehicle: { read: ALL, write: ALL, approve: ['super_admin'] },
   duty: { read: ALL, write: ALL },
   homevisit: { read: ALL, write: ALL },
+  'smart-visit': { read: ALL, write: ALL },
+  telemedicine: { read: ALL, write: ALL },
   // ทำเนียบบุคลากร (ฐานข้อมูลบุคคล/ประวัติราชการ) — Super Admin เท่านั้นที่แก้ไขได้ ดูได้ทุกคน
   personnel: { read: ALL, write: ['super_admin'] },
   // กำหนดผู้ใช้งาน/อนุมัติสมัครสมาชิก (Username/รหัสผ่าน/บทบาท/บัญชี) — Super Admin เท่านั้นทั้งดูและแก้

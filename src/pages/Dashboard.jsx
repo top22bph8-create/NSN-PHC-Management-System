@@ -19,6 +19,7 @@ import { getQuota, usage } from '../lib/leave';
 import { addDays, fmtDate, thMonths, todayStr } from '../lib/thai';
 import { Badge, ErrorState, Spinner } from '../components/ui';
 import Logo from '../components/Logo';
+import { CareToday, HeroClock } from '../components/CareToday';
 import { SYSTEM_AREA_TH, SYSTEM_NAME_EN, SYSTEM_NAME_TH } from '../config/brand';
 
 // สีแถบประจำแต่ละประเภทการลา (ไล่เฉดสด เห็นชัดเจน) ใช้ทั้งการ์ด "คนลาเดือนนี้" และแถบ "วันลาคงเหลือ" บนแดชบอร์ดตามที่แจ้ง
@@ -141,22 +142,22 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
-      <div className="relative mb-4 flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-700 via-brand-600 to-brand-400 p-4 text-white shadow-md sm:gap-5 sm:p-6">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-        <div className="pointer-events-none absolute -bottom-14 right-24 hidden h-32 w-32 rounded-full bg-white/10 md:block" />
-        <div className="shrink-0 rounded-2xl bg-white/90 p-1.5 shadow sm:p-2"><Logo size={56} className="sm:hidden" /><Logo size={88} className="hidden sm:block" /></div>
-        <div className="relative min-w-0 flex-1">
-          <div className="text-xs text-brand-50 sm:text-sm">{today}</div>
-          <h1 className="mt-0.5 text-base font-bold leading-snug !text-white sm:text-xl lg:text-2xl">{SYSTEM_NAME_TH}</h1>
-          <div className="text-xs text-brand-50 sm:text-sm">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
+      <div className="hero mb-4 flex flex-wrap items-center gap-3 p-4 sm:gap-4 sm:p-5">
+        <div className="shrink-0 rounded-2xl bg-white p-1.5 shadow-lg ring-2 ring-white/50 sm:p-2"><Logo size={56} className="sm:hidden" /><Logo size={88} className="hidden sm:block" /></div>
+        <div className="relative z-10 min-w-0 flex-1">
+          <div className="text-xs text-brand-100 sm:text-sm">{today}</div>
+          <h1 className="mt-0.5 text-base font-extrabold leading-snug !text-white sm:text-xl lg:text-2xl">{SYSTEM_NAME_TH}</h1>
+          <div className="text-xs text-brand-100 sm:text-sm">{SYSTEM_AREA_TH} · {SYSTEM_NAME_EN}</div>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-sm font-medium sm:text-base">
+            <span className="text-sm font-semibold sm:text-base">
               {profile.email === 'top22bph8@gmail.com' ? 'นายพงศกร แป่มจำนัก · ผู้อำนวยการ' : `${profile.name || profile.email} · ${ROLES[normalizeRole(profile.role)]}`}
             </span>
-            <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold">ปีงบประมาณ {fy}</span>
+            <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-bold text-brand-950 shadow">ปีงบประมาณ {fy}</span>
           </div>
         </div>
+        <HeroClock />
       </div>
+      <CareToday />
 
       {normalizeRole(profile.role) === 'super_admin' && <><LineQuotaStatus /><LineQuotaCard /></>}
 
