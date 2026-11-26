@@ -30,12 +30,12 @@ function ManualCell({ value, canEdit, onSave }) {
 }
 
 const MONEY_HEADS = ['เรียกเก็บ', 'HC', 'DRUG', 'AE', 'AE-DRUG', 'DMISHD', 'PP', 'FS', 'อื่นๆ', 'ยอดชดเชยทั้งสิ้น'];
-const CASE_HEADS = ['ลำดับงวด', 'รายงานงวด', 'ประเภทข้อมูล', 'REP', 'ลำดับที่', 'TRAN_ID', 'HN', 'วันเข้ารักษา', 'สิทธิ (MAININSCL)', 'PROJCODE', ...MONEY_HEADS, 'สถานะการชดเชย'];
+const CASE_HEADS = ['หน่วยบริการ', 'ลำดับงวด', 'รายงานงวด', 'ประเภทข้อมูล', 'REP', 'ลำดับที่', 'TRAN_ID', 'HN', 'วันเข้ารักษา', 'สิทธิ (MAININSCL)', 'PROJCODE', ...MONEY_HEADS, 'สถานะการชดเชย'];
 const fmtM = (v) => (!v ? '-' : Number(v).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const PAGE = 200;
 
 // ชีต "ข้อมูลรายเคส" ดูบนหน้าเว็บ (เหมือนชีตใน Excel): กรองตามงวด/ประเภท/สถานะ ค้นหา HN-TRAN_ID-REP แบ่งหน้า
-function CaseSheet({ list, periods }) {
+function CaseSheet({ list, periods, unitLabel }) {
   const [per, setPer] = useState(''); const [typ, setTyp] = useState(''); const [st, setSt] = useState(''); const [q, setQ] = useState(''); const [page, setPage] = useState(0);
   const idx = useMemo(() => Object.fromEntries(periods.map((p, i) => [p, i + 1])), [periods]);
   const all = useMemo(() => (list || []).filter((c) => idx[c.period]).sort((a, b) => idx[a.period] - idx[b.period]).flatMap((c) => c.rows.map((r) => ({ p: c.period, r }))), [list, idx]);
@@ -66,12 +66,12 @@ function CaseSheet({ list, periods }) {
           <tbody>
             {slice.map(({ p, r }, i) => (
               <tr key={`${p}-${cur}-${i}`} className={r[17] > 0 ? '' : 'bg-rose-50/60'}>
-                <td className={`${cell} text-right`}>{idx[p]}</td><td className={cell}>{p}</td><td className={cell}>{r[0] ? 'อุทธรณ์' : 'ปกติ'}</td><td className={cell}>{r[1]}</td><td className={`${cell} text-right`}>{r[2]}</td><td className={cell}>{r[3]}</td><td className={cell}>{r[4]}</td><td className={cell}>{r[5]}</td><td className={cell}>{r[6]}</td><td className={cell}>{r[7]}</td>
+                <td className={cell}>{unitLabel}</td><td className={`${cell} text-right`}>{idx[p]}</td><td className={cell}>{p}</td><td className={cell}>{r[0] ? 'อุทธรณ์' : 'ปกติ'}</td><td className={cell}>{r[1]}</td><td className={`${cell} text-right`}>{r[2]}</td><td className={cell}>{r[3]}</td><td className={cell}>{r[4]}</td><td className={cell}>{r[5]}</td><td className={cell}>{r[6]}</td><td className={cell}>{r[7]}</td>
                 {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map((k) => <td key={k} className={`${cell} text-right tabular-nums ${r[k] < 0 ? 'text-rose-600' : ''}`}>{fmtM(r[k])}</td>)}
                 <td className={`${cell} ${r[17] > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{r[17] > 0 ? 'ได้รับชดเชย' : 'ไม่ได้รับชดเชย'}</td>
               </tr>))}
           </tbody>
-          <tfoot className="sticky bottom-0"><tr className="bg-amber-100 font-bold"><td className={cell} colSpan={10}>รวมตามที่กรอง ({int(shown.length)} เคส)</td>{sums.map((v, i) => <td key={i} className={`${cell} text-right tabular-nums`}>{fmtM(Math.round(v * 100) / 100)}</td>)}<td className={cell} /></tr></tfoot>
+          <tfoot className="sticky bottom-0"><tr className="bg-amber-100 font-bold"><td className={cell} colSpan={11}>รวมตามที่กรอง ({int(shown.length)} เคส)</td>{sums.map((v, i) => <td key={i} className={`${cell} text-right tabular-nums`}>{fmtM(Math.round(v * 100) / 100)}</td>)}<td className={cell} /></tr></tfoot>
         </table>
       </div>
     </div>
@@ -335,7 +335,7 @@ export default function ReceivableReport() {
             <button type="button" className="btn btn-primary !py-1.5 text-sm" disabled={!unitSum.length || dl === 'unit'} onClick={downloadUnit}>{dl === 'unit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} ดาวน์โหลด Excel (สรุป / แดชบอร์ด / รายหมวด / ข้อมูลรายเคส / หมายเหตุ)</button>
           </div>
           {!unitSum.length ? <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลของหน่วยนี้ — ไปที่แท็บ "นำเข้าไฟล์"</p> : (
-            unitView === 'cases' ? <CaseSheet list={caseData.unit === unit ? caseData.list : null} periods={unitSum.map((r) => r.period)} /> : <>
+            unitView === 'cases' ? <CaseSheet list={caseData.unit === unit ? caseData.list : null} periods={unitSum.map((r) => r.period)} unitLabel={`${unit} ${(PM_UNITS.find(([c]) => c === unit) || [])[1] || ''}`} /> : <>
               <Kpi t={unitTot} />
               <SumTable items={unitSum.map((r) => ({ row: r }))} tot={unitTot} firstHead="รายงานงวด" firstCell={(it) => it.row.period} />
               <Bars items={unitSum.map((r) => ({ k: r.period, billed: r.billed, total: r.total }))} label="รายงวด" />

@@ -143,16 +143,16 @@ export async function buildUnitWorkbook({ unit, docs, cases, from, to, issued })
   ]);
   catSheet(wb.addWorksheet('รายหมวด'), 'ยอดชดเชยตามหมวด รายงานงวด (บาท)', 'รวมยอดชดเชย = HC + DRUG + AE + DMISHD + PP + FS + อื่นๆ ; PP&FS = PP + FS (ไม่นับซ้ำในยอดรวม) ; ช่อง "ตรวจสอบ" เทียบยอดรวมหมวดกับยอดชดเชยทั้งสิ้นในชีตสรุป', ['ลำดับ', 'รายงานงวด'], cRows, cTot);
   // ข้อมูลรายเคส
-  const ws = wb.addWorksheet('ข้อมูลรายเคส'); const heads = ['ลำดับงวด', 'รายงานงวด', 'ประเภทข้อมูล', 'REP', 'ลำดับที่', 'TRAN_ID', 'HN', 'วันเข้ารักษา', 'สิทธิ (MAININSCL)', 'PROJCODE', 'เรียกเก็บ', 'HC', 'DRUG', 'AE', 'AE-DRUG', 'DMISHD', 'PP', 'FS', 'อื่นๆ', 'ยอดชดเชยทั้งสิ้น', 'สถานะการชดเชย'];
+  const ws = wb.addWorksheet('ข้อมูลรายเคส'); const heads = ['หน่วยบริการ', 'ลำดับงวด', 'รายงานงวด', 'ประเภทข้อมูล', 'REP', 'ลำดับที่', 'TRAN_ID', 'HN', 'วันเข้ารักษา', 'สิทธิ (MAININSCL)', 'PROJCODE', 'เรียกเก็บ', 'HC', 'DRUG', 'AE', 'AE-DRUG', 'DMISHD', 'PP', 'FS', 'อื่นๆ', 'ยอดชดเชยทั้งสิ้น', 'สถานะการชดเชย'];
   // หัวตารางสีเขียวอ่อน ตัวหนาสีดำ เหมือนชีตรายเคสของ รพ.สต.ดงสง่า
   heads.forEach((h, i) => put(ws, 1, i + 1, h, { fill: 'FFCCFFCC', font: { bold: true }, h: 'center', wrap: true })); ws.getRow(1).height = 32;
   const idx = Object.fromEntries(ds.map((d, i) => [d.period, i + 1])); let n = 2;
   const caseList = (cases || []).filter((c) => idx[c.period]).sort((a, b) => idx[a.period] - idx[b.period]);
   caseList.forEach((c) => c.rows.forEach((r) => {
-    ws.addRow([idx[c.period], c.period, r[0] ? 'อุทธรณ์' : 'ปกติ', r[1], r[2], r[3], r[4], r[5] ? new Date(`${r[5]}T00:00:00Z`) : '', r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15], r[16], r[17], r[17] > 0 ? 'ได้รับชดเชย' : 'ไม่ได้รับชดเชย']); n += 1;
+    ws.addRow([`${unit.code} ${unit.name}`, idx[c.period], c.period, r[0] ? 'อุทธรณ์' : 'ปกติ', r[1], r[2], r[3], r[4], r[5] ? new Date(`${r[5]}T00:00:00Z`) : '', r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15], r[16], r[17], r[17] > 0 ? 'ได้รับชดเชย' : 'ไม่ได้รับชดเชย']); n += 1;
   }));
-  ws.getColumn(8).numFmt = 'yyyy-mm-dd'; for (let c = 11; c <= 20; c++) ws.getColumn(c).numFmt = '#,##0.00;\\-#,##0.00;"-"'; // ศูนย์แสดงเป็น "-"
-  [12, 14, 8, 14, 8, 13, 8, 14, 16, 12, 13, 12, 12, 12, 12, 12, 12, 12, 12, 16, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  ws.getColumn(9).numFmt = 'yyyy-mm-dd'; for (let c = 12; c <= 21; c++) ws.getColumn(c).numFmt = '#,##0.00;\\-#,##0.00;"-"'; // ศูนย์แสดงเป็น "-"
+  [26, 12, 14, 8, 14, 8, 13, 8, 14, 16, 12, 13, 12, 12, 12, 12, 12, 12, 12, 12, 16, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
   ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(n - 1, 1), column: heads.length } };
   notesSheet(wb.addWorksheet('หมายเหตุ'), [['1. แหล่งข้อมูล', `รายงานพึงรับ รพสต. จำนวน ${ds.length} ไฟล์ (${first} ถึง ${lastP}) รวม ${(t.cases || 0).toLocaleString('th-TH')} เคส · หน่วยบริการ HCODE ${unit.code} (${unit.name})`], ['', 'สรุปเฉพาะไฟล์ที่นำเข้าในระบบ หากมีรายงานงวดเพิ่มต้องนำเข้าใหม่'], ...COMMON_NOTES]);
   return wb.xlsx.writeBuffer();
