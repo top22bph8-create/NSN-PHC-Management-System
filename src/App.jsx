@@ -6,6 +6,9 @@ import { REGISTRIES } from './config/registries';
 import { PERSON_REGISTRIES } from './config/personRegistries';
 import PersonRegistry from './pages/PersonRegistry';
 import CareLog from './components/CareLog';
+import TelemedPage from './modules/telemed/TelemedPage';
+import TelemedRoom from './modules/telemed/TelemedRoom';
+import TelemedJoin from './modules/telemed/TelemedJoin';
 import { SMART_VISIT, TELEMED } from './config/careLogs';
 import UnitDuty from './pages/UnitDuty';
 import ServiceStats from './pages/ServiceStats';
@@ -214,7 +217,8 @@ function Shell() {
             <Route key={cfg.key} path={cfg.path.slice(1)} element={<Guard module={cfg.key}><PersonRegistry cfg={cfg} /></Guard>} />
           ))}
           <Route path="smart-visit" element={<Guard module="smart-visit"><CareLog cfg={SMART_VISIT} /></Guard>} />
-          <Route path="telemedicine" element={<Guard module="telemedicine"><CareLog cfg={TELEMED} /></Guard>} />
+          <Route path="telemedicine" element={<Guard module="telemedicine"><TelemedPage /></Guard>} />
+          <Route path="telemedicine/room/:id" element={<Guard module="telemedicine"><TelemedRoom /></Guard>} />
           <Route path="unit-firstaid" element={<Guard module="unit-duty"><UnitDuty kind="firstaid" /></Guard>} />
           <Route path="rights-registry" element={<Guard module="rights-registry"><RightsRegistry /></Guard>} />
           <Route path="reg-budget" element={<Guard module="reg-budget"><BudgetPlan /></Guard>} />
@@ -261,6 +265,7 @@ export default function App() {
           {/* หน้าสาธารณะ (ไม่ต้องล็อกอิน): จองคิวแพทย์แผนไทยผ่าน QR Code + ป้าย QR สำหรับพิมพ์ */}
           <Route path="/ncd-asm" element={<NcdAsmPublic />} />
           <Route path="/book-thai" element={<ThaiBookingPublic />} />
+          <Route path="/tele/:token" element={<TelemedJoin />} />
           <Route path="/satisfaction" element={<SurveyPublic />} />
           <Route path="/print-thai-qr" element={<PrintThaiQr />} />
           <Route path="/print/:key" element={<PrintGate />} />

@@ -34,7 +34,7 @@ function Field({ f, value, onChange }) {
   return <input className={base} type={type} inputMode={f.type === 'number' ? 'decimal' : undefined} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
 }
 
-export default function CareLog({ cfg }) {
+export default function CareLog({ cfg, headerExtra, rowExtra }) {
   const { profile, user } = useAuth();
   const canEdit = canWrite(profile.role, cfg.key);
   const [rows, setRows] = useState(null);
@@ -84,7 +84,7 @@ export default function CareLog({ cfg }) {
 
   return (
     <div className="mx-auto max-w-7xl p-4 lg:p-6">
-      <PageHeader emoji={cfg.emoji} title={cfg.title} subtitle={cfg.subtitle} tone={cfg.tone} actions={canEdit && <button className="btn bg-white text-slate-800 shadow hover:bg-slate-100" onClick={openNew}><Plus className="h-5 w-5" /> เพิ่ม{cfg.noun}</button>} />
+      <PageHeader emoji={cfg.emoji} title={cfg.title} subtitle={cfg.subtitle} tone={cfg.tone} actions={<>{headerExtra}{canEdit && <button className="btn bg-white text-slate-800 shadow hover:bg-slate-100" onClick={openNew}><Plus className="h-5 w-5" /> เพิ่ม{cfg.noun}</button>}</>} />
       {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>}
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
@@ -122,6 +122,7 @@ export default function CareLog({ cfg }) {
                         </td>
                       ))}
                       <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                        {rowExtra && rowExtra(r)}
                         {r.phone && <a href={`tel:${r.phone}`} className="mr-1 inline-flex rounded p-1 text-emerald-700 hover:bg-emerald-50" title={r.phone}><Phone className="h-4 w-4" /></a>}
                         {mapsUrl(r.gps) && <a href={mapsUrl(r.gps)} target="_blank" rel="noopener noreferrer" className="mr-1 inline-flex rounded p-1 text-sky-700 hover:bg-sky-50" title="เปิดแผนที่"><ExternalLink className="h-4 w-4" /></a>}
                         {canEdit && <><button className="mr-1 rounded p-1 text-brand-700 hover:bg-brand-50" onClick={() => setEdit({ id: r.id, data: { ...r } })} title="แก้ไข"><Pencil className="h-4 w-4" /></button>
