@@ -15,7 +15,7 @@ import { ConfirmDialog, Spinner, Toast } from '../../components/ui';
 import { PM_UNITS } from './pmUnits';
 
 const MAX = 20 * 1024 * 1024;
-const OK_EXT = ['xls', 'xlsx', 'csv', 'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'];
+const OK_EXT = ['xls', 'xlsx', 'csv', 'zip', 'rar', '7z', 'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'];
 const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ceil((b || 0) / 1024)} KB`);
 const safeName = (n) => n.replace(/[^\w.\-฀-๿]/g, '_');
 
@@ -104,6 +104,7 @@ export default function HospitalDebt() {
       <PageHeader icon={Banknote} emoji="💵" tone="from-emerald-700 via-emerald-600 to-teal-500" title="ระบบตรวจสอบเงินค้างจ่ายจาก รพ.สกลนคร" subtitle="รายชื่อ รพ.สต. อำเภอเมืองสกลนคร และช่องแนบไฟล์นำเข้าของแต่ละแห่ง" />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Link to="/pm-info" className="btn btn-outline !px-3 !py-1.5 text-sm"><ArrowLeft className="h-4 w-4" /> งาน PM</Link>
+        <Link to="/pm-info/receivable" className="btn btn-primary !px-3 !py-1.5 text-sm">📊 รายงานพึงรับ 2569</Link>
         <input className="input min-w-0 flex-1 basis-48 !py-1.5" placeholder="พิมพ์ชื่อหรือรหัส รพ.สต." value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหา รพ.สต." />
         <span className="inline-flex items-center gap-1 text-sm text-slate-500"><Paperclip className="h-4 w-4" /> ไฟล์ทั้งหมด <b className="text-slate-800">{total}</b> ไฟล์ · {PM_UNITS.length} แห่ง</span>
       </div>

@@ -1,0 +1,90 @@
+// อ่านไฟล์ "รายงานพึงรับ รพสต." (xls จาก สปสช./รพ.) ที่ รพ.สต. ส่งมาเป็น zip → สรุปรายงวด/รายหมวด
+// ไม่เก็บ ชื่อ-นามสกุล/เลขบัตร/HN ลงฐานข้อมูล เก็บเฉพาะยอดรวม
+export const CATS = ['HC', 'DRUG', 'AE', 'DMISHD', 'PP', 'FS', 'PALL', 'OTHER'];
+export const CAT_LABEL = { HC: 'HC', DRUG: 'DRUG (ยาสมุนไพร)', AE: 'AE', DMISHD: 'DMISHD', PP: 'PP', FS: 'FS', PALL: 'Palliative', OTHER: 'อื่นๆ' };
+// คอลัมน์ (เริ่มนับ 0) ตามไฟล์พึงรับ: เรียกเก็บ=R(17) HC=AE(30) DRUG=AF(31) AE=AG(32)+AH(33) Palliative=AM(38) DMISHD=AN(39) PP=AO(40) FS=AP(41) รวม=AQ(42)
+const COL = { HCODE: 13, BILL: 17, HC: 30, DRUG: 31, AE: 32, AEDRUG: 33, PALL: 38, DMISHD: 39, PP: 40, FS: 41, TOTAL: 42 };
+
+const num = (v) => { const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+const r2 = (n) => Math.round(n * 100) / 100;
+const blank = () => ({ cases: 0, billed: 0, paid: 0, paidCases: 0, herbCases: 0, HCpos: 0, DRUGpos: 0, HC: 0, DRUG: 0, AE: 0, DMISHD: 0, PP: 0, FS: 0, PALL: 0, OTHER: 0 });
+
+export function periodOf(name) {
+  const m = String(name).match(/(\d{4})[\s_-]*op[\s_-]*(\d{1,2})/i);
+  return m ? `${m[1]}_OP_${m[2].padStart(2, '0')}` : null;
+}
+
+export function parseReceivable(XLSX, buf, fileName) {
+  const wb = XLSX.read(buf, { type: 'array' });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: true });
+  const agg = { normal: blank(), appeal: blank() };
+  const hc = {}; const reps = []; let sect = 'normal';
+  for (const r of rows) {
+    const a = String(r[0] ?? '').trim();
+    if (a.includes('ข้อมูลอุทธรณ์')) { sect = 'appeal'; continue; }
+    if (a.includes('ข้อมูลปกติ')) { sect = 'normal'; continue; }
+    if (!/^\d{6,}$/.test(a) || r[1] === '' || !Number.isFinite(Number(r[1]))) continue;
+    const t = agg[sect]; const total = num(r[COL.TOTAL]);
+    t.cases += 1; t.billed += num(r[COL.BILL]); t.paid += total;
+    if (total > 0) t.paidCases += 1;
+    const drug = num(r[COL.DRUG]); if (drug > 0) t.herbCases += 1;
+    // ต้นแบบ 2568: ยาสมุนไพร = ผลรวมเฉพาะแถวที่ HC > 0 (ไม่หักรายการติดลบ)
+    if (num(r[COL.HC]) > 0) t.HCpos += num(r[COL.HC]);
+    if (drug > 0) t.DRUGpos += drug;
+    if (sect === 'normal') reps.push(a);
+    const v = { HC: num(r[COL.HC]), DRUG: drug, AE: num(r[COL.AE]) + num(r[COL.AEDRUG]), DMISHD: num(r[COL.DMISHD]), PP: num(r[COL.PP]), FS: num(r[COL.FS]), PALL: num(r[COL.PALL]) };
+    for (const k of Object.keys(v)) t[k] += v[k];
+    t.OTHER += total - Object.values(v).reduce((s, x) => s + x, 0);
+    const h = String(r[COL.HCODE] ?? '').trim(); if (h) hc[h.padStart(5, '0')] = (hc[h.padStart(5, '0')] || 0) + 1;
+  }
+  for (const t of Object.values(agg)) for (const k of Object.keys(t)) t[k] = r2(t[k]);
+  const code = Object.entries(hc).sort((x, y) => y[1] - x[1])[0]?.[0] || '';
+  // ชื่อไฟล์จากระบบเป็น Hsub_Report_<วันเวลาโหลด> ไม่มีงวด → ใช้เลข REP: 4 หลักแรก = ปี-เดือน (เช่น 6710), REP ต่ำสุด = รอบของงวด
+  const pre = {}; reps.forEach((x) => { pre[x.slice(0, 4)] = (pre[x.slice(0, 4)] || 0) + 1; });
+  const yymm = Object.entries(pre).sort((x, y) => y[1] - x[1])[0]?.[0] || '';
+  const minRep = reps.filter((x) => x.startsWith(yymm)).sort()[0] || '';
+  const period = periodOf(fileName) || (yymm ? `${yymm}_REP${minRep.slice(4)}` : null);
+  const sum = (k) => r2(agg.normal[k] + agg.appeal[k]);
+  return { fileName, period, code, ...agg, cases: sum('cases'), billed: sum('billed'), paid: sum('paid'), paidCases: sum('paidCases') };
+}
+
+// แตก zip ในเบราว์เซอร์ (ไม่ต้องใช้ไลบรารีเพิ่ม) — รองรับ store/deflate
+export async function unzip(buf) {
+  const u8 = new Uint8Array(buf); const dv = new DataView(buf);
+  let e = u8.length - 22; while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('ไม่ใช่ไฟล์ zip');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const out = [];
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nlen));
+    p += 46 + nlen + xlen + clen;
+    if (name.endsWith('/') || (flags & 1)) continue;
+    const start = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+    const data = u8.subarray(start, start + csize);
+    let bytes;
+    if (method === 0) bytes = data.slice().buffer;
+    else if (method === 8) bytes = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+    else continue;
+    out.push({ name, buf: bytes });
+  }
+  return out;
+}
+
+// ---- ตารางสรุปอำเภอ (รูปแบบเดียวกับ "สรุปทุกบริการ" ของ รพ.สกลนคร) ----
+export const RATE = { palliative: 500, fit: 60, fitShare: 0.5, hep: 50, knee: 100, herbUnitShare: 0.3 };
+export function districtRow(unitDocs, manual = {}, herbBasis = 'HC') {
+  const sum = (k) => unitDocs.reduce((s, d) => s + (d.normal?.[k] || 0) + (d.appeal?.[k] || 0), 0);
+  const m = { palVisit: 0, palDead: 0, fitUnit: 0, fitHosp: 0, hep: 0, kneeVisit: 0, kneeAmount: null, ...manual };
+  const pal = (num(m.palVisit) + num(m.palDead)) * RATE.palliative;
+  const herb = r2(sum(herbBasis === 'DRUG' ? 'DRUGpos' : 'HCpos')), herbUnit = r2(herb * RATE.herbUnitShare), herbHosp = r2(herb - herbUnit);
+  const kneeAmt = m.kneeAmount === null || m.kneeAmount === '' ? num(m.kneeVisit) * RATE.knee : num(m.kneeAmount);
+  const fitN = num(m.fitUnit) + num(m.fitHosp), fitAmt = r2(fitN * RATE.fit * RATE.fitShare);
+  const hepAmt = num(m.hep) * RATE.hep;
+  return {
+    pal, herbCases: sum('herbCases'), herb, herbHosp, herbUnit, kneeVisit: num(m.kneeVisit), kneeAmt: r2(kneeAmt), fitN, fitAmt, hepN: num(m.hep), hepAmt,
+    total: r2(pal + herbUnit + kneeAmt + fitAmt + hepAmt),
+    cases: sum('cases'), billed: r2(sum('billed')), paid: r2(sum('paid')), paidCases: sum('paidCases'), periods: unitDocs.length,
+  };
+}

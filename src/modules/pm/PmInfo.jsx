@@ -1,10 +1,11 @@
 // งาน PM ข้อมูลข่าวสาร อำเภอเมืองสกลนคร — หน้ารวมระบบย่อย (ไอคอน) ภายใต้งานข้อมูลข่าวสารและสารสนเทศ
 import { Link } from 'react-router-dom';
-import { ArrowRight, Banknote, ClipboardList } from 'lucide-react';
+import { ArrowRight, Banknote, BarChart3, ClipboardList } from 'lucide-react';
 import { PageHeader } from '../../components/Logo';
 
 const TOOLS = [
   { to: '/pm-info/hospital-debt', icon: Banknote, title: 'ระบบตรวจสอบเงินค้างจ่ายจาก รพ.สกลนคร', desc: 'รายชื่อ รพ.สต. อำเภอเมืองสกลนคร 24 แห่ง พร้อมช่องแนบไฟล์นำเข้าของแต่ละแห่ง', tone: 'from-emerald-600 to-teal-500' },
+  { to: '/pm-info/receivable', icon: BarChart3, title: 'รายงานพึงรับ รพ.สต. ปีงบ 2569', desc: 'นำเข้า zip รายงานพึงรับของแต่ละ รพ.สต. แล้วออกรายงานสรุปอำเภอและรายหน่วย', tone: 'from-sky-600 to-cyan-500' },
 ];
 
 export default function PmInfo() {
