@@ -1,8 +1,8 @@
 // รายงานพึงรับ รพ.สต. อำเภอเมืองสกลนคร ปีงบ 2569 — นำเข้า zip/xls จากแต่ละ รพ.สต. แล้วออกรายงานสรุปอำเภอ + รายหน่วย
-// Firestore: pmReceivable/{รหัส}_{งวด} (ยอดรวมเท่านั้น ไม่มีข้อมูลบุคคล) · pmDistrictInputs/{ปี}_{รหัส} (ข้อมูลกรอกเอง)
+// Firestore: pmReceivable/{รหัส}_{งวด} (ยอดรวม) · pmReceivableCases/{รหัส}_{งวด}_{n} (รายเคสไม่มีชื่อ/เลขบัตร) · pmDistrictInputs/{ปี}_{รหัส} (ข้อมูลกรอกเอง)
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, doc, onSnapshot, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from 'firebase/firestore';
 import { ArrowLeft, FileSpreadsheet, Download, Loader2, Upload } from 'lucide-react';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -12,7 +12,8 @@ import { exportXlsx } from '../../lib/exportFile';
 import { PageHeader } from '../../components/Logo';
 import { Spinner, Toast } from '../../components/ui';
 import { PM_UNITS } from './pmUnits';
-import { CATS, CAT_LABEL, districtRow, parseReceivable, unrar, unzip } from './receivable';
+import { chunkRows, districtRow, filterDocs, parseReceivable, sumRows, summaryRow, unrar, unzip, yymmOf } from './receivable';
+import { buildDistrictWorkbook, buildUnitWorkbook, downloadBuffer, mergeDocs } from './reportExcel';
 
 const FY = 2569;
 const money = (n) => (n || n === 0 ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
@@ -33,12 +34,15 @@ export default function ReceivableReport() {
   const canEdit = canWrite(profile?.role, 'pm-info');
   const [recv, setRecv] = useState(null);
   const [inputs, setInputs] = useState({});
-  const [tab, setTab] = useState('district');
+  const [tab, setTab] = useState('overview');
   const [unit, setUnit] = useState(PM_UNITS[6][0]);
   const [toast, setToast] = useState(null);
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const basis = 'HC'; // ยืนยันจากผู้ใช้: นับเฉพาะ HC
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [dl, setDl] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t); }, [toast]);
@@ -75,9 +79,13 @@ export default function ReceivableReport() {
     const ok = items.filter((i) => !problem(i)); if (!ok.length) return;
     setBusy(true);
     try {
-      const b = writeBatch(db);
-      ok.forEach((i) => b.set(doc(db, 'pmReceivable', `${i.code}_${i.period}`), { code: i.code, period: i.period, fileName: i.fileName, normal: i.normal, appeal: i.appeal, cases: i.cases, billed: i.billed, paid: i.paid, paidCases: i.paidCases, importedBy: user.email.toLowerCase(), importedAt: serverTimestamp() }));
-      await b.commit();
+      for (const i of ok) {
+        const chunks = chunkRows(i.caseRows || []);
+        const b = writeBatch(db);
+        b.set(doc(db, 'pmReceivable', `${i.code}_${i.period}`), { code: i.code, period: i.period, fileName: i.fileName, normal: i.normal, appeal: i.appeal, cases: i.cases, billed: i.billed, paid: i.paid, paidCases: i.paidCases, chunks: chunks.length, importedBy: user.email.toLowerCase(), importedAt: serverTimestamp() });
+        chunks.forEach((rows, k) => b.set(doc(db, 'pmReceivableCases', `${i.code}_${i.period}_${k}`), { code: i.code, period: i.period, k, rows: JSON.stringify(rows) }));
+        await b.commit();
+      }
       await writeAudit({ action: 'create', module: 'pm-info', docId: ok[0].code, label: 'นำเข้ารายงานพึงรับ', after: { จำนวนไฟล์: ok.length, หน่วย: [...new Set(ok.map((i) => i.code))].join(',') } });
       setToast({ type: 'ok', text: `นำเข้า ${ok.length} งวดแล้ว` }); setItems([]);
     } catch (err) { setToast({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
@@ -89,12 +97,75 @@ export default function ReceivableReport() {
     'พึงรับ: เรียกเก็บ': r.billed, 'พึงรับ: ชดเชยรวม': r.paid, 'พึงรับ: จำนวนงวด': r.periods,
   })), { ลำดับ: 'รวม', 'Palliative ชดเชย(บาท)': tot.pal, 'ยาสมุนไพร เคส': tot.herbCases, 'ยาสมุนไพร ยอดรวม': tot.herb, 'สัดส่วน 70': tot.herbHosp, 'สัดส่วน 30': tot.herbUnit, 'พอกเข่า ครั้ง': tot.kneeVisit, 'พอกเข่า ชดเชย': tot.kneeAmt, 'Fit test ครั้ง': tot.fitN, 'Fit test ชดเชย(50:50)': tot.fitAmt, 'ไวรัสตับ ครั้ง': tot.hepN, 'ไวรัสตับ ชดเชย': tot.hepAmt, 'รวมจ่าย(บาท)': tot.total, 'พึงรับ: เรียกเก็บ': tot.billed, 'พึงรับ: ชดเชยรวม': tot.paid }], 'สรุปทุกบริการ', `สรุปทุกบริการ_อำเภอเมือง_${FY}`);
 
-  const unitDocs = useMemo(() => [...(byUnit[unit] || [])].sort((a, b) => a.period.localeCompare(b.period)), [byUnit, unit]);
-  const unitRows = unitDocs.map((d, i) => {
-    const g = (k) => (d.normal?.[k] || 0) + (d.appeal?.[k] || 0);
-    return { ลำดับ: i + 1, รายงานงวด: d.period, เคสทั้งหมด: d.cases, เรียกเก็บ: d.billed, 'เคสได้รับ': d.paidCases, 'เคสไม่ได้รับ': d.cases - d.paidCases, ...Object.fromEntries(CATS.map((c) => [c, Math.round(g(c) * 100) / 100])), ยอดชดเชยรวม: d.paid };
+  const months = useMemo(() => [...new Set((recv || []).map((d) => yymmOf(d.period)))].sort(), [recv]);
+  const issued = new Date().toLocaleDateString('th-TH');
+  const unitDocs = useMemo(() => filterDocs(byUnit[unit] || [], from, to), [byUnit, unit, from, to]);
+  const unitSum = useMemo(() => unitDocs.map(summaryRow), [unitDocs]);
+  const unitTot = useMemo(() => sumRows(unitSum), [unitSum]);
+  const overview = useMemo(() => PM_UNITS.map(([code, name]) => { const ds = filterDocs(byUnit[code] || [], from, to); return { code, name, n: ds.length, row: summaryRow(mergeDocs(ds, code)) }; }), [byUnit, from, to]);
+  const overTot = useMemo(() => sumRows(overview.map((o) => o.row)), [overview]);
+  const servicesPayload = () => ({
+    note: `ปีงบ ${FY} · ยาสมุนไพร = ผลรวม HC เฉพาะแถวที่เป็นบวก · รพ.สต.ได้ 30%`,
+    rows: rows.map((r, i) => ({ ลำดับ: i + 1, 'รพ.สต.': `${r.code} - ${r.name}`, 'Palliative ชดเชย': r.pal, 'ยาสมุนไพร ยอดรวม': r.herb, 'สัดส่วน 70': r.herbHosp, 'สัดส่วน 30 (รพ.สต.)': r.herbUnit, 'พอกเข่า ชดเชย': r.kneeAmt, 'Fit test ชดเชย': r.fitAmt, 'ไวรัสตับ ชดเชย': r.hepAmt, 'รวมจ่าย': r.total })),
+    total: { ลำดับ: 'รวม', 'รพ.สต.': '', 'Palliative ชดเชย': tot.pal, 'ยาสมุนไพร ยอดรวม': tot.herb, 'สัดส่วน 70': tot.herbHosp, 'สัดส่วน 30 (รพ.สต.)': tot.herbUnit, 'พอกเข่า ชดเชย': tot.kneeAmt, 'Fit test ชดเชย': tot.fitAmt, 'ไวรัสตับ ชดเชย': tot.hepAmt, 'รวมจ่าย': tot.total },
   });
-  const unitTot = unitRows.reduce((t, r) => { Object.entries(r).forEach(([k, v]) => { if (typeof v === 'number' && k !== 'ลำดับ') t[k] = (t[k] || 0) + v; }); return t; }, {});
+  const downloadUnit = async () => {
+    setDl('unit');
+    try {
+      const snap = await getDocs(query(collection(db, 'pmReceivableCases'), where('code', '==', unit)));
+      const cm = {};
+      snap.docs.forEach((d) => { const x = d.data(); (cm[x.period] ||= []).push({ k: x.k, rows: JSON.parse(x.rows) }); });
+      const cases = Object.entries(cm).map(([period, parts]) => ({ period, rows: parts.sort((a, b) => a.k - b.k).flatMap((p) => p.rows) }));
+      const buf = await buildUnitWorkbook({ unit: { code: unit, name: UNIT_NAME[unit] }, docs: byUnit[unit] || [], cases, from, to, issued });
+      downloadBuffer(buf, `รายงานพึงรับ_${unit}_${UNIT_NAME[unit]}`);
+      if (!cases.length) setToast({ type: 'error', text: 'ชีต "ข้อมูลรายเคส" ว่าง — งวดเหล่านี้นำเข้าก่อนมีระบบเก็บรายเคส ให้นำเข้าไฟล์ซ้ำอีกครั้ง' });
+    } catch (e) { setToast({ type: 'error', text: 'สร้างไฟล์ไม่สำเร็จ: ' + (e.code || e.message) }); } finally { setDl(''); }
+  };
+  const downloadDistrict = async () => {
+    setDl('district');
+    try {
+      const buf = await buildDistrictWorkbook({ units: PM_UNITS, byUnit, from, to, issued, services: servicesPayload() });
+      downloadBuffer(buf, `รายงานพึงรับ_อำเภอเมือง_${FY}`);
+    } catch (e) { setToast({ type: 'error', text: 'สร้างไฟล์ไม่สำเร็จ: ' + (e.code || e.message) }); } finally { setDl(''); }
+  };
+  const rangeBox = (
+    <div className="flex flex-wrap items-center gap-1.5 text-sm text-slate-600">ช่วงเดือน
+      <select className="input !w-auto !py-1" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">ตั้งแต่ต้น</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+      ถึง
+      <select className="input !w-auto !py-1" value={to} onChange={(e) => setTo(e.target.value)}><option value="">ล่าสุด</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+    </div>
+  );
+  const SumTable = ({ items, tot, firstHead, firstCell }) => (
+    <div className="overflow-x-auto"><table className="w-full text-sm">
+      <thead className="bg-slate-50 align-bottom"><tr>
+        <th className="px-2 py-2 text-left text-xs">{firstHead}</th><th className={th}>เคส</th><th className={th}>เรียกเก็บ</th>
+        <th className={th}>ปกติ ได้รับ</th><th className={th}>เคสได้</th><th className={th}>เคสไม่ได้</th>
+        <th className={th}>อุทธรณ์ ได้รับ</th><th className={th}>เคสได้</th><th className={th}>เคสไม่ได้</th>
+        <th className={th}>ยาสมุนไพร (HC)</th><th className={th}>เคส</th><th className={th}>AE</th><th className={th}>เคส</th><th className={th}>PP</th><th className={th}>เคส</th><th className={th}>FS</th><th className={th}>เคส</th>
+        <th className={`${th} bg-emerald-100`}>รวมได้รับ</th><th className={`${th} bg-emerald-100`}>เคส</th></tr></thead>
+      <tbody className="divide-y divide-slate-100">
+        {items.map((it, i) => { const r = it.row; return (
+          <tr key={i}><td className="whitespace-nowrap px-2 py-1.5">{firstCell(it, i)}</td><td className={td}>{int(r.cases)}</td><td className={td}>{money(r.billed)}</td>
+            <td className={td}>{money(r.nPaid)}</td><td className={td}>{int(r.nOk)}</td><td className={td}>{int(r.nNo)}</td>
+            <td className={td}>{money(r.aPaid)}</td><td className={td}>{int(r.aOk)}</td><td className={td}>{int(r.aNo)}</td>
+            <td className={td}>{money(r.herb)}</td><td className={td}>{int(r.herbC)}</td><td className={td}>{money(r.ae)}</td><td className={td}>{int(r.aeC)}</td><td className={td}>{money(r.pp)}</td><td className={td}>{int(r.ppC)}</td><td className={td}>{money(r.fs)}</td><td className={td}>{int(r.fsC)}</td>
+            <td className={`${td} bg-emerald-50 font-semibold`}>{money(r.total)}</td><td className={`${td} bg-emerald-50`}>{int(r.totalC)}</td></tr>); })}
+        <tr className="bg-amber-50 font-bold"><td className="px-2 py-1.5">รวม</td><td className={td}>{int(tot.cases)}</td><td className={td}>{money(tot.billed)}</td>
+          <td className={td}>{money(tot.nPaid)}</td><td className={td}>{int(tot.nOk)}</td><td className={td}>{int(tot.nNo)}</td><td className={td}>{money(tot.aPaid)}</td><td className={td}>{int(tot.aOk)}</td><td className={td}>{int(tot.aNo)}</td>
+          <td className={td}>{money(tot.herb)}</td><td className={td}>{int(tot.herbC)}</td><td className={td}>{money(tot.ae)}</td><td className={td}>{int(tot.aeC)}</td><td className={td}>{money(tot.pp)}</td><td className={td}>{int(tot.ppC)}</td><td className={td}>{money(tot.fs)}</td><td className={td}>{int(tot.fsC)}</td>
+          <td className={td}>{money(tot.total)}</td><td className={td}>{int(tot.totalC)}</td></tr>
+      </tbody></table></div>
+  );
+  const Kpi = ({ t }) => {
+    const ok = (t.nOk || 0) + (t.aOk || 0); const no = (t.nNo || 0) + (t.aNo || 0);
+    const cards = [['เคสทั้งหมด', int(t.cases)], ['เรียกเก็บ (บาท)', money(t.billed)], ['ได้รับชดเชย (บาท)', money(t.total)], ['เคสที่ได้รับ', `${int(ok)}${t.cases ? ` (${((ok / t.cases) * 100).toFixed(1)}%)` : ''}`], ['เคสที่ไม่ได้รับ', `${int(no)}${t.cases ? ` (${((no / t.cases) * 100).toFixed(1)}%)` : ''}`], ['ได้รับ ÷ เรียกเก็บ', t.billed ? `${((t.total / t.billed) * 100).toFixed(1)}%` : '-']];
+    return <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">{cards.map(([l, v]) => <div key={l} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200"><div className="text-xs text-slate-500">{l}</div><div className="mt-1 text-lg font-bold tabular-nums text-emerald-800">{v}</div></div>)}</div>;
+  };
+  const Bars = ({ items, label }) => { const max = Math.max(1, ...items.map((i) => Math.max(i.billed, i.total))); return (
+    <div className="mt-4 space-y-1"><div className="text-xs font-semibold text-slate-600">เรียกเก็บ (เทา) เทียบเงินที่ได้รับ (เขียว) — {label}</div>
+      {items.map((i) => (<div key={i.k} className="flex items-center gap-2 text-xs"><div className="w-44 shrink-0 truncate text-slate-600">{i.k}</div>
+        <div className="flex-1"><div className="h-2 rounded bg-slate-300" style={{ width: `${(i.billed / max) * 100}%` }} /><div className="mt-0.5 h-2 rounded bg-emerald-500" style={{ width: `${(Math.max(i.total, 0) / max) * 100}%` }} /></div>
+        <div className="w-24 shrink-0 text-right tabular-nums">{money(i.total)}</div></div>))}</div>); };
 
   const th = 'whitespace-nowrap px-2 py-2 text-right text-xs font-semibold';
   const td = 'whitespace-nowrap px-2 py-1.5 text-right tabular-nums';
@@ -103,14 +174,14 @@ export default function ReceivableReport() {
       <PageHeader icon={FileSpreadsheet} emoji="📊" tone="from-emerald-700 via-emerald-600 to-teal-500" title={`รายงานพึงรับ รพ.สต. อำเภอเมือง ปีงบ ${FY}`} subtitle="นำเข้า zip/rar/xls ของแต่ละ รพ.สต. แล้วออกรายงานสรุปอำเภอและรายหน่วย" />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Link to="/pm-info/hospital-debt" className="btn btn-outline !px-3 !py-1.5 text-sm"><ArrowLeft className="h-4 w-4" /> กลับ</Link>
-        {[['district', 'สรุปอำเภอ'], ['unit', 'รายหน่วย'], ['import', 'นำเข้าไฟล์']].map(([k, l]) => (
+        {[['overview', 'ภาพรวมอำเภอ'], ['unit', 'รายงานรายหน่วย'], ['district', 'สรุปทุกบริการ'], ['import', 'นำเข้าไฟล์']].map(([k, l]) => (
           <button key={k} type="button" onClick={() => setTab(k)} className={`btn !px-3 !py-1.5 text-sm ${tab === k ? 'btn-primary' : 'btn-outline'}`}>{l}</button>
         ))}
         <span className="text-sm text-slate-500">นำเข้าแล้ว {Object.keys(byUnit).length}/{PM_UNITS.length} หน่วย · {(recv || []).length} งวด</span>
       </div>
       {recv === null ? <Spinner /> : tab === 'import' ? (
         <div className="card p-4">
-          <p className="mb-3 text-sm text-slate-600">เลือกไฟล์ zip หรือ rar ที่ รพ.สต. ส่งมา (หรือไฟล์ .xls รายงานพึงรับทีละไฟล์) ระบบอ่านรหัสหน่วยจากในไฟล์ และงวดจากเลข REP (หรือจากชื่อไฟล์ถ้ามี เช่น 6809_OP_02) ถ้านำเข้างวดเดิมซ้ำจะเขียนทับ · ระบบเก็บเฉพาะยอดรวม ไม่เก็บชื่อ-เลขบัตรผู้ป่วย</p>
+          <p className="mb-3 text-sm text-slate-600">เลือกไฟล์ zip หรือ rar ที่ รพ.สต. ส่งมา (หรือไฟล์ .xls รายงานพึงรับทีละไฟล์) ระบบอ่านรหัสหน่วยจากในไฟล์ และงวดจากเลข REP (หรือจากชื่อไฟล์ถ้ามี เช่น 6809_OP_02) ถ้านำเข้างวดเดิมซ้ำจะเขียนทับ · ระบบเก็บยอดรวมและรายเคสแบบไม่ระบุตัวตน (มีเฉพาะ REP, TRAN_ID, HN, ยอดเงิน — ไม่เก็บชื่อและเลขบัตรประชาชน)</p>
           <input ref={fileRef} type="file" multiple accept=".zip,.rar,.xls,.xlsx" className="hidden" onChange={(e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) readFiles(l); }} />
           <button type="button" className="btn btn-primary" disabled={busy || !canEdit} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} เลือกไฟล์ zip / rar / xls</button>
           {items.length > 0 && (
@@ -126,18 +197,30 @@ export default function ReceivableReport() {
             </>
           )}
         </div>
+      ) : tab === 'overview' ? (
+        <div className="card p-3">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            {rangeBox}
+            <button type="button" className="btn btn-primary !py-1.5 text-sm" disabled={dl === 'district'} onClick={downloadDistrict}>{dl === 'district' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} ดาวน์โหลด Excel ภาพรวมอำเภอ</button>
+            <span className="text-xs text-slate-500">เรียงตามรหัส รพ.สต. · ไฟล์ Excel มีชีต สรุปอำเภอ / รายหมวด / แดชบอร์ด / รายเดือนตามหน่วย / สรุปทุกบริการ / หมายเหตุ</span>
+          </div>
+          <Kpi t={overTot} />
+          <SumTable items={overview} tot={overTot} firstHead="รพ.สต. (เรียงตามรหัส)" firstCell={(o) => <><span className="font-mono text-xs text-emerald-700">{o.code}</span> {o.name} <span className="text-xs text-slate-400">{o.n ? `(${o.n} งวด)` : '(ยังไม่นำเข้า)'}</span></>} />
+          <Bars items={overview.filter((o) => o.n).map((o) => ({ k: `${o.code} ${o.name}`, billed: o.row.billed, total: o.row.total }))} label="รายหน่วย" />
+        </div>
       ) : tab === 'unit' ? (
         <div className="card p-3">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
             <select className="input !w-auto !py-1.5" value={unit} onChange={(e) => setUnit(e.target.value)}>{PM_UNITS.map(([c, n]) => <option key={c} value={c}>{c} {n}</option>)}</select>
-            <button type="button" className="btn btn-outline !py-1.5 text-sm" disabled={!unitRows.length} onClick={() => exportXlsx([...unitRows, { ลำดับ: 'รวม', ...unitTot, รายงานงวด: '' }], 'รายหมวด', `รายงานพึงรับ_${unit}_${FY}`)}><Download className="h-4 w-4" /> Excel</button>
+            {rangeBox}
+            <button type="button" className="btn btn-primary !py-1.5 text-sm" disabled={!unitSum.length || dl === 'unit'} onClick={downloadUnit}>{dl === 'unit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} ดาวน์โหลด Excel (สรุป / แดชบอร์ด / รายหมวด / ข้อมูลรายเคส / หมายเหตุ)</button>
           </div>
-          {!unitRows.length ? <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลของหน่วยนี้ — ไปที่แท็บ "นำเข้าไฟล์"</p> : (
-            <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead className="bg-slate-50"><tr><th className="px-2 py-2 text-left text-xs">งวด</th><th className={th}>เคส</th><th className={th}>เรียกเก็บ</th><th className={th}>ได้รับ</th><th className={th}>ไม่ได้รับ</th>{CATS.map((c) => <th key={c} className={th}>{CAT_LABEL[c]}</th>)}<th className={th}>ชดเชยรวม</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">{unitRows.map((r) => (<tr key={r.รายงานงวด}><td className="px-2 py-1.5">{r.รายงานงวด}</td><td className={td}>{int(r.เคสทั้งหมด)}</td><td className={td}>{money(r.เรียกเก็บ)}</td><td className={td}>{int(r.เคสได้รับ)}</td><td className={td}>{int(r.เคสไม่ได้รับ)}</td>{CATS.map((c) => <td key={c} className={td}>{money(r[c])}</td>)}<td className={`${td} font-semibold`}>{money(r.ยอดชดเชยรวม)}</td></tr>))}
-                <tr className="bg-emerald-50 font-bold"><td className="px-2 py-1.5">รวม</td><td className={td}>{int(unitTot.เคสทั้งหมด)}</td><td className={td}>{money(unitTot.เรียกเก็บ)}</td><td className={td}>{int(unitTot.เคสได้รับ)}</td><td className={td}>{int(unitTot.เคสไม่ได้รับ)}</td>{CATS.map((c) => <td key={c} className={td}>{money(unitTot[c])}</td>)}<td className={td}>{money(unitTot.ยอดชดเชยรวม)}</td></tr></tbody>
-            </table></div>
+          {!unitSum.length ? <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลของหน่วยนี้ — ไปที่แท็บ "นำเข้าไฟล์"</p> : (
+            <>
+              <Kpi t={unitTot} />
+              <SumTable items={unitSum.map((r) => ({ row: r }))} tot={unitTot} firstHead="รายงานงวด" firstCell={(it) => it.row.period} />
+              <Bars items={unitSum.map((r) => ({ k: r.period, billed: r.billed, total: r.total }))} label="รายงวด" />
+            </>
           )}
         </div>
       ) : (
