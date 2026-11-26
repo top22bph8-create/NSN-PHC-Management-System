@@ -82,15 +82,17 @@ export async function unzip(buf) {
 export const RATE = { palliative: 500, fit: 60, fitShare: 0.5, hep: 50, knee: 100, herbUnitShare: 0.3 };
 export function districtRow(unitDocs, manual = {}, herbBasis = 'HC') {
   const sum = (k) => unitDocs.reduce((s, d) => s + (d.normal?.[k] || 0) + (d.appeal?.[k] || 0), 0);
-  const m = { palVisit: 0, palDead: 0, fitUnit: 0, fitHosp: 0, hep: 0, kneeVisit: 0, kneeAmount: null, ...manual };
+  const m = { palVisit: 0, palDead: 0, fitAmount: null, fitUnit: 0, fitHosp: 0, dm: 0, fluoride: 0, tele: 0, hep: 0, kneeVisit: 0, kneeAmount: null, ...manual };
   const pal = (num(m.palVisit) + num(m.palDead)) * RATE.palliative;
   const herb = r2(sum(herbBasis === 'DRUG' ? 'DRUGpos' : 'HCpos')), herbUnit = r2(herb * RATE.herbUnitShare), herbHosp = r2(herb - herbUnit);
   const kneeAmt = m.kneeAmount === null || m.kneeAmount === '' ? num(m.kneeVisit) * RATE.knee : num(m.kneeAmount);
-  const fitN = num(m.fitUnit) + num(m.fitHosp), fitAmt = r2(fitN * RATE.fit * RATE.fitShare);
+  // Fit test: กรอกเป็นยอดเงิน (บาท) ตามไฟล์ CUP; ถ้าไม่กรอกแต่มีข้อมูลเดิม (จำนวนครั้ง) ใช้สูตรเดิม 60 บาท แบ่ง 50:50
+  const fitAmt = r2(m.fitAmount === null || m.fitAmount === '' ? (num(m.fitUnit) + num(m.fitHosp)) * RATE.fit * RATE.fitShare : num(m.fitAmount));
+  const dmAmt = r2(num(m.dm)), fluorideAmt = r2(num(m.fluoride)), teleAmt = r2(num(m.tele));
   const hepAmt = num(m.hep) * RATE.hep;
   return {
-    pal, herbCases: sum('HCc'), herb, herbHosp, herbUnit, kneeVisit: num(m.kneeVisit), kneeAmt: r2(kneeAmt), fitN, fitAmt, hepN: num(m.hep), hepAmt,
-    total: r2(pal + herbUnit + kneeAmt + fitAmt + hepAmt),
+    pal, herbCases: sum('HCc'), herb, herbHosp, herbUnit, kneeVisit: num(m.kneeVisit), kneeAmt: r2(kneeAmt), fitAmt, dmAmt, fluorideAmt, teleAmt, hepN: num(m.hep), hepAmt,
+    total: r2(pal + herbUnit + kneeAmt + fitAmt + hepAmt + dmAmt + fluorideAmt + teleAmt),
     cases: sum('cases'), billed: r2(sum('billed')), paid: r2(sum('paid')), paidCases: sum('paidCases'), periods: unitDocs.length,
   };
 }

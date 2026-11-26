@@ -20,7 +20,7 @@ const money = (n) => (n || n === 0 ? Number(n).toLocaleString('th-TH', { minimum
 const int = (n) => Number(n || 0).toLocaleString('th-TH');
 const UNIT_NAME = Object.fromEntries(PM_UNITS);
 const MANUAL = [
-  ['palVisit', 'Palliative เยี่ยม(ครั้ง)'], ['palDead', 'Palliative เสียชีวิต'], ['fitUnit', 'Fit test รพ.สต.ส่ง'], ['fitHosp', 'Fit test รพ.ส่ง'], ['hep', 'ไวรัสตับ บี/ซี (ครั้ง)'], ['kneeVisit', 'พอกเข่า(ครั้ง)'], ['kneeAmount', 'พอกเข่า(บาท) ถ้าไม่กรอก=ครั้ง×100'],
+  ['palVisit', 'Palliative เยี่ยม(ครั้ง)'], ['palDead', 'Palliative เสียชีวิต'], ['fitAmount', 'Fit test (บาท)'], ['dm', 'คัดกรองเบาหวาน/ไขมันในเลือด (บาท)'], ['fluoride', 'เคลือบฟลูออไรด์ (บาท)'], ['tele', 'Telemedicine (บาท)'], ['hep', 'ไวรัสตับ บี/ซี (ครั้ง)'], ['kneeVisit', 'พอกเข่า(ครั้ง)'], ['kneeAmount', 'พอกเข่า(บาท) ถ้าไม่กรอก=ครั้ง×100'],
 ];
 
 function ManualCell({ value, canEdit, onSave }) {
@@ -107,6 +107,26 @@ export default function ReceivableReport() {
     try { await setDoc(doc(db, 'pmDistrictInputs', `${FY}_${code}`), { code, fy: FY, [key]: val, updatedAt: serverTimestamp(), updatedBy: user.email.toLowerCase() }, { merge: true }); }
     catch (e) { setToast({ type: 'error', text: 'บันทึกไม่สำเร็จ: ' + (e.code || e.message) }); }
   };
+  // นำเข้ายอดเงินจากไฟล์ CUP (ชีต "บันทึกข้อมูล": เบาหวาน/ไขมัน, ฟลูออไรด์, Fit test, Telemedicine ต่อ รพ.สต.)
+  const cupRef = useRef(null);
+  const importCup = async (f) => {
+    setBusy(true);
+    try {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      const ws = wb.Sheets['บันทึกข้อมูล'] || wb.Sheets[wb.SheetNames.find((n) => /บันทึก/.test(n))];
+      if (!ws) throw new Error('ไม่พบชีต "บันทึกข้อมูล"');
+      const num = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+      const b = writeBatch(db); let n = 0;
+      XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }).forEach((r) => {
+        const code = String(r[1] || '').trim().slice(0, 5);
+        if (!UNIT_NAME[code]) return;
+        b.set(doc(db, 'pmDistrictInputs', `${FY}_${code}`), { code, fy: FY, dm: num(r[2]), fluoride: num(r[3]), fitAmount: num(r[4]), tele: num(r[5]), updatedAt: serverTimestamp(), updatedBy: user.email.toLowerCase() }, { merge: true }); n += 1;
+      });
+      if (!n) throw new Error('ไม่พบรหัสหน่วยในไฟล์');
+      await b.commit(); setToast({ type: 'ok', text: `นำเข้ายอดจากไฟล์ CUP ${n} หน่วยแล้ว` });
+    } catch (e) { setToast({ type: 'error', text: 'นำเข้าไฟล์ CUP ไม่สำเร็จ: ' + (e.code || e.message) }); } finally { setBusy(false); }
+  };
   const rows = useMemo(() => PM_UNITS.map(([code, name]) => ({ code, name, ...districtRow(byUnit[code] || [], inputs[`${FY}_${code}`] || {}, basis) })), [byUnit, inputs, basis]);
   const tot = useMemo(() => rows.reduce((t, r) => { Object.keys(r).forEach((k) => { if (typeof r[k] === 'number') t[k] = (t[k] || 0) + r[k]; }); return t; }, {}), [rows]);
 
@@ -167,9 +187,9 @@ export default function ReceivableReport() {
 
   const exportDistrict = () => exportXlsx([...rows.map((r, i) => ({
     ลำดับ: i + 1, 'รพ.สต.': `${r.code} - ${r.name}`, 'Palliative ชดเชย(บาท)': r.pal, 'ยาสมุนไพร เคส': r.herbCases, 'ยาสมุนไพร ยอดรวม': r.herb, 'สัดส่วน 70': r.herbHosp, 'สัดส่วน 30': r.herbUnit,
-    'พอกเข่า ครั้ง': r.kneeVisit, 'พอกเข่า ชดเชย': r.kneeAmt, 'Fit test ครั้ง': r.fitN, 'Fit test ชดเชย(50:50)': r.fitAmt, 'ไวรัสตับ ครั้ง': r.hepN, 'ไวรัสตับ ชดเชย': r.hepAmt, 'รวมจ่าย(บาท)': r.total,
+    'พอกเข่า ครั้ง': r.kneeVisit, 'พอกเข่า ชดเชย': r.kneeAmt, 'Fit test (บาท)': r.fitAmt, 'คัดกรองเบาหวาน/ไขมัน (บาท)': r.dmAmt, 'เคลือบฟลูออไรด์ (บาท)': r.fluorideAmt, 'Telemedicine (บาท)': r.teleAmt, 'ไวรัสตับ ครั้ง': r.hepN, 'ไวรัสตับ ชดเชย': r.hepAmt, 'รวมจ่าย(บาท)': r.total,
     'พึงรับ: เรียกเก็บ': r.billed, 'พึงรับ: ชดเชยรวม': r.paid, 'พึงรับ: จำนวนงวด': r.periods,
-  })), { ลำดับ: 'รวม', 'Palliative ชดเชย(บาท)': tot.pal, 'ยาสมุนไพร เคส': tot.herbCases, 'ยาสมุนไพร ยอดรวม': tot.herb, 'สัดส่วน 70': tot.herbHosp, 'สัดส่วน 30': tot.herbUnit, 'พอกเข่า ครั้ง': tot.kneeVisit, 'พอกเข่า ชดเชย': tot.kneeAmt, 'Fit test ครั้ง': tot.fitN, 'Fit test ชดเชย(50:50)': tot.fitAmt, 'ไวรัสตับ ครั้ง': tot.hepN, 'ไวรัสตับ ชดเชย': tot.hepAmt, 'รวมจ่าย(บาท)': tot.total, 'พึงรับ: เรียกเก็บ': tot.billed, 'พึงรับ: ชดเชยรวม': tot.paid }], 'สรุปทุกบริการ', `สรุปทุกบริการ_อำเภอเมือง_${FY}`);
+  })), { ลำดับ: 'รวม', 'Palliative ชดเชย(บาท)': tot.pal, 'ยาสมุนไพร เคส': tot.herbCases, 'ยาสมุนไพร ยอดรวม': tot.herb, 'สัดส่วน 70': tot.herbHosp, 'สัดส่วน 30': tot.herbUnit, 'พอกเข่า ครั้ง': tot.kneeVisit, 'พอกเข่า ชดเชย': tot.kneeAmt, 'Fit test (บาท)': tot.fitAmt, 'คัดกรองเบาหวาน/ไขมัน (บาท)': tot.dmAmt, 'เคลือบฟลูออไรด์ (บาท)': tot.fluorideAmt, 'Telemedicine (บาท)': tot.teleAmt, 'ไวรัสตับ ครั้ง': tot.hepN, 'ไวรัสตับ ชดเชย': tot.hepAmt, 'รวมจ่าย(บาท)': tot.total, 'พึงรับ: เรียกเก็บ': tot.billed, 'พึงรับ: ชดเชยรวม': tot.paid }], 'สรุปทุกบริการ', `สรุปทุกบริการ_อำเภอเมือง_${FY}`);
 
   const months = useMemo(() => [...new Set((recv || []).map((d) => yymmOf(d.period)))].sort(), [recv]);
   const issued = new Date().toLocaleDateString('th-TH');
@@ -181,8 +201,8 @@ export default function ReceivableReport() {
   const overTot = useMemo(() => sumRows(overview.map((o) => o.row)), [overview]);
   const servicesPayload = () => ({
     note: `ปีงบ ${FY} · ยาสมุนไพร = ผลรวม HC เฉพาะแถวที่เป็นบวก · รพ.สต.ได้ 30%`,
-    rows: rows.map((r, i) => ({ ลำดับ: i + 1, 'รพ.สต.': `${r.code} - ${r.name}`, 'Palliative ชดเชย': r.pal, 'ยาสมุนไพร ยอดรวม': r.herb, 'สัดส่วน 70': r.herbHosp, 'สัดส่วน 30 (รพ.สต.)': r.herbUnit, 'พอกเข่า ชดเชย': r.kneeAmt, 'Fit test ชดเชย': r.fitAmt, 'ไวรัสตับ ชดเชย': r.hepAmt, 'รวมจ่าย': r.total })),
-    total: { ลำดับ: 'รวม', 'รพ.สต.': '', 'Palliative ชดเชย': tot.pal, 'ยาสมุนไพร ยอดรวม': tot.herb, 'สัดส่วน 70': tot.herbHosp, 'สัดส่วน 30 (รพ.สต.)': tot.herbUnit, 'พอกเข่า ชดเชย': tot.kneeAmt, 'Fit test ชดเชย': tot.fitAmt, 'ไวรัสตับ ชดเชย': tot.hepAmt, 'รวมจ่าย': tot.total },
+    rows: rows.map((r, i) => ({ ลำดับ: i + 1, 'รพ.สต.': `${r.code} - ${r.name}`, 'Palliative ชดเชย': r.pal, 'ยาสมุนไพร ยอดรวม': r.herb, 'สัดส่วน 70': r.herbHosp, 'สัดส่วน 30 (รพ.สต.)': r.herbUnit, 'พอกเข่า ชดเชย': r.kneeAmt, 'Fit test': r.fitAmt, 'คัดกรองเบาหวาน/ไขมัน': r.dmAmt, 'เคลือบฟลูออไรด์': r.fluorideAmt, 'Telemedicine': r.teleAmt, 'ไวรัสตับ ชดเชย': r.hepAmt, 'รวมจ่าย': r.total })),
+    total: { ลำดับ: 'รวม', 'รพ.สต.': '', 'Palliative ชดเชย': tot.pal, 'ยาสมุนไพร ยอดรวม': tot.herb, 'สัดส่วน 70': tot.herbHosp, 'สัดส่วน 30 (รพ.สต.)': tot.herbUnit, 'พอกเข่า ชดเชย': tot.kneeAmt, 'Fit test': tot.fitAmt, 'คัดกรองเบาหวาน/ไขมัน': tot.dmAmt, 'เคลือบฟลูออไรด์': tot.fluorideAmt, 'Telemedicine': tot.teleAmt, 'ไวรัสตับ ชดเชย': tot.hepAmt, 'รวมจ่าย': tot.total },
   });
   const loadCases = async (code) => {
     const snap = await getDocs(query(collection(db, 'pmReceivableCases'), where('code', '==', code)));
@@ -362,16 +382,18 @@ export default function ReceivableReport() {
         <div className="card p-3">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <button type="button" className="btn btn-outline !py-1.5 text-sm" onClick={exportDistrict}><Download className="h-4 w-4" /> ส่งออก Excel</button>
+            <input ref={cupRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importCup(f); }} />
+            <button type="button" className="btn btn-outline !py-1.5 text-sm" disabled={busy || !canEdit} onClick={() => cupRef.current?.click()}><Upload className="h-4 w-4" /> นำเข้ายอดจากไฟล์ CUP</button>
             <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-800 ring-1 ring-emerald-200">ยาสมุนไพร = ผลรวมคอลัมน์ HC เฉพาะแถวที่เป็นบวก</span>
-            <span className="text-xs text-slate-500">ช่องกรอกเอง (ขอบสีขาว) = Palliative, Fit test, ไวรัสตับ, พอกเข่า · รพ.สต.ได้ 30% · Fit test 60 บาท แบ่ง 50:50 · ไวรัสตับ 50 บาท/ครั้ง</span>
+            <span className="text-xs text-slate-500">ช่องกรอกเอง (ขอบสีขาว) = Palliative, ยอดเงิน Fit test / เบาหวาน-ไขมัน / ฟลูออไรด์ / Telemedicine (ตามไฟล์ CUP), ไวรัสตับ, พอกเข่า · รพ.สต.ได้ 30% · ไวรัสตับ 50 บาท/ครั้ง</span>
           </div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="bg-slate-50 align-bottom"><tr><th className="px-2 py-2 text-left text-xs">รพ.สต.</th>{MANUAL.map(([k, l]) => <th key={k} className="px-1 py-2 text-xs font-semibold">{l}</th>)}<th className={th}>Palliative ชดเชย</th><th className={th}>ยาสมุนไพร ยอดรวม</th><th className={th}>70%</th><th className={th}>30% (รพ.สต.)</th><th className={th}>พอกเข่า ชดเชย</th><th className={th}>Fit test ชดเชย</th><th className={th}>ไวรัสตับ ชดเชย</th><th className={`${th} bg-emerald-100`}>รวมจ่าย</th><th className={th}>พึงรับ ชดเชยรวม</th></tr></thead>
+            <thead className="bg-slate-50 align-bottom"><tr><th className="px-2 py-2 text-left text-xs">รพ.สต.</th>{MANUAL.map(([k, l]) => <th key={k} className="px-1 py-2 text-xs font-semibold">{l}</th>)}<th className={th}>Palliative ชดเชย</th><th className={th}>ยาสมุนไพร ยอดรวม</th><th className={th}>70%</th><th className={th}>30% (รพ.สต.)</th><th className={th}>พอกเข่า ชดเชย</th><th className={th}>Fit test</th><th className={th}>เบาหวาน/ไขมัน</th><th className={th}>ฟลูออไรด์</th><th className={th}>Telemedicine</th><th className={th}>ไวรัสตับ ชดเชย</th><th className={`${th} bg-emerald-100`}>รวมจ่าย</th><th className={th}>พึงรับ ชดเชยรวม</th></tr></thead>
             <tbody className="divide-y divide-slate-100">{rows.map((r) => { const m = inputs[`${FY}_${r.code}`] || {}; return (
               <tr key={r.code}><td className="whitespace-nowrap px-2 py-1.5"><span className="font-mono text-xs text-emerald-700">{r.code}</span> {r.name}</td>
                 {MANUAL.map(([k]) => <td key={k} className="px-1 py-1"><ManualCell value={m[k]} canEdit={canEdit} onSave={(v) => saveInput(r.code, k, v)} /></td>)}
-                <td className={td}>{money(r.pal)}</td><td className={td}>{money(r.herb)}</td><td className={td}>{money(r.herbHosp)}</td><td className={td}>{money(r.herbUnit)}</td><td className={td}>{money(r.kneeAmt)}</td><td className={td}>{money(r.fitAmt)}</td><td className={td}>{money(r.hepAmt)}</td><td className={`${td} bg-emerald-50 font-bold`}>{money(r.total)}</td><td className={td}>{money(r.paid)}</td></tr>); })}
-              <tr className="bg-emerald-50 font-bold"><td className="px-2 py-1.5">รวม</td><td colSpan={MANUAL.length} /><td className={td}>{money(tot.pal)}</td><td className={td}>{money(tot.herb)}</td><td className={td}>{money(tot.herbHosp)}</td><td className={td}>{money(tot.herbUnit)}</td><td className={td}>{money(tot.kneeAmt)}</td><td className={td}>{money(tot.fitAmt)}</td><td className={td}>{money(tot.hepAmt)}</td><td className={td}>{money(tot.total)}</td><td className={td}>{money(tot.paid)}</td></tr></tbody>
+                <td className={td}>{money(r.pal)}</td><td className={td}>{money(r.herb)}</td><td className={td}>{money(r.herbHosp)}</td><td className={td}>{money(r.herbUnit)}</td><td className={td}>{money(r.kneeAmt)}</td><td className={td}>{money(r.fitAmt)}</td><td className={td}>{money(r.dmAmt)}</td><td className={td}>{money(r.fluorideAmt)}</td><td className={td}>{money(r.teleAmt)}</td><td className={td}>{money(r.hepAmt)}</td><td className={`${td} bg-emerald-50 font-bold`}>{money(r.total)}</td><td className={td}>{money(r.paid)}</td></tr>); })}
+              <tr className="bg-emerald-50 font-bold"><td className="px-2 py-1.5">รวม</td><td colSpan={MANUAL.length} /><td className={td}>{money(tot.pal)}</td><td className={td}>{money(tot.herb)}</td><td className={td}>{money(tot.herbHosp)}</td><td className={td}>{money(tot.herbUnit)}</td><td className={td}>{money(tot.kneeAmt)}</td><td className={td}>{money(tot.fitAmt)}</td><td className={td}>{money(tot.dmAmt)}</td><td className={td}>{money(tot.fluorideAmt)}</td><td className={td}>{money(tot.teleAmt)}</td><td className={td}>{money(tot.hepAmt)}</td><td className={td}>{money(tot.total)}</td><td className={td}>{money(tot.paid)}</td></tr></tbody>
           </table></div>
         </div>
       )}
