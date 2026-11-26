@@ -12,7 +12,7 @@ import { exportXlsx } from '../../lib/exportFile';
 import { PageHeader } from '../../components/Logo';
 import { Spinner, Toast } from '../../components/ui';
 import { PM_UNITS } from './pmUnits';
-import { CATS, CAT_LABEL, districtRow, parseReceivable, unzip } from './receivable';
+import { CATS, CAT_LABEL, districtRow, parseReceivable, unrar, unzip } from './receivable';
 
 const FY = 2569;
 const money = (n) => (n || n === 0 ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
@@ -60,14 +60,14 @@ export default function ReceivableReport() {
       const entries = [];
       for (const f of list) {
         const buf = await f.arrayBuffer();
-        if (/\.zip$/i.test(f.name)) (await unzip(buf)).forEach((e) => { if (/\.xlsx?$/i.test(e.name) && !/__MACOSX|\/~\$|^~\$/.test(e.name)) entries.push({ name: e.name.split('/').pop(), buf: e.buf }); });
+        if (/\.(zip|rar)$/i.test(f.name)) (await (/\.rar$/i.test(f.name) ? unrar(buf) : unzip(buf))).forEach((e) => { const base = e.name.split(/[\\/]/).pop(); if (/\.xlsx?$/i.test(base) && !/__MACOSX|^~\$/.test(e.name)) entries.push({ name: base, buf: e.buf }); });
         else if (/\.xlsx?$/i.test(f.name)) entries.push({ name: f.name, buf });
       }
       for (const e of entries) {
         try { out.push(parseReceivable(XLSX, e.buf, e.name)); } catch (err) { out.push({ fileName: e.name, error: err.message }); }
       }
       setItems(out);
-      if (!out.length) setToast({ type: 'error', text: 'ไม่พบไฟล์ .xls/.xlsx ใน zip' });
+      if (!out.length) setToast({ type: 'error', text: 'ไม่พบไฟล์ .xls/.xlsx ใน zip/rar' });
     } catch (err) { setToast({ type: 'error', text: 'อ่านไฟล์ไม่สำเร็จ: ' + err.message }); } finally { setBusy(false); }
   };
   const problem = (it) => it.error || (!it.period && 'อ่านงวดจากชื่อไฟล์ไม่ได้') || (!UNIT_NAME[it.code] && `ไม่พบรหัสหน่วย ${it.code || '-'} ในรายชื่อ 24 แห่ง`) || (!it.cases && 'ไม่พบรายการข้อมูล') || '';
@@ -100,7 +100,7 @@ export default function ReceivableReport() {
   const td = 'whitespace-nowrap px-2 py-1.5 text-right tabular-nums';
   return (
     <div className="mx-auto max-w-[1400px] p-4 lg:p-6">
-      <PageHeader icon={FileSpreadsheet} emoji="📊" tone="from-emerald-700 via-emerald-600 to-teal-500" title={`รายงานพึงรับ รพ.สต. อำเภอเมือง ปีงบ ${FY}`} subtitle="นำเข้า zip/xls ของแต่ละ รพ.สต. แล้วออกรายงานสรุปอำเภอและรายหน่วย" />
+      <PageHeader icon={FileSpreadsheet} emoji="📊" tone="from-emerald-700 via-emerald-600 to-teal-500" title={`รายงานพึงรับ รพ.สต. อำเภอเมือง ปีงบ ${FY}`} subtitle="นำเข้า zip/rar/xls ของแต่ละ รพ.สต. แล้วออกรายงานสรุปอำเภอและรายหน่วย" />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Link to="/pm-info/hospital-debt" className="btn btn-outline !px-3 !py-1.5 text-sm"><ArrowLeft className="h-4 w-4" /> กลับ</Link>
         {[['district', 'สรุปอำเภอ'], ['unit', 'รายหน่วย'], ['import', 'นำเข้าไฟล์']].map(([k, l]) => (
@@ -110,9 +110,9 @@ export default function ReceivableReport() {
       </div>
       {recv === null ? <Spinner /> : tab === 'import' ? (
         <div className="card p-4">
-          <p className="mb-3 text-sm text-slate-600">เลือกไฟล์ zip ที่ รพ.สต. ส่งมา (หรือไฟล์ .xls รายงานพึงรับทีละไฟล์) ระบบอ่านรหัสหน่วยจากไฟล์และงวดจากชื่อไฟล์ (เช่น 6809_OP_02) ถ้านำเข้างวดเดิมซ้ำจะเขียนทับ · ระบบเก็บเฉพาะยอดรวม ไม่เก็บชื่อ-เลขบัตรผู้ป่วย</p>
-          <input ref={fileRef} type="file" multiple accept=".zip,.xls,.xlsx" className="hidden" onChange={(e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) readFiles(l); }} />
-          <button type="button" className="btn btn-primary" disabled={busy || !canEdit} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} เลือกไฟล์ zip / xls</button>
+          <p className="mb-3 text-sm text-slate-600">เลือกไฟล์ zip หรือ rar ที่ รพ.สต. ส่งมา (หรือไฟล์ .xls รายงานพึงรับทีละไฟล์) ระบบอ่านรหัสหน่วยจากในไฟล์ และงวดจากเลข REP (หรือจากชื่อไฟล์ถ้ามี เช่น 6809_OP_02) ถ้านำเข้างวดเดิมซ้ำจะเขียนทับ · ระบบเก็บเฉพาะยอดรวม ไม่เก็บชื่อ-เลขบัตรผู้ป่วย</p>
+          <input ref={fileRef} type="file" multiple accept=".zip,.rar,.xls,.xlsx" className="hidden" onChange={(e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) readFiles(l); }} />
+          <button type="button" className="btn btn-primary" disabled={busy || !canEdit} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} เลือกไฟล์ zip / rar / xls</button>
           {items.length > 0 && (
             <>
               <div className="mt-4 overflow-x-auto"><table className="w-full text-sm">

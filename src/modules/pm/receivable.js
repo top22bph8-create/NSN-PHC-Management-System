@@ -88,3 +88,18 @@ export function districtRow(unitDocs, manual = {}, herbBasis = 'HC') {
     cases: sum('cases'), billed: r2(sum('billed')), paid: r2(sum('paid')), paidCases: sum('paidCases'), periods: unitDocs.length,
   };
 }
+
+// แตก rar (RAR4/RAR5) ในเบราว์เซอร์ด้วย WebAssembly — โหลดเฉพาะตอนเลือกไฟล์ .rar
+export async function unrar(buf) {
+  const [{ createExtractorFromData }, wasm] = await Promise.all([import('node-unrar-js'), import('node-unrar-js/esm/js/unrar.wasm?url')]);
+  const wasmBinary = await (await fetch(wasm.default)).arrayBuffer();
+  const ex = await createExtractorFromData({ wasmBinary, data: new Uint8Array(buf) });
+  const names = [...ex.getFileList().fileHeaders].filter((h) => !h.flags.directory).map((h) => h.name);
+  const out = [];
+  for (const f of ex.extract({ files: names }).files) {
+    const d = f.extraction;
+    const bytes = d && d.data ? d.data : d; // เวอร์ชันต่างกันคืน {data} หรือ Uint8Array
+    if (bytes && bytes.length) out.push({ name: f.fileHeader.name, buf: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
+  }
+  return out;
+}
