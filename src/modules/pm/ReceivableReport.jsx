@@ -126,6 +126,27 @@ export default function ReceivableReport() {
     } catch (err) { setToast({ type: 'error', text: 'อ่านไฟล์ไม่สำเร็จ: ' + err.message }); } finally { setBusy(false); }
   };
   const problem = (it) => it.error || (!it.period && 'อ่านงวดจากชื่อไฟล์ไม่ได้') || (!UNIT_NAME[it.code] && `ไม่พบรหัสหน่วย ${it.code || '-'} ในรายชื่อ 24 แห่ง`) || (!it.cases && 'ไม่พบรายการข้อมูล') || '';
+  // ลบข้อมูลที่นำเข้า: เลือกหน่วยเดียว หรือ ALL (ทั้งอำเภอ) — ลบทั้งยอดรวมและรายเคส ไม่ลบข้อมูลกรอกเอง (pmDistrictInputs)
+  const [delUnit, setDelUnit] = useState('');
+  const wipe = async () => {
+    if (!delUnit) return;
+    const label = delUnit === 'ALL' ? 'ทุกหน่วย (ทั้งอำเภอ)' : (PM_UNITS.find(([c]) => c === delUnit) || []).join(' ');
+    if (!window.confirm(`ลบข้อมูลรายงานพึงรับที่นำเข้าของ ${label} ทั้งหมด?\nลบแล้วกู้คืนไม่ได้ ต้องนำเข้าไฟล์ใหม่`)) return;
+    setBusy(true);
+    try {
+      let n = 0;
+      for (const col of ['pmReceivable', 'pmReceivableCases']) {
+        const snap = await getDocs(delUnit === 'ALL' ? collection(db, col) : query(collection(db, col), where('code', '==', delUnit)));
+        for (let i = 0; i < snap.docs.length; i += 400) {
+          const b = writeBatch(db); snap.docs.slice(i, i + 400).forEach((d) => b.delete(d.ref)); await b.commit();
+        }
+        n += snap.docs.length;
+      }
+      await writeAudit({ action: 'delete', module: 'pm-info', docId: delUnit, label: 'ลบข้อมูลรายงานพึงรับที่นำเข้า', before: { หน่วย: label, จำนวนเอกสาร: n } });
+      setCaseData({ unit: '', list: [] }); setDelUnit('');
+      setToast({ type: 'ok', text: `ลบแล้ว ${n} เอกสาร` });
+    } catch (err) { setToast({ type: 'error', text: 'ลบไม่สำเร็จ: ' + (err.code || err.message) }); } finally { setBusy(false); }
+  };
   const saveAll = async () => {
     const ok = items.filter((i) => !problem(i)); if (!ok.length) return;
     setBusy(true);
@@ -244,6 +265,15 @@ export default function ReceivableReport() {
           <p className="mb-3 text-sm text-slate-600">เลือกไฟล์ zip หรือ rar ที่ รพ.สต. ส่งมา (หรือไฟล์ .xls รายงานพึงรับทีละไฟล์) ระบบอ่านรหัสหน่วยจากในไฟล์ และงวดจากเลข REP (หรือจากชื่อไฟล์ถ้ามี เช่น 6809_OP_02) ถ้านำเข้างวดเดิมซ้ำจะเขียนทับ · ระบบเก็บยอดรวมและรายเคสแบบไม่ระบุตัวตน (มีเฉพาะ REP, TRAN_ID, HN, ยอดเงิน — ไม่เก็บชื่อและเลขบัตรประชาชน)</p>
           <input ref={fileRef} type="file" multiple accept=".zip,.rar,.xls,.xlsx" className="hidden" onChange={(e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) readFiles(l); }} />
           <button type="button" className="btn btn-primary" disabled={busy || !canEdit} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} เลือกไฟล์ zip / rar / xls</button>
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm">
+            <span className="font-medium text-rose-800">ลบข้อมูลที่นำเข้า</span>
+            <select className="input !w-auto !py-1.5" value={delUnit} onChange={(e) => setDelUnit(e.target.value)}>
+              <option value="">— เลือกหน่วยที่จะลบ —</option><option value="ALL">ทุกหน่วย (ล้างทั้งอำเภอ)</option>
+              {PM_UNITS.map(([c, n]) => <option key={c} value={c}>{c} {n}</option>)}
+            </select>
+            <button type="button" className="btn btn-outline !py-1.5 text-rose-700" disabled={busy || !canEdit || !delUnit} onClick={wipe}>ลบ</button>
+            <span className="text-xs text-rose-700">ลบทั้งยอดรวมและรายเคส (ไม่ลบข้อมูลที่กรอกเอง) · กู้คืนไม่ได้</span>
+          </div>
           {items.length > 0 && (
             <>
               <div className="mt-4 overflow-x-auto"><table className="w-full text-sm">
