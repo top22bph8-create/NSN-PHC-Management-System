@@ -117,6 +117,25 @@ function dashboardSheet(ws, ttl, sub, kpis, tables) {
   ws.getColumn(1).width = 26; for (let c = 2; c <= last; c++) ws.getColumn(c).width = 18;
 }
 
+
+// ชีต "ข้อมูลรายเคส": blocks = [{ label: 'รหัส ชื่อหน่วย', ds: [งวด...], cases: [{period, rows}] }] เรียงตามลำดับที่ส่งมา
+function caseSheet(wb, blocks) {
+  const ws = wb.addWorksheet('ข้อมูลรายเคส');
+  const heads = ['หน่วยบริการ', 'ลำดับงวด', 'รายงานงวด', 'ประเภทข้อมูล', 'REP', 'ลำดับที่', 'TRAN_ID', 'HN', 'วันเข้ารักษา', 'สิทธิ (MAININSCL)', 'PROJCODE', 'เรียกเก็บ', 'HC', 'DRUG', 'AE', 'AE-DRUG', 'DMISHD', 'PP', 'FS', 'อื่นๆ', 'ยอดชดเชยทั้งสิ้น', 'สถานะการชดเชย'];
+  // หัวตารางสีเขียวอ่อน ตัวหนาสีดำ เหมือนชีตรายเคสของ รพ.สต.ดงสง่า
+  heads.forEach((h, i) => put(ws, 1, i + 1, h, { fill: 'FFCCFFCC', font: { bold: true }, h: 'center', wrap: true })); ws.getRow(1).height = 32;
+  let n = 2;
+  blocks.forEach(({ label, ds, cases }) => {
+    const idx = Object.fromEntries(ds.map((d, i) => [d.period, i + 1]));
+    (cases || []).filter((c) => idx[c.period]).sort((a, b) => idx[a.period] - idx[b.period]).forEach((c) => c.rows.forEach((r) => {
+      ws.addRow([label, idx[c.period], c.period, r[0] ? 'อุทธรณ์' : 'ปกติ', r[1], r[2], r[3], r[4], r[5] ? new Date(`${r[5]}T00:00:00Z`) : '', r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15], r[16], r[17], r[17] > 0 ? 'ได้รับชดเชย' : 'ไม่ได้รับชดเชย']); n += 1;
+    }));
+  });
+  ws.getColumn(9).numFmt = 'yyyy-mm-dd'; for (let c = 12; c <= 21; c++) ws.getColumn(c).numFmt = '#,##0.00;\\-#,##0.00;"-"'; // ศูนย์แสดงเป็น "-"
+  [26, 12, 14, 8, 14, 8, 13, 8, 14, 16, 12, 13, 12, 12, 12, 12, 12, 12, 12, 12, 16, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(n - 1, 1), column: heads.length } };
+}
+
 export async function buildUnitWorkbook({ unit, docs, cases, from, to, issued }) {
   const ExcelJS = (await import('exceljs')).default; const wb = new ExcelJS.Workbook(); wb.creator = 'NSN-PHC';
   const ds = filterDocs(docs, from, to);
@@ -142,23 +161,12 @@ export async function buildUnitWorkbook({ unit, docs, cases, from, to, issued })
     { title: 'ยอดชดเชยรวมตามหมวด (บาท)', heads: ['หมวด', 'จำนวนเงิน'], fmts: [null, MONEY], bars: [2], rows: [['HC', cTot.HC], ['DRUG', cTot.DRUG], ['AE', cTot.AE], ['DMISHD', cTot.DMISHD], ['PP', cTot.PP], ['FS', cTot.FS], ['อื่นๆ', cTot.OTHER]] },
   ]);
   catSheet(wb.addWorksheet('รายหมวด'), 'ยอดชดเชยตามหมวด รายงานงวด (บาท)', 'รวมยอดชดเชย = HC + DRUG + AE + DMISHD + PP + FS + อื่นๆ ; PP&FS = PP + FS (ไม่นับซ้ำในยอดรวม) ; ช่อง "ตรวจสอบ" เทียบยอดรวมหมวดกับยอดชดเชยทั้งสิ้นในชีตสรุป', ['ลำดับ', 'รายงานงวด'], cRows, cTot);
-  // ข้อมูลรายเคส
-  const ws = wb.addWorksheet('ข้อมูลรายเคส'); const heads = ['หน่วยบริการ', 'ลำดับงวด', 'รายงานงวด', 'ประเภทข้อมูล', 'REP', 'ลำดับที่', 'TRAN_ID', 'HN', 'วันเข้ารักษา', 'สิทธิ (MAININSCL)', 'PROJCODE', 'เรียกเก็บ', 'HC', 'DRUG', 'AE', 'AE-DRUG', 'DMISHD', 'PP', 'FS', 'อื่นๆ', 'ยอดชดเชยทั้งสิ้น', 'สถานะการชดเชย'];
-  // หัวตารางสีเขียวอ่อน ตัวหนาสีดำ เหมือนชีตรายเคสของ รพ.สต.ดงสง่า
-  heads.forEach((h, i) => put(ws, 1, i + 1, h, { fill: 'FFCCFFCC', font: { bold: true }, h: 'center', wrap: true })); ws.getRow(1).height = 32;
-  const idx = Object.fromEntries(ds.map((d, i) => [d.period, i + 1])); let n = 2;
-  const caseList = (cases || []).filter((c) => idx[c.period]).sort((a, b) => idx[a.period] - idx[b.period]);
-  caseList.forEach((c) => c.rows.forEach((r) => {
-    ws.addRow([`${unit.code} ${unit.name}`, idx[c.period], c.period, r[0] ? 'อุทธรณ์' : 'ปกติ', r[1], r[2], r[3], r[4], r[5] ? new Date(`${r[5]}T00:00:00Z`) : '', r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15], r[16], r[17], r[17] > 0 ? 'ได้รับชดเชย' : 'ไม่ได้รับชดเชย']); n += 1;
-  }));
-  ws.getColumn(9).numFmt = 'yyyy-mm-dd'; for (let c = 12; c <= 21; c++) ws.getColumn(c).numFmt = '#,##0.00;\\-#,##0.00;"-"'; // ศูนย์แสดงเป็น "-"
-  [26, 12, 14, 8, 14, 8, 13, 8, 14, 16, 12, 13, 12, 12, 12, 12, 12, 12, 12, 12, 16, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
-  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(n - 1, 1), column: heads.length } };
+  caseSheet(wb, [{ label: `${unit.code} ${unit.name}`, ds, cases }]);
   notesSheet(wb.addWorksheet('หมายเหตุ'), [['1. แหล่งข้อมูล', `รายงานพึงรับ รพสต. จำนวน ${ds.length} ไฟล์ (${first} ถึง ${lastP}) รวม ${(t.cases || 0).toLocaleString('th-TH')} เคส · หน่วยบริการ HCODE ${unit.code} (${unit.name})`], ['', 'สรุปเฉพาะไฟล์ที่นำเข้าในระบบ หากมีรายงานงวดเพิ่มต้องนำเข้าใหม่'], ...COMMON_NOTES]);
   return wb.xlsx.writeBuffer();
 }
 
-export async function buildDistrictWorkbook({ units, byUnit, from, to, issued, services }) {
+export async function buildDistrictWorkbook({ units, byUnit, from, to, issued, services, casesByUnit }) {
   const ExcelJS = (await import('exceljs')).default; const wb = new ExcelJS.Workbook(); wb.creator = 'NSN-PHC';
   const list = [...units].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
   const per = list.map(([code, name]) => { const ds = filterDocs(byUnit[code] || [], from, to); const m = mergeDocs(ds, `${code} ${name}`); return { code, name, ds, m }; });
@@ -197,6 +205,7 @@ export async function buildDistrictWorkbook({ units, byUnit, from, to, issued, s
     [...services.rows, services.total].forEach((r, i) => keys.forEach((k, j) => put(sv, 5 + i, j + 1, r[k] ?? '', { fmt: typeof r[k] === 'number' && j > 1 ? MONEY : undefined, fill: r === services.total ? C.total : undefined, font: { bold: r === services.total } })));
     keys.forEach((k, j) => { sv.getColumn(j + 1).width = j === 1 ? 36 : 15; }); sv.views = [{ state: 'frozen', xSplit: 2, ySplit: 4 }];
   }
+  if (casesByUnit) caseSheet(wb, per.filter((p) => p.ds.length).map((p) => ({ label: `${p.code} ${p.name}`, ds: p.ds, cases: casesByUnit[p.code] || [] })));
   notesSheet(wb.addWorksheet('หมายเหตุ'), [['1. แหล่งข้อมูล', `รายงานพึงรับ รพสต. ของแต่ละหน่วย (zip/rar ที่ รพ.สต.ส่งมา) นำเข้าแล้ว ${withData} จาก ${per.length} หน่วย · เรียงตามรหัส รพ.สต.`], ['', 'ชีต "สรุปทุกบริการ" ใช้ยาสมุนไพร = ผลรวม HC เฉพาะแถวที่เป็นบวก (วิธีเดียวกับไฟล์อำเภอปี 2568) ส่วน Palliative / Fit test / ไวรัสตับ / พอกเข่า เป็นข้อมูลที่กรอกเอง'], ...COMMON_NOTES]);
   return wb.xlsx.writeBuffer();
 }

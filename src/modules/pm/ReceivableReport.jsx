@@ -35,13 +35,13 @@ const fmtM = (v) => (!v ? '-' : Number(v).toLocaleString('th-TH', { minimumFract
 const PAGE = 200;
 
 // ชีต "ข้อมูลรายเคส" ดูบนหน้าเว็บ (เหมือนชีตใน Excel): กรองตามงวด/ประเภท/สถานะ ค้นหา HN-TRAN_ID-REP แบ่งหน้า
-function CaseSheet({ list, periods, unitLabel }) {
-  const [per, setPer] = useState(''); const [typ, setTyp] = useState(''); const [st, setSt] = useState(''); const [q, setQ] = useState(''); const [page, setPage] = useState(0);
+function CaseSheet({ list, periods, nameOf, multi }) {
+  const [uf, setUf] = useState(''); const [per, setPer] = useState(''); const [typ, setTyp] = useState(''); const [st, setSt] = useState(''); const [q, setQ] = useState(''); const [page, setPage] = useState(0);
   const idx = useMemo(() => Object.fromEntries(periods.map((p, i) => [p, i + 1])), [periods]);
-  const all = useMemo(() => (list || []).filter((c) => idx[c.period]).sort((a, b) => idx[a.period] - idx[b.period]).flatMap((c) => c.rows.map((r) => ({ p: c.period, r }))), [list, idx]);
-  const shown = useMemo(() => { const t = q.trim(); return all.filter(({ p, r }) => (!per || p === per) && (!typ || String(r[0]) === typ) && (!st || (st === 'ok') === (r[17] > 0)) && (!t || r[1].includes(t) || r[3].includes(t) || r[4].includes(t))); }, [all, per, typ, st, q]);
+  const all = useMemo(() => (list || []).filter((c) => idx[c.period]).sort((a, b) => String(a.code).localeCompare(String(b.code)) || idx[a.period] - idx[b.period]).flatMap((c) => c.rows.map((r) => ({ p: c.period, r, u: c.code }))), [list, idx]);
+  const shown = useMemo(() => { const t = q.trim(); return all.filter(({ p, r, u }) => (!uf || u === uf) && (!per || p === per) && (!typ || String(r[0]) === typ) && (!st || (st === 'ok') === (r[17] > 0)) && (!t || r[1].includes(t) || r[3].includes(t) || r[4].includes(t))); }, [all, uf, per, typ, st, q]);
   const sums = useMemo(() => { const t = Array(10).fill(0); shown.forEach(({ r }) => { for (let i = 0; i < 10; i += 1) t[i] += r[8 + i]; }); return t; }, [shown]);
-  useEffect(() => setPage(0), [per, typ, st, q]);
+  useEffect(() => setPage(0), [uf, per, typ, st, q]);
   if (list === null) return <div className="py-10 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" /> กำลังโหลดรายเคส…</div>;
   if (!all.length) return <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลรายเคสของหน่วยนี้ในช่วงที่เลือก — งวดที่นำเข้าก่อนหน้านี้ ให้นำเข้าไฟล์ซ้ำอีกครั้ง</p>;
   const pages = Math.max(1, Math.ceil(shown.length / PAGE)); const cur = Math.min(page, pages - 1); const slice = shown.slice(cur * PAGE, cur * PAGE + PAGE);
@@ -49,6 +49,7 @@ function CaseSheet({ list, periods, unitLabel }) {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+        {multi && <select className="input !w-auto !py-1" value={uf} onChange={(e) => setUf(e.target.value)}><option value="">ทุกหน่วย (ทั้งอำเภอ)</option>{PM_UNITS.map(([c, n]) => <option key={c} value={c}>{c} {n}</option>)}</select>}
         <select className="input !w-auto !py-1" value={per} onChange={(e) => setPer(e.target.value)}><option value="">ทุกงวด</option>{periods.map((p) => <option key={p} value={p}>{p}</option>)}</select>
         <select className="input !w-auto !py-1" value={typ} onChange={(e) => setTyp(e.target.value)}><option value="">ปกติ + อุทธรณ์</option><option value="0">ปกติ</option><option value="1">อุทธรณ์</option></select>
         <select className="input !w-auto !py-1" value={st} onChange={(e) => setSt(e.target.value)}><option value="">ทุกสถานะ</option><option value="ok">ได้รับชดเชย</option><option value="no">ไม่ได้รับชดเชย</option></select>
@@ -64,9 +65,9 @@ function CaseSheet({ list, periods, unitLabel }) {
         <table className="border-collapse text-sm">
           <thead className="sticky top-0 z-10"><tr>{CASE_HEADS.map((h) => <th key={h} className="whitespace-nowrap border border-slate-300 bg-[#ccffcc] px-2 py-2 text-center text-xs font-bold text-slate-900">{h}</th>)}</tr></thead>
           <tbody>
-            {slice.map(({ p, r }, i) => (
+            {slice.map(({ p, r, u }, i) => (
               <tr key={`${p}-${cur}-${i}`} className={r[17] > 0 ? '' : 'bg-rose-50/60'}>
-                <td className={cell}>{unitLabel}</td><td className={`${cell} text-right`}>{idx[p]}</td><td className={cell}>{p}</td><td className={cell}>{r[0] ? 'อุทธรณ์' : 'ปกติ'}</td><td className={cell}>{r[1]}</td><td className={`${cell} text-right`}>{r[2]}</td><td className={cell}>{r[3]}</td><td className={cell}>{r[4]}</td><td className={cell}>{r[5]}</td><td className={cell}>{r[6]}</td><td className={cell}>{r[7]}</td>
+                <td className={cell}>{nameOf(u)}</td><td className={`${cell} text-right`}>{idx[p]}</td><td className={cell}>{p}</td><td className={cell}>{r[0] ? 'อุทธรณ์' : 'ปกติ'}</td><td className={cell}>{r[1]}</td><td className={`${cell} text-right`}>{r[2]}</td><td className={cell}>{r[3]}</td><td className={cell}>{r[4]}</td><td className={cell}>{r[5]}</td><td className={cell}>{r[6]}</td><td className={cell}>{r[7]}</td>
                 {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map((k) => <td key={k} className={`${cell} text-right tabular-nums ${r[k] < 0 ? 'text-rose-600' : ''}`}>{fmtM(r[k])}</td>)}
                 <td className={`${cell} ${r[17] > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{r[17] > 0 ? 'ได้รับชดเชย' : 'ไม่ได้รับชดเชย'}</td>
               </tr>))}
@@ -93,6 +94,7 @@ export default function ReceivableReport() {
   const [to, setTo] = useState('');
   const [dl, setDl] = useState('');
   const [unitView, setUnitView] = useState('summary');
+  const [caseScope, setCaseScope] = useState('unit');
   const [caseData, setCaseData] = useState({ unit: '', list: [] });
   const fileRef = useRef(null);
 
@@ -172,6 +174,7 @@ export default function ReceivableReport() {
   const months = useMemo(() => [...new Set((recv || []).map((d) => yymmOf(d.period)))].sort(), [recv]);
   const issued = new Date().toLocaleDateString('th-TH');
   const unitDocs = useMemo(() => filterDocs(byUnit[unit] || [], from, to), [byUnit, unit, from, to]);
+  const months2 = useMemo(() => [...new Set(filterDocs(recv || [], from, to).map((d) => d.period))].sort(), [recv, from, to]);
   const unitSum = useMemo(() => unitDocs.map(summaryRow), [unitDocs]);
   const unitTot = useMemo(() => sumRows(unitSum), [unitSum]);
   const overview = useMemo(() => PM_UNITS.map(([code, name]) => { const ds = filterDocs(byUnit[code] || [], from, to); return { code, name, n: ds.length, row: summaryRow(mergeDocs(ds, code)) }; }), [byUnit, from, to]);
@@ -187,11 +190,22 @@ export default function ReceivableReport() {
     snap.docs.forEach((d) => { const x = d.data(); (cm[x.period] ||= []).push({ k: x.k, rows: JSON.parse(x.rows) }); });
     return Object.entries(cm).map(([period, parts]) => ({ period, rows: parts.sort((a, b) => a.k - b.k).flatMap((p) => p.rows) }));
   };
-  const showCases = async () => {
-    setUnitView('cases');
-    if (caseData.unit === unit) return;
-    setCaseData({ unit, list: null });
-    try { setCaseData({ unit, list: await loadCases(unit) }); } catch (e) { setCaseData({ unit, list: [] }); setToast({ type: 'error', text: 'โหลดรายเคสไม่สำเร็จ: ' + (e.code || e.message) }); }
+  const loadAllCases = async () => {
+    const snap = await getDocs(collection(db, 'pmReceivableCases'));
+    const m = {};
+    snap.docs.forEach((d) => { const x = d.data(); ((m[x.code] ||= {})[x.period] ||= []).push({ k: x.k, rows: JSON.parse(x.rows) }); });
+    return Object.fromEntries(Object.entries(m).map(([code, per]) => [code, Object.entries(per).map(([period, parts]) => ({ period, rows: parts.sort((a, b) => a.k - b.k).flatMap((p) => p.rows) }))]));
+  };
+  const nameOf = (c) => `${c} ${UNIT_NAME[c] || ''}`;
+  const showCases = async (scope = caseScope) => {
+    setUnitView('cases'); setCaseScope(scope);
+    const key = scope === 'all' ? 'ALL' : unit;
+    if (caseData.unit === key) return;
+    setCaseData({ unit: key, list: null });
+    try {
+      if (scope === 'all') { const m = await loadAllCases(); setCaseData({ unit: key, list: Object.entries(m).flatMap(([code, l]) => l.map((x) => ({ ...x, code }))) }); }
+      else setCaseData({ unit: key, list: (await loadCases(unit)).map((x) => ({ ...x, code: unit })) });
+    } catch (e) { setCaseData({ unit, list: [] }); setToast({ type: 'error', text: 'โหลดรายเคสไม่สำเร็จ: ' + (e.code || e.message) }); }
   };
   const downloadUnit = async () => {
     setDl('unit');
@@ -205,7 +219,8 @@ export default function ReceivableReport() {
   const downloadDistrict = async () => {
     setDl('district');
     try {
-      const buf = await buildDistrictWorkbook({ units: PM_UNITS, byUnit, from, to, issued, services: servicesPayload() });
+      const casesByUnit = await loadAllCases();
+      const buf = await buildDistrictWorkbook({ units: PM_UNITS, byUnit, from, to, issued, services: servicesPayload(), casesByUnit });
       downloadBuffer(buf, `รายงานพึงรับ_อำเภอเมือง_${FY}`);
     } catch (e) { setToast({ type: 'error', text: 'สร้างไฟล์ไม่สำเร็จ: ' + (e.code || e.message) }); } finally { setDl(''); }
   };
@@ -326,16 +341,17 @@ export default function ReceivableReport() {
       ) : tab === 'unit' ? (
         <div className="card p-3">
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <select className="input !w-auto !py-1.5" value={unit} onChange={(e) => { setUnit(e.target.value); setUnitView('summary'); }}>{PM_UNITS.map(([c, n]) => <option key={c} value={c}>{c} {n}</option>)}</select>
+            <select className="input !w-auto !py-1.5" value={unit} onChange={(e) => { setUnit(e.target.value); setUnitView('summary'); setCaseScope('unit'); }}>{PM_UNITS.map(([c, n]) => <option key={c} value={c}>{c} {n}</option>)}</select>
             {rangeBox}
             <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-300">
               <button type="button" className={`px-3 py-1.5 text-sm ${unitView === 'summary' ? 'bg-emerald-600 text-white' : 'bg-white'}`} onClick={() => setUnitView('summary')}>สรุปรายงวด</button>
-              <button type="button" className={`px-3 py-1.5 text-sm ${unitView === 'cases' ? 'bg-emerald-600 text-white' : 'bg-white'}`} onClick={showCases}>ข้อมูลรายเคส (ชีต)</button>
+              <button type="button" className={`px-3 py-1.5 text-sm ${unitView === 'cases' ? 'bg-emerald-600 text-white' : 'bg-white'}`} onClick={() => showCases('unit')}>ข้อมูลรายเคส (ชีต)</button>
+              <button type="button" className={`px-3 py-1.5 text-sm ${unitView === 'cases' && caseScope === 'all' ? 'bg-emerald-600 text-white' : 'bg-white'}`} onClick={() => showCases('all')}>รายเคสทั้งอำเภอ</button>
             </div>
             <button type="button" className="btn btn-primary !py-1.5 text-sm" disabled={!unitSum.length || dl === 'unit'} onClick={downloadUnit}>{dl === 'unit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} ดาวน์โหลด Excel (สรุป / แดชบอร์ด / รายหมวด / ข้อมูลรายเคส / หมายเหตุ)</button>
           </div>
           {!unitSum.length ? <p className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลของหน่วยนี้ — ไปที่แท็บ "นำเข้าไฟล์"</p> : (
-            unitView === 'cases' ? <CaseSheet list={caseData.unit === unit ? caseData.list : null} periods={unitSum.map((r) => r.period)} unitLabel={`${unit} ${(PM_UNITS.find(([c]) => c === unit) || [])[1] || ''}`} /> : <>
+            unitView === 'cases' ? <CaseSheet key={caseScope} list={caseData.unit === (caseScope === 'all' ? 'ALL' : unit) ? caseData.list : null} periods={caseScope === 'all' ? months2 : unitSum.map((r) => r.period)} nameOf={nameOf} multi={caseScope === 'all'} /> : <>
               <Kpi t={unitTot} />
               <SumTable items={unitSum.map((r) => ({ row: r }))} tot={unitTot} firstHead="รายงานงวด" firstCell={(it) => it.row.period} />
               <Bars items={unitSum.map((r) => ({ k: r.period, billed: r.billed, total: r.total }))} label="รายงวด" />
